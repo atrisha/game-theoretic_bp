@@ -1,0 +1,27 @@
+
+
+'''
+Values derived from https://www.mdpi.com/2079-9292/8/9/943
+'''
+MAX_ACC_NORMAL = 1.47
+MAX_ACC_AGGR = 3.07
+MAX_ACC_EMG = 5
+
+MAX_DEC_NORMAL = -2
+MAX_DEC_AGGR = -3.5
+MAX_DEC_EMG = -5
+
+MAX_ACC_JERK_NORMAL = 0.9
+MAX_ACC_JERK_AGGR = 2
+
+MAX_ACC_JERK_NORMAL = -0.9
+MAX_ACC_JERK_AGGR = -2
+
+STOP_LOC_STD_DEV = 1.5
+STOP_VEL_STD_DEV = 0.5
+
+
+N_STOP_POS_SAMPLES = {'prep-turn_s':10}
+
+N_STOP_VEL_SAMPLES = {'prep-turn_s':5}
+

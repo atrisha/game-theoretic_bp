@@ -60,6 +60,7 @@ LATERAL_TOLERANCE_EXITLINE = [1,0.5,-0.5,-1]
 
 LANE_BOUNDARY = {'prep-turn_s|proceed':'l_s_n|left_boundary'}
 
+ACTION_MAP = {'prep-turn_':['wait','go']}
 LP_FREQ = 0.1
 
 

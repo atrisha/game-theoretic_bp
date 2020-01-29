@@ -10,6 +10,7 @@ from numpy import arccos, array, dot, pi, cross
 from numpy.linalg import det, norm
 import matplotlib.pyplot as plt
 import ast
+import sys
 
 # from: https://gist.github.com/nim65s/5e9902cd67f094ce65b0
 def distance_numpy(A, B, P):
@@ -144,6 +145,29 @@ def get_n_e_vehicles_on_intersection(time):
     conn.close()
     return vehicles
 
+def get_track_segment_seq(track_id):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "SELECT TRAFFIC_SEGMENT_SEQ FROM TRAJECTORY_MOVEMENTS WHERE TRACK_ID = "+str(track_id)
+    c.execute(q_string)
+    res = c.fetchall()
+    seq = []
+    for row in res:
+        seq = row[0]
+    conn.close()
+    return ast.literal_eval(seq)
+
+    
+def assign_curent_segment(traffic_region_list,track_region_seq):
+    traffic_region_list = str(traffic_region_list).replace(' ','')
+    current_segment = []
+    all_segments = ['int-entr_','exec-turn_','prep-turn_','rt-stop_','rt-prep_turn_','rt_exec_turn_']
+    traffic_region_list = traffic_region_list.split(',')
+    for region in reversed(track_region_seq):
+        if region in traffic_region_list:
+            return region
+    return None  
+
 def get_closest_east_vehicles_before_intersection(time,loc):
     vehicles = []
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
@@ -180,6 +204,17 @@ def get_closest_east_vehicles_before_intersection(time,loc):
     conn.close()
     return vehicles
 
+def get_n_w_vehicles(time):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "SELECT DISTINCT TRACK_ID FROM TRAJECTORIES_0769 WHERE TIME = "+str(time)+" AND (TRAFFIC_REGIONS LIKE '%l_n_w%')"
+    c.execute(q_string)
+    res = c.fetchall()
+    vehicles = []
+    for row in res:
+        vehicles.append(row[0])
+    conn.close()
+    return vehicles
 
 def get_closest_west_vehicles_before_intersection(time,loc):
     vehicles = []

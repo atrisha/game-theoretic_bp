@@ -14,7 +14,29 @@ import itertools
 from QuinticPolynomialsPlanner.quintic_polynomials_planner import *
 from quartic_planner import *
 import matplotlib.pyplot as plt
+import motion_planner
 
+
+class VehicleState:
+    
+    def __init__(self,vehicle_track_info):
+        self.track_id = vehicle_track_info[0,]
+        self.x = vehicle_track_info[1,]
+        self.y = vehicle_track_info[2,]
+        self.speed = vehicle_track_info[3,]
+        self.tan_acc = vehicle_track_info[4,]
+        self.long_acc = vehicle_track_info[5,]
+        self.time = vehicle_track_info[6,]
+        self.yaw = vehicle_track_info[7,]
+        self.traffic_region = vehicle_track_info[8,]
+        
+    def set_current_segment(self,segment):
+        self.current_segment = segment
+    
+    
+    
+    
+    
 def get_stopline(init_segment):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
@@ -177,15 +199,16 @@ def show_trajectories(trajectories,lane_boundaries):
             plt.plot(t[1], t[2],'-')
     plt.show()
         
-    
-def generate_trajectory(init_state,init_segment):
-    init_pos_x = init_state[0][0]
-    init_pos_y = init_state[0][1]
-    init_yaw_rads = init_state[1]
-    init_v = init_state[2]
-    init_a = init_state[3]
+ 
+def generate_trajectory(init_state,l1_actions):
+    init_pos_x = init_state.x
+    init_pos_y = init_state.y
+    init_yaw_rads = init_state.yaw
+    init_v = init_state.speed
+    init_a = init_state[3].long_acc
     init_a_x = init_a * math.cos(init_yaw_rads)
     init_a_y = init_a * math.sin(init_yaw_rads)
+    init_segment = init_state.current_segment
     
     boundary_state_list = []
     traj_list = []
@@ -268,7 +291,7 @@ def generate_trajectory(init_state,init_segment):
     
     return traj_list,lane_boundary           
                 
-            
+'''            
 trajectories,lane_boundaries = [],[]
 
 traj_list,lane_boundary = generate_trajectory(((538842.19,4814000.61),1.658,0.127,0),'prep-turn_s')
@@ -279,3 +302,4 @@ traj_list,lane_boundary = generate_trajectory(((538830.52,4814012.16),5.3031,17.
 #trajectories.append(traj_list)
 lane_boundaries.append(lane_boundary)
 show_trajectories(trajectories, lane_boundaries)
+'''

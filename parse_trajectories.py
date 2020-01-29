@@ -8,7 +8,7 @@ import numpy as np
 import sqlite3
 import utils
 import sys
-from gevent._tblib import __traceback_maker
+
 
 
 def fix_exec_turn():

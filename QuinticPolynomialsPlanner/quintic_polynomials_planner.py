@@ -14,13 +14,17 @@ import math
 
 import matplotlib.pyplot as plt
 import numpy as np
+import sqlite3
+import utils
+from scipy.stats import halfnorm
+import constants
 
 # parameter
-MAX_T = 100.0  # maximum time to the goal [s]
-MIN_T = 5.0  # minimum time to the goal[s]
 
-show_animation = True
 
+show_animation = False
+show_simple_plot = False
+show_log = False
 
 class QuinticPolynomial:
 
@@ -65,8 +69,24 @@ class QuinticPolynomial:
 
         return xt
 
-
-def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt):
+def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary):
+    #print('called with')
+    MAX_T = 10.0  # maximum time to the goal [s]
+    MIN_T = 1  # minimum time to the goal[s]
+    
+    if show_log:
+        print(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt, lane_boundary)
+        print('target_pos',(gx,gy),'target vel', gv, 'target acc' , ga)
+        print('max acc', max_accel, 'max jerk', max_jerk)
+        print('yaw',gyaw)
+    acc = True
+    if max_accel < 0:
+        acc = False
+    if lane_boundary is not None:
+        lb_xs = lane_boundary[0]
+        lb_ys = lane_boundary[1]
+    else:
+        lb_xs,lb_ys = None,None
     """
     quintic polynomial planner
 
@@ -75,12 +95,10 @@ def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_
         sy: start y position [m]
         syaw: start yaw angle [rad]
         sa: start accel [m/ss]
-        
         gx: goal x position [m]
         gy: goal y position [m]
         gyaw: goal yaw angle [rad]
         ga: goal accel [m/ss]
-        
         max_accel: maximum accel [m/ss]
         max_jerk: maximum jerk [m/sss]
         dt: time tick [s]
@@ -105,23 +123,26 @@ def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_
     axg = ga * math.cos(gyaw)
     ayg = ga * math.sin(gyaw)
 
-    time, rx, ry, ryaw, rv, ra, rj = [], [], [], [], [], [], []
-
+    time, rx, ry, ryaw, rv, ra, rj, d2g = [], [], [], [], [], [], [], []
+    traj_found = False
     for T in np.arange(MIN_T, MAX_T, MIN_T):
         xqp = QuinticPolynomial(sx, vxs, axs, gx, vxg, axg, T)
         yqp = QuinticPolynomial(sy, vys, ays, gy, vyg, ayg, T)
 
-        time, rx, ry, ryaw, rv, ra, rj = [], [], [], [], [], [], []
-
+        time, rx, ry, ryaw, rv, ra, rj, d2g = [], [], [], [], [], [], [], []
+        within_lane = True
+        goal_reached = False
         for t in np.arange(0.0, T + dt, dt):
             time.append(t)
             rx.append(xqp.calc_point(t))
             ry.append(yqp.calc_point(t))
-
+            dist_to_goal = math.hypot(rx[-1] - gx , ry[-1] - gy)
+            if dist_to_goal <= constants.CAR_WIDTH/2:
+                goal_reached = True
+            d2g.append(dist_to_goal)
             vx = xqp.calc_first_derivative(t)
             vy = yqp.calc_first_derivative(t)
             v = np.hypot(vx, vy)
-            
             yaw = math.atan2(vy, vx)
             rv.append(v)
             ryaw.append(yaw)
@@ -139,11 +160,28 @@ def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_
             if len(ra) >= 2 and ra[-1] - ra[-2] < 0.0:
                 j *= -1
             rj.append(j)
-
-        if max([abs(i) for i in ra]) <= max_accel and max([abs(i) for i in rj]) <= max_jerk:
-            print("find path!!")
-            break
-
+            
+        
+        if lane_boundary is not None:
+            goal_sign = np.sign(utils.distance_numpy([lb_xs[0],lb_ys[0]], [lb_xs[1],lb_ys[1]], [gx,gy]))
+            dist_to_lane_b = np.sign([utils.distance_numpy([lb_xs[0],lb_ys[0]], [lb_xs[1],lb_ys[1]], [t[0],t[1]]) for t in list(zip(rx,ry))])
+            within_lane = np.all(dist_to_lane_b == goal_sign)
+        else:
+            within_lane = True
+        if within_lane:
+            if max([abs(i) for i in ra]) <= max_accel:
+                if max([abs(i) for i in rj]) <= max_jerk:
+                    if show_log:
+                        print("found path!!",len(rx)*dt)
+                    traj_found = True
+                    break
+                else:
+                    f = 1
+                    #print('couldnt find path for',T,'max jerk:',max([abs(i) for i in rj]), min(d2g))
+            else:
+                    f = 1
+                    #print('couldnt find path for',T,'max acc/dec:',max([abs(i) for i in ra]), min(d2g))
+        
     if show_animation:  # pragma: no cover
         for i, _ in enumerate(time):
             plt.cla()
@@ -152,20 +190,240 @@ def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_
                                          lambda event: [exit(0) if event.key == 'escape' else None])
             plt.grid(True)
             plt.axis("equal")
+            
             plot_arrow(sx, sy, syaw)
             plot_arrow(gx, gy, gyaw)
             plot_arrow(rx[i], ry[i], ryaw[i])
+            
             plt.title("Time[s]:" + str(time[i])[0:4] +
                       " v[m/s]:" + str(rv[i])[0:4] +
                       " a[m/ss]:" + str(ra[i])[0:4] +
                       " jerk[m/sss]:" + str(rj[i])[0:4],
                       )
             plt.pause(0.001)
+        plt.show()
+    
+    if T == MAX_T-1 and not traj_found:
+        return None
+    else:
+        return time, rx, ry, ryaw, rv, ra, rj, T
 
-    return time, rx, ry, ryaw, rv, ra, rj
+def check_traj_safety(rx,vx,ax,jx,max_accel,max_jerk,dt,axis):
+    T = len(rx)*dt
+    if max([abs(i) for i in ax]) <= max_accel:
+        if max([abs(i) for i in jx]) <= max_jerk:
+            if show_log:
+                print("found path!!",T)
+            return True
+        else:
+            print('couldnt find',axis,' path for',T,'max jerk:',max([abs(i) for i in jx]))
+            return False
+            
+    else:
+        print('couldnt find',axis,' path for',T,'max acc:',max([abs(i) for i in ax]))
+        return False
 
+def check_collision(rx,dist_to_lead,vxg,lvax,dt):
+    lx = [dist_to_lead]
+    for i in np.arange(len(rx)):
+        dist_to_lead += (vxg*dt + (0.5*lvax*dt**2))
+        lx.append(dist_to_lead)
+    dist = [math.hypot(x, y) for x,y in zip(rx,lx)]
+    print('dist values',min(dist),max(dist)) 
 
-def plot_arrow(x, y, yaw, length=1.0, width=0.5, fc="r", ec="k"):  # pragma: no cover
+def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line):
+    MAX_T = 10.0  # maximum time to the goal [s]
+    MIN_T = .01  # minimum time to the goal[s]
+    MAX_TX = 5.0
+    max_accel_long = constants.MAX_LONG_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LONG_ACC_AGGR
+    max_accel_lat = constants.MAX_LAT_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LAT_ACC_AGGR
+    #print('called with')
+    print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line)
+    '''
+    if show_log:
+        print(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt, lane_boundary)
+        print('target_pos',(gx,gy),'target vel', gv, 'target acc' , ga)
+        print('max acc', max_accel, 'max jerk', max_jerk)
+        print('yaw',gyaw)
+    '''
+    acc = True
+    if max_accel_long < 0:
+        acc = False
+    if lane_boundary is not None:
+        lb_xs = lane_boundary[0]
+        lb_ys = lane_boundary[1]
+    else:
+        lb_xs,lb_ys = None,None
+    """
+    quintic polynomial planner
+
+    input
+        sx: start x position [m]
+        sy: start y position [m]
+        syaw: start yaw angle [rad]
+        sa: start accel [m/ss]
+        gx: goal x position [m]
+        gy: goal y position [m]
+        gyaw: goal yaw angle [rad]
+        ga: goal accel [m/ss]
+        max_accel: maximum accel [m/ss]
+        max_jerk: maximum jerk [m/sss]
+        dt: time tick [s]
+
+    return
+        time: time result
+        rx: x position result list
+        ry: y position result list
+        ryaw: yaw angle result list
+        rv: velocity result list
+        ra: accel result list
+
+    """
+    lead_vehicle_present = False
+    if lvx is not None:
+        lead_vehicle_present = True
+        MAX_T = 10.0  # maximum time to the goal [s]
+        MIN_T = 1  # minimum time to the goal[s]
+        MAX_TX = 10.0
+        T_STEP = 0.1
+    
+    center_line_angle = math.atan2((center_line[0][1]-center_line[1][1]),(center_line[0][0]-center_line[1][0]))
+    if center_line_angle > 0:
+        center_line_angle = center_line_angle - math.pi
+    dist_to_centerline = utils.distance_numpy([center_line[0][0],center_line[0][1]],[center_line[1][0],center_line[1][1]],[sx,sy])
+    sv_angle_with_cl = syaw - center_line_angle
+    sv_angle_in_map = math.atan2(sy,sx)
+    fresnet_origin = (sx - dist_to_centerline*math.cos(sv_angle_in_map), sy - dist_to_centerline*math.sin(sv_angle_in_map))
+    vxs = sv * math.cos(sv_angle_with_cl)
+    vys = sv * math.sin(sv_angle_with_cl)
+    axs = sax * math.cos(sv_angle_with_cl)
+    ays = say
+    axg = 0
+    ayg = 0
+    if lead_vehicle_present:
+        lv_angle_with_cl = lvyaw - center_line_angle
+        dist_to_lead = math.hypot(lvx-sx, lvy-sy)
+        dist_to_lead_cl_proj = dist_to_lead
+        vxg = lvv * math.cos(lv_angle_with_cl)
+        vyg = lvv * math.sin(lv_angle_with_cl)
+        #lvax = 
+        goal_x = dist_to_lead_cl_proj - constants.CAR_FOLLOWING_SAFETY_DISTANCE
+    else:
+        vyg = constants.TARGET_VEL*math.sin(sv_angle_with_cl)
+        if constants.TARGET_VEL*math.cos(sv_angle_with_cl) - vxs > 0:
+            time_to_target_vel = (constants.TARGET_VEL*math.cos(sv_angle_with_cl) - vxs)/constants.MAX_LONG_ACC_NORMAL
+            acc = constants.MAX_LONG_ACC_NORMAL
+        else:
+            time_to_target_vel = (constants.TARGET_VEL*math.cos(sv_angle_with_cl) - vxs)/constants.MAX_LONG_DEC_NORMAL
+            acc = constants.MAX_LONG_DEC_NORMAL
+        dist_to_target_vel = vxs*time_to_target_vel + (0.5*acc*time_to_target_vel**2)
+        goal_x = dist_to_target_vel
+        vxg = constants.TARGET_VEL * math.cos(sv_angle_with_cl)
+        axg = 0
+    goal_y = 0
+    
+    traj_found = False
+    for TX in np.arange(MIN_T, MAX_TX, T_STEP):
+        if lead_vehicle_present:
+            goal_x_upper = goal_x + max(0,vxg*TX + 0.5*lvax*(TX**2))
+            end_states = [goal_x_upper - x for x in halfnorm.rvs(loc=0,scale=10,size=100)]
+        else:
+            end_states = np.random.normal(goal_x,10,size=100)
+        for gx in end_states:
+            xqp = QuinticPolynomial(0, vxs, axs, gx, vxg, axg, TX)
+            time_x, rx, rvx, rax, rjx = [], [], [], [], []
+            traj_x_found = False
+            for t in np.arange(0.0, TX + dt, dt):
+                time_x.append(t)
+                rx.append(xqp.calc_point(t))
+                vx = xqp.calc_first_derivative(t)
+                rvx.append(vx)
+                ax = xqp.calc_second_derivative(t)
+                rax.append(ax)
+                jx = xqp.calc_third_derivative(t)
+                rjx.append(jx)
+            if check_traj_safety(rx,rvx,rax,rjx,max_accel_long,max_jerk,dt,'lon'):
+                traj_found = True
+                print('found path for',gx,TX)
+                break
+        if traj_found:
+            if lead_vehicle_present:
+                check_collision(rx,dist_to_lead,vxg,lvax,dt)
+                traj_x_found = True
+                break
+            else:
+                traj_x_found = True
+                break
+            
+    for TY in np.arange(MIN_T, MAX_T, T_STEP):
+        yqp = QuinticPolynomial(dist_to_centerline, vys, ays, goal_y, vyg, ayg, TY)
+        time_y, ry, rvy, ray, rjy = [], [], [], [], []
+        traj_y_found = False
+        for t in np.arange(0.0, TY + dt, dt):
+            time_y.append(t)
+            ry.append(yqp.calc_point(t))
+            vy = yqp.calc_first_derivative(t)
+            rvy.append(vy)
+            ay = yqp.calc_second_derivative(t)
+            ray.append(ay)
+            jy = yqp.calc_third_derivative(t)
+            rjy.append(jy)
+        if check_traj_safety(ry,rvy,ray,rjy,max_accel_lat,max_jerk,dt,'lat'):
+            traj_y_found = True
+            break
+    #print('times are',TX,TY)
+    
+    if traj_x_found and traj_y_found:
+        ''' padding lateral and longitudinal trajectory for the same length '''
+        if len(rx) > len(ry):
+            T = TX
+            ry += [0]*(len(rx)-len(ry))
+            time_y += [time_y[-1]]*(len(time_x)-len(time_y))
+            rvy += [rvy[-1]]*(len(rvx)-len(rvy))
+            ray += [ray[-1]]*(len(rax)-len(ray))
+            rjy += [rjy[-1]]*(len(rjx)-len(rjy))
+        elif len(rx) < len(ry):
+            T = TY
+            for i in np.arange(0,len(ry)-len(rx)+1):
+                rx.append(rx[-1] + rvx[-1]*(i+1)*dt)
+            time_x += [time_x[-1]]*(len(time_y)-len(time_x))
+            rvx += [rvx[-1]]*(len(rvy)-len(rvx))
+            rax += [0]*(len(ray)-len(rax))
+            rjx += [0]*(len(rjy)-len(rjx))
+        
+        time, ryaw, rv, ra, rj = [], [], [], [], [] 
+        ''' set the goal states since they have been reached anyway '''
+        ry[-1],rvy[-1] = 0.0,0.0
+        ''' merge lateral and longitudinal into a single trajectory'''
+        for vx,vy in zip(rvx,rvy):
+            v = np.hypot(vx, vy)
+            yaw = math.atan2(vy, vx)
+            rv.append(v)
+            ryaw.append(yaw)
+            
+        for ax,ay in zip(rax,ray):
+            a = np.hypot(ax, ay)
+            if len(rv) >= 2 and rv[-1] - rv[-2] < 0.0:
+                a *= -1
+            ra.append(a)
+            
+        for jx,jy in zip(rjx,rjy):
+            j = np.hypot(jx, jy)
+            if len(ra) >= 2 and ra[-1] - ra[-2] < 0.0:
+                j *= -1
+            rj.append(j)
+        time = time_x
+        rx_map, ry_map = utils.fresnet_to_map(fresnet_origin[0], fresnet_origin[1], rx, ry, center_line_angle)    
+        ryaw_map = [y - abs(center_line_angle) for y in ryaw]
+        plt.plot([center_line[0][0],center_line[1][0]],[center_line[0][1],center_line[1][1]],'b-')
+        show_summary(time, rx_map, ry_map, ryaw_map, rv, ra, rj)
+        print('traj found', T)
+        return time, rx_map, ry_map, ryaw_map, rv, ra, rj, T
+    else:
+        return None
+    
+    
+def plot_arrow(x, y, yaw, length=0.5, width=0.25, fc="r", ec="k"):  # pragma: no cover
     """
     Plot arrow
     """
@@ -178,29 +436,65 @@ def plot_arrow(x, y, yaw, length=1.0, width=0.5, fc="r", ec="k"):  # pragma: no 
                   fc=fc, ec=ec, head_width=width, head_length=width)
         plt.plot(x, y)
 
+def show_summary(time, x, y, yaw, v, a, j):
+        if len(x) > len(y):
+            y += [y[-1]]*(len(x)-len(y))
+        elif len(x) < len(y):
+            x += [x[-1]]*(len(y)-len(x))
+        plt.axis('equal')
+        plt.plot(x, y, "-r")
+        if yaw is not None:
+            plt.subplots()
+            plt.plot(time, [np.rad2deg(i) for i in yaw], "-r")
+            plt.xlabel("Time[s]")
+            plt.ylabel("Yaw[deg]")
+            plt.grid(True)
+
+        plt.subplots()
+        plt.plot(time, v, "-r")
+        plt.xlabel("Time[s]")
+        plt.ylabel("Speed[m/s]")
+        plt.grid(True)
+
+        plt.subplots()
+        plt.plot(time, a, "-r")
+        plt.xlabel("Time[s]")
+        plt.ylabel("accel[m/ss]")
+        plt.grid(True)
+
+        plt.subplots()
+        plt.plot(time, j, "-r")
+        plt.xlabel("Time[s]")
+        plt.ylabel("jerk[m/sss]")
+        plt.grid(True)
+
+        plt.show()
+
 
 def main():
     print(__file__ + " start!!")
-    
-    sx = 0.0  # start x position [m]
-    sy = 0.0  # start y position [m]
-    syaw = np.deg2rad(90.0)  # start yaw angle [rad]
-    sv = 0.0  # start speed [m/s]
-    sa = 0.0  # start accel [m/ss]
-    
-    gx = -30.0  # goal x position [m]
-    gy = 28.0  # goal y position [m]
-    gyaw = np.deg2rad(170.0)  # goal yaw angle [rad]
-    gv = 8.5  # goal speed [m/s]
-    ga = 1.5  # goal accel [m/ss]
-    
-    max_accel = 3.5  # max accel [m/ss]
-    max_jerk = 0.9  # max jerk [m/sss]
-    dt = 1  # time tick [s]
+
+    sx,sy,syaw,sv,sa,gx,gy,gyaw,gv,ga,max_accel,max_jerk,dt,lane_boundary = \
+    0.0, 0.0, 0.0, 17.19, 0, 46.0, 0.0, 0.0, 18.45, 1.13, 2.47, 10, 0.1, None
+    '''
+     = 538842.32  # start x position [m]
+    sy = 4814000.61  # start y position [m]
+    syaw = 2.23  # start yaw angle [rad]
+    sv = 0.18  # start speed [m/s]
+    sa = 0.1  # start accel [m/ss]
+    gx = 538815.15  # goal x position [m]
+    gy = 4814006.58  # goal y position [m]
+    gyaw = 3.6  # goal yaw angle [rad]
+    gv = 9.7  # goal speed [m/s]
+    ga = 1.6  # goal accel [m/ss]
+    max_accel = 3.07  # max accel [m/ss]
+    max_jerk = 5  # max jerk [m/sss]
+    dt = 0.1  # time tick [s]
+    '''
 
     time, x, y, yaw, v, a, j = quintic_polynomials_planner(
         sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt)
-
+    
     if show_animation:  # pragma: no cover
         plt.plot(x, y, "-r")
 
@@ -229,7 +523,10 @@ def main():
         plt.grid(True)
 
         plt.show()
+        
+''' with a lead vehicle '''    
+#sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt,lane_boundary,center_line = 538830.52,4814012.16,5.3031,17.19,0.0,-0.0,538839.93,4813997.24,5.3094,utils.kph_to_mps(53.1595),-0.1741,0.0026,'NORMAL',2,0.1,None,[(538822.54,4814023.19),(538842.94,4813993.87)]
+''' without a lead vehicle '''
+#sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt,lane_boundary,center_line = 538817.08,4814032.29,5.3031,17.19,0.0,-0.0,None,None,None,None,None,None,'NORMAL',2,0.1,None,[(538822.54,4814023.19),(538842.94,4813993.87)]
 
-
-if __name__ == '__main__':
-    main()
+#car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, 'NORMAL', max_jerk, dt, lane_boundary, center_line)

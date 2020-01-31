@@ -33,8 +33,16 @@ class VehicleState:
     def set_current_segment(self,segment):
         self.current_segment = segment
     
+    def set_path(self,self,path):
+        self.path = path
     
+class TrajectoryPlan:
     
+    def __init__(self,action_l1):
+        self.action_l1 = action_l1
+        
+    def generate_trajectory(self):
+        t = 5
     
     
 def get_stopline(init_segment):
@@ -199,7 +207,8 @@ def show_trajectories(trajectories,lane_boundaries):
             plt.plot(t[1], t[2],'-')
     plt.show()
         
- 
+
+
 def generate_trajectory(init_state,l1_actions):
     init_pos_x = init_state.x
     init_pos_y = init_state.y
@@ -209,7 +218,8 @@ def generate_trajectory(init_state,l1_actions):
     init_a_x = init_a * math.cos(init_yaw_rads)
     init_a_y = init_a * math.sin(init_yaw_rads)
     init_segment = init_state.current_segment
-    
+    for l1_action in l1_actions:
+        traj_plan = TrajectoryPlan(l1_action)
     boundary_state_list = []
     traj_list = []
     lane_boundary = None
@@ -289,7 +299,7 @@ def generate_trajectory(init_state,l1_actions):
             print('no path found')
         
     
-    return traj_list,lane_boundary           
+    return traj_list,lane_boundary
                 
 '''            
 trajectories,lane_boundaries = [],[]

@@ -155,7 +155,93 @@ def get_track_segment_seq(track_id):
     for row in res:
         seq = row[0]
     conn.close()
-    return ast.literal_eval(seq)
+    return ast.literal_eval(seq) if seq is not None else None
+
+
+def get_path(agent_track):
+    path = ['NA','NA']
+    i = 0
+    while len(agent_track[i]) == 0:
+        i += 1
+    entry_region = agent_track[i].replace(' ','').strip(',')
+    j = -1
+    while len(agent_track[j]) == 0:
+        j += -1
+    exit_region = agent_track[j].replace(' ','').strip(',')
+    ''' some tracks start in the middle '''
+    origin_lane_map = {'s_w':1,'w_n':1,'e_s':1,'n_e':1}
+    if 'ln_' not in entry_region:
+        entry_regions = entry_region.split(',')
+        possible_entry_paths = []
+        for r in entry_regions:
+            r = r.strip()
+            if len(r) < 1:
+                brk = 6
+            if r[0] == 'l':
+                possible_entry_paths.append(r)
+        for p in possible_entry_paths:
+            ends_in = p[4]
+            if 'ln_'+ends_in in exit_region:
+                if len(p) < 7:
+                    lane_num = origin_lane_map[p[-3:]]
+                else:
+                    lane_num = -1 if p[6] == 'l' else -2
+                entry_region = 'ln_'+p[2]+'_' + str(lane_num)
+                path[0] = entry_region
+                break
+    else:
+        entry_regions = entry_region.split(',')
+        for e in entry_regions:
+            if 'ln_' in e:
+                entry_region = e
+    ''' some tracks end in the middle'''
+    exit_lane_map = {''}
+    if 'ln_' not in exit_region:
+        exit_regions = exit_region.split(',')
+        possible_exit_paths = []
+        for r in exit_regions:
+            if len(r) > 1:
+                r = r.strip()
+                if r[0] == 'l':
+                    possible_exit_paths.append(r)
+        for p in possible_exit_paths:
+            starts_in = p[2]
+            if 'ln_'+starts_in in entry_region:
+                if len(p) < 7:
+                    lane_num = -1
+                else:
+                    lane_num = -1 if p[6] == 'l' else -2 
+                exit_region = 'ln_'+p[4]+'_' + str(lane_num)
+                path[1] = exit_region
+                break
+    else:
+        exit_regions = exit_region.split(',')
+        for e in exit_regions:
+            if 'ln_' in e:
+                exit_region = e
+    path = [entry_region,exit_region]
+    if 'ln_' not in entry_region and 'ln_' not in exit_region:
+        lane_mapping = {'l_n_s_r':['ln_n_3','ln_s_-2'],
+                        'l_n_s_l':['ln_n_2','ln_s_-1'],
+                        'l_s_n_r':['ln_s_3','ln_n_-2'],
+                        'l_s_n_l':['ln_s_2','ln_n_-1'],
+                        'l_e_w_r':['ln_e_3','ln_w_-2'],
+                        'l_e_w_l':['ln_e_2','ln_w_-1'],
+                        'l_w_e_r':['ln_w_3','ln_e_-2'],
+                        'l_w_e_l':['ln_w_2','ln_e_-1'],
+                        'rt_exec-turn_w':['ln_w_4','ln_s_-2']}
+        for r in entry_region.split(','):
+            if r in exit_region.split(','):
+                path = lane_mapping[r] if r[0] == 'l' else ['NA','NA']
+                break
+            path = ['NA','NA']
+    elif 'ln_' not in entry_region:
+        entry_region = 'NA'
+        path = [entry_region,exit_region]
+    elif 'ln_' not in exit_region:
+        exit_region = 'NA'
+        path = [entry_region,exit_region]
+    return path
 
     
 def assign_curent_segment(traffic_region_list,track_region_seq):

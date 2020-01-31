@@ -73,6 +73,7 @@ def build_game_tree():
         veh_state = motion_planner.VehicleState(point)
         current_segment = utils.assign_curent_segment(point[8,],track_region_seq)
         veh_state.set_current_segment(current_segment)
+        veh_state.set_path(utils.get_path(agent_track[:,8]))
         if current_segment is None:
             print('no current segment found')
             break

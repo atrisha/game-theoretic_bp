@@ -38,41 +38,122 @@ def fix_exec_turn():
                         brk = 9
                     c.execute(u_string)
                     conn.commit()
-                    
-            
-        
-        
-        
     conn.commit()
     conn.close()
 
+
+def fix_lane_assignments():
+    ''' '''    
+    gate_map = {(65,18) : 'ln_s_-2', }
+    
+def assign_traffic_regions():
+    traffic_segments = None
+    gate_map = {'north_exit':[72,73],
+                'south_exit':[18],
+                'east_exit':[34],
+                'west_exit':[63],
+                'north_entry':[59,60,61],
+                'south_entry':[17,28,29],
+                'east_entry':[26,27,30],
+                'west_entry':[64,65]}
+    
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "SELECT TRACK_ID FROM TRACKS WHERE TYPE <> 'Pedestrian'"
+    res = c.execute(q_string)
+    vehicles = []
+    for row in res:
+        vehicles.append(row[0])
+    veh_count = 0 
+    for veh in vehicles:
+        veh_count += 1
+        #print('assigning traffic region',veh,'/283')
+        q_string = "SELECT TRAFFIC_REGIONS FROM TRAJECTORIES_0769 WHERE TRACK_ID = "+str(veh)
+        c.execute(q_string)
+        res = c.fetchall()
+        track_regions = []
+        if veh == 8:
+            brk = 8
+        for row in res:
+            if row[0] is not None and len(row[0]) > 1:
+                track_regions.append(row[0])
+        if track_regions is not None and len(track_regions)>1:
+            path = utils.get_path(track_regions)
+            if not path[0] is 'NA' and not path[1] is 'NA':
+                o,d = path[0][3],path[1][3]
+            else:
+                q_string = "SELECT ENTRY_GATE,EXIT_GATE FROM TRAJECTORY_MOVEMENTS WHERE TRACK_ID = "+str(veh)
+                c.execute(q_string)
+                res = c.fetchall()
+                for row in res:
+                    if row[0] is not None:
+                        e_g = int(row[0])
+                    if row[1] is not None:
+                        ex_g = int(row[1])
+                o,d = None,None
+                for k,v in gate_map.items():
+                    if e_g in v:
+                        o = k[0]
+                    if ex_g in v:
+                        d = k[0]
+            if o is not None and d is not None:
+                if (o,d) == ('n','s') or (o,d) == ('s','n') or (o,d) == ('e','w') or (o,d) == ('w','e'):
+                    traffic_segments = ['ln_'+o+'_','int_entry_'+o,'ln_'+d+'_']
+                else:
+                    traffic_segments = ['ln_'+o+'_','prepare-turn_'+o,'execute-turn_'+o,'ln_'+d+'_']
+        
+        u_string = "UPDATE TRAJECTORY_MOVEMENTS SET TRAFFIC_SEGMENT_SEQ=? WHERE TRACK_ID=?"
+        print(u_string)
+        c.execute(u_string,(str(traffic_segments),str(veh)))
+    conn.commit()
+    conn.close()
+
+
+
+
+def replace_single_quotes(filepath):
+    # Read in the file
+    with open(filepath, 'r') as file :
+        filedata = file.read()
+    
+    # Replace the target string
+    filedata = filedata.replace(',",', ',"",')
+
+    # Write the file out again
+    with open(filepath, 'w') as file:
+        file.write(filedata)
+    
 def insert_trajectories():
     traffic_segments = dict()
-    file_path = "D:\\intersections_dataset\\all_tracks\\exported\\DJI_0769_traj(segments).csv"
+    file_path = "D:\\intersections_dataset\\all_tracks\\exported\\2401\\DJI_0769_traj(segments).csv"
+    replace_single_quotes(file_path)
     with open(file_path, newline='') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=',', skipinitialspace=True)
         ct = 0
         for row in csvreader:
             size = len(row)
             if ct > 0:
-                ins_list = [None if x=='- ' else x for x in row[:12]]
+                ins_list = [None if x.strip()=='-' else x for x in row[:8]]
                 ins_list = [x.strip("'") if x is not None else None for x in ins_list]
                 track_id = ins_list[0]
                 i = 0
-                rest = row[12:]
+                if str(track_id) == '26':
+                    brk = 5
+                rest = row[8:]
                 while i+8 < size: 
                     ins_traj_list = rest[i:i+8]
                     if len(ins_traj_list) == 8:
-                        ins_traj_list = [None if x=='- ' else x for x in ins_traj_list]
-                        ins_traj_list = [x.strip("'") if x is not None else None for x in ins_traj_list]
+                        ins_traj_list = [None if x.strip()=='-' else x for x in ins_traj_list]
+                        ins_traj_list = [x.strip('"') if x is not None else None for x in ins_traj_list]
                         traj_ts = ins_traj_list[5]
                         
-                        if len(ins_traj_list[7]) > 1:
+                        if ins_traj_list[7] is not None and len(ins_traj_list[7]) > 1:
                             key_str = str(track_id)+'_'+str(float(traj_ts))
                             traffic_segments[key_str] = ins_traj_list[7]
                     i += 8
             ct += 1
-    file_path = "D:\\intersections_dataset\\all_tracks\\exported\\DJI_0769_traj.csv"
+    file_path = "D:\\intersections_dataset\\all_tracks\\exported\\2401\\DJI_0769_traj.csv"
+    replace_single_quotes(file_path)
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
     '''
@@ -86,27 +167,28 @@ def insert_trajectories():
         for row in csvreader:
             size = len(row)
             if ct > 0:
-                ins_list = [None if x=='- ' else x for x in row[:12]]
-                ins_list = [x.strip("'") if x is not None else None for x in ins_list]
+                ins_list = [None if x.strip()=='-' else x for x in row[:8]]
+                #ins_list = [x.strip("'") if x is not None else None for x in ins_list]
                 print(ins_list)
                 #q_string = "INSERT INTO TRACKS VALUES (0769,"+ins_list[0]+",'"+ins_list[1]+"',"+ins_list[2]+","+ins_list[4]+",'"+ \
                 #ins_list[6]+"',"+ins_list[7]+",'"+ins_list[8]+"',"+ins_list[9]+","+ins_list[10]+","+ins_list[11]+')'
                 track_id = ins_list[0]  
                 q_string = "INSERT INTO TRACKS VALUES (0769,?,?,?,?,?,?,?,?,?,?)"
-                
-                c.execute(q_string, (ins_list[0],ins_list[1],ins_list[2],ins_list[4],ins_list[6],ins_list[7],ins_list[8],ins_list[9],ins_list[10],ins_list[11]))
-                
+                c.execute(q_string, (ins_list[0],ins_list[1],None,None,ins_list[2],ins_list[3],ins_list[4],ins_list[5],ins_list[6],ins_list[7]))
                 i = 0
-                rest = row[12:]
+                rest = row[8:]
                 while i+8 < size: 
                     ins_traj_list = rest[i:i+8]
                     if len(ins_traj_list) == 8:
-                        ins_traj_list = [None if x=='- ' else x for x in ins_traj_list]
-                        ins_traj_list = [x.strip("'") if x is not None else None for x in ins_traj_list]
+                        ins_traj_list = [None if x.strip()=='-' else x for x in ins_traj_list]
+                        #ins_traj_list = [x.strip("'") if x is not None else None for x in ins_traj_list]
                         traj_ts = ins_traj_list[5]
                         key_str = str(track_id)+'_'+str(float(traj_ts))
-                        if key_str in traffic_segments:
-                            ins_traj_list[7] = ins_traj_list[7] + ',' + traffic_segments[key_str]
+                        if key_str in traffic_segments and traffic_segments[key_str] is not None:
+                            if ins_traj_list[7] is not None:
+                                ins_traj_list[7] = ins_traj_list[7] + ',' + traffic_segments[key_str]
+                            else:
+                                ins_traj_list[7] = traffic_segments[key_str]
                         q_string = "INSERT INTO TRAJECTORIES_0769 VALUES (?,?,?,?,?,?,?,?,?)"
                         #print(' ',ins_traj_list)
                         c.execute(q_string,(ins_list[0],ins_traj_list[0],ins_traj_list[1],ins_traj_list[2],ins_traj_list[3],ins_traj_list[4],ins_traj_list[5],ins_traj_list[6],ins_traj_list[7]))
@@ -296,4 +378,4 @@ def get_relevant_agents():
     '''
     conn.close()
             
-get_relevant_agents()
+assign_traffic_regions()

@@ -44,5 +44,6 @@ def show_dist_to_lane_boundary():
     for t in traj:
         print(utils.distance_numpy([x[0],y[0]], [x[1],y[1]], [t[0],t[1]]))
     print(utils.distance_numpy([x[0],y[0]], [x[1],y[1]], [r[0],r[1]]))
-show_dist_to_lane_boundary()   
+
+
                     

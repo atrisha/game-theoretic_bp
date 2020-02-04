@@ -11,81 +11,84 @@ import sys
 import constants
 import motion_planner
 
-def get_relevant_agents(current_segment,pt_time,agent_loc):
-    relev_agents = []
-    if current_segment.startswith('prep-turn_s') or current_segment.startswith('exec-turn_s'):
-        ''' add oncoming vehicles on intersection '''
-        relev_agents += utils.get_n_s_vehicles_on_intersection(pt_time)
-        ''' add oncoming vehicles about to enter the intersection '''
-        relev_agents += utils.get_n_s_vehicles_before_intersection(pt_time)
-        ''' add oncoming north vehicles about to turn east'''
-        relev_agents += utils.get_n_e_vehicles_before_intersection(pt_time)
-        ''' add oncoming north south vehicles turning east'''
-        relev_agents += utils.get_n_e_vehicles_on_intersection(pt_time)
-        ''' add oncoming north south vehicles turning west'''
-        relev_agents += utils.get_n_e_vehicles_on_intersection(pt_time)
-        ''' add closest east vehicles '''
-        relev_agents += utils.get_closest_east_vehicles_before_intersection(pt_time,agent_loc)
-        ''' add closest west vehicles'''
-        relev_agents += utils.get_closest_west_vehicles_before_intersection(pt_time,agent_loc)
-        ''' add any other vehicle on the intersection '''
-        
-        if current_segment.startswith('exec-turn_s'):
-            ''' add vehicles turning north to west '''
-            relev_agents += utils.get_n_w_vehicles(pt_time)
-        print(pt_time,current_segment,relev_agents)
-    else:
-        print(current_segment)
-        sys.exit('segment not supported')
-            
-            
-        
     
-    
-    '''
-    q_string = "select distinct track_id from trajectories_0769 where time between 0 and 12.846167"
-    res = c.execute(q_string)
-    l = []
-    for row in res:
-        l.append(row[0])
-    q_string = "SELECT * FROM TRAJECTORY_MOVEMENTS WHERE ((ENTRY_GATE = 60 AND EXIT_GATE = 18 ) OR (EXIT_GATE = 18 AND ENTRY_GATE IS NULL)) AND (TRACK_ID IN "+str(tuple(l))+")"
-    res = c.execute(q_string)
-    for row in res:
-        print(row)
-    '''
    
 def get_l2_actions(veh_state,actions_l1):
     motion_planner.generate_trajectory(veh_state,actions_l1)
 
 def build_game_tree():
     agent_id = 11
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
-    c = conn.cursor()
-    q_string = "select * from trajectories_0769 where track_id="+str(agent_id)+" order by time"
-    res = c.execute(q_string)
-    l = []
-    for row in res:
-        l.append(row)
-    track_region_seq = utils.get_track_segment_seq(agent_id)
-    agent_track = np.asarray(l)
+    veh_state = motion_planner.VehicleState()
+    veh_state.set_id(agent_id)
+    veh_state.set_current_time(None)
+    track_region_seq = utils.get_track_segment_seq(veh_state.id)
+    veh_state.set_segment_seq(track_region_seq)
+    agent_track = utils.get_track(veh_state)
     for i in np.arange(0,len(agent_track),30):
-        point = agent_track[i]
-        veh_state = motion_planner.VehicleState(point)
-        current_segment = utils.assign_curent_segment(point[8,],track_region_seq)
+        track_info = agent_track[i]
+        curr_time = float(track_info[6,])
+        veh_state.set_track_info(track_info)
+        if track_info[8,] is None or len(track_info[8,]) == 0:
+            veh_track_region = utils.guess_track_info(veh_state,track_info)[8,]
+            if veh_track_region is None:
+                print(track_info[8,],agent_id,curr_time)
+                sys.exit('need to guess traffic region for agent')
+        else:
+            veh_track_region = track_info[8,]
+        current_segment = utils.assign_curent_segment(veh_track_region,track_region_seq)
         veh_state.set_current_segment(current_segment)
-        veh_state.set_path(utils.get_path(agent_track[:,8]))
+        path,gates,direction = utils.get_path_gates_direction(agent_track[:,8],agent_id)
+        traffic_light = utils.get_traffic_signal(curr_time, direction)
+        veh_state.set_traffic_light(traffic_light)
+        veh_state.set_gates(gates)
+        gate_crossing_times = utils.gate_crossing_times(veh_state)
+        veh_state.set_gate_crossing_times(gate_crossing_times)
         if current_segment is None:
-            print('no current segment found')
-            break
-        pt_time = point[6,]
-        agent_loc = (point[1,],point[2,])
-        actions_l1 = constants.ACTION_MAP[current_segment[:-1]]
-        print(actions_l1)
-        get_l2_actions(veh_state,actions_l1)
-        get_relevant_agents(current_segment,pt_time,agent_loc)
-    
-    
-    conn.close()
+            print(curr_time,track_info[8,],track_region_seq)
+            sys.exit('no current segment found')
+        agent_loc = (track_info[1,],track_info[2,])
+        veh_state.set_current_time(curr_time)
+        veh_state.set_current_segment(current_segment)
+        actions_l1 = constants.L1_ACTION_MAP[current_segment[:-1].replace('-','_')]
+        print('time',curr_time,'agent segment',current_segment,'l1 actions',actions_l1)
+        #get_l2_actions(veh_state,actions_l1)
+        relev_agents = utils.get_relevant_agents(veh_state)
+        for r_a in relev_agents:
+            if r_a == agent_id:
+                continue
+            r_a_state = motion_planner.VehicleState()
+            r_a_state.set_id(r_a)
+            r_a_state.set_current_time(curr_time)
+            r_a_track = utils.get_track(r_a_state)
+            r_a_track_segment_seq = utils.get_track_segment_seq(r_a)
+            r_a_state.set_segment_seq(r_a_track_segment_seq)
+            if len(r_a_track) == 0:
+                ''' this agent is out of the view currently'''
+                r_a_state.set_out_of_view(True)
+                r_a_track = None
+            else:
+                r_a_state.set_out_of_view(False)
+                r_a_state.set_track_info(r_a_track[0,])
+                r_a_track = r_a_track[0,]
+            if r_a_state.out_of_view or len(r_a_track[8]) == 0:
+                r_a_track_info = utils.guess_track_info(r_a_state,r_a_track)
+                r_a_state.set_track_info(r_a_track_info)
+                r_a_track_region = r_a_track_info[8,]
+                if r_a_track_region is None:
+                    sys.exit('need to guess traffic region for relev agent')
+            else:
+                r_a_track_region = r_a_track[8]
+            print('relev agents for agent',agent_id,':',r_a, r_a_track_region,r_a_track_segment_seq)
+            r_a_current_segment = utils.get_current_segment(r_a_state,r_a_track_region,r_a_track_segment_seq,curr_time)
+            r_a_state.set_current_segment(r_a_current_segment)
+            r_a_actions_l1 = constants.L1_ACTION_MAP[r_a_current_segment[:-1].replace('-','_')]
+            print('relev agent l1 actions for agent',agent_id,':',r_a,r_a_actions_l1)
+            lead_vehice = utils.get_leading_vehicles(r_a_state)
+            print('lead vehicle for',r_a,':',lead_vehice.id if lead_vehice is not None else None)
+            
+        print(relev_agents)
+        trajectory_plan = motion_planner.TrajectoryPlan()
+        trajectory_plan.set_l1_action(actions_l1)
 
 build_game_tree()
     

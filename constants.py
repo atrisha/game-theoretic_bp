@@ -60,7 +60,26 @@ LATERAL_TOLERANCE_EXITLINE = [1,0.5,-0.5,-1]
 
 LANE_BOUNDARY = {'prep-turn_s|proceed':'l_s_n|left_boundary'}
 
-ACTION_MAP = {'prep-turn_':['wait','go']}
+L1_ACTION_MAP = {'prep_turn_':['wait','go'],'exec_turn_':['wait','go'],'int_entry_':['track_speed','follow_lead'],
+              'ln_n_':['track_speed','follow_lead'],
+              'ln_s__':['track_speed','follow_lead'],
+              'ln_n__':['track_speed','follow_lead'],
+              'ln_w__':['track_speed','follow_lead'],
+              'ln_w_':['track_speed','follow_lead'],
+              'ln_s_':['track_speed','follow_lead'],
+              'ln_e_':['track_speed','follow_lead']}
 LP_FREQ = 0.1
 
+gate_map = {'north_exit':[72,73],
+                'south_exit':[18,130],
+                'east_exit':[34,132],
+                'west_exit':[63,131],
+                'north_entry':[59,60,61,126],
+                'south_entry':[17,28,29,127],
+                'east_entry':[26,27,30,128],
+                'west_entry':[64,65,125,129]}
 
+#traffic_segment_seq_map = {:'d'}
+
+RELEV_VEHS_TIME_THRESH = 1
+VEH_ARRIVAL_HORIZON = 3

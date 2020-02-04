@@ -8,6 +8,8 @@ import numpy as np
 import sqlite3
 import utils
 import sys
+import constants
+
 
 
 
@@ -21,7 +23,7 @@ def fix_exec_turn():
     vehicles = []
     for row in res:
         vehicles.append(row[0])
-    exec_turn_map = [('prep-turn_s',63),('prep-turn_n',34),('prep-turn_e',18),(('prep-turn_w',73))]
+    exec_turn_map = [('prep_turn_s',131),('prep-turn_n',34),('prep-turn_n',132),('prep-turn_e',18),('prep-turn_w',73),('prep-turn_e',130),('prep_turn_s',63)]
     veh_count = 0 
     for veh in vehicles:
         veh_count += 1
@@ -46,25 +48,19 @@ def fix_lane_assignments():
     ''' '''    
     gate_map = {(65,18) : 'ln_s_-2', }
     
-def assign_traffic_regions():
+def assign_traffic_segment_seq():
     traffic_segments = None
-    gate_map = {'north_exit':[72,73],
-                'south_exit':[18],
-                'east_exit':[34],
-                'west_exit':[63],
-                'north_entry':[59,60,61],
-                'south_entry':[17,28,29],
-                'east_entry':[26,27,30],
-                'west_entry':[64,65]}
     
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    q_string = "SELECT TRACK_ID FROM TRACKS WHERE TYPE <> 'Pedestrian'"
+    q_string = "SELECT TRACK_ID FROM TRACKS WHERE TYPE <> 'Pedestrian' AND TYPE <> 'Bicycle'"
     res = c.execute(q_string)
     vehicles = []
     for row in res:
         vehicles.append(row[0])
     veh_count = 0 
+    direction_less = []
+    u_strings = []
     for veh in vehicles:
         veh_count += 1
         #print('assigning traffic region',veh,'/283')
@@ -77,34 +73,50 @@ def assign_traffic_regions():
         for row in res:
             if row[0] is not None and len(row[0]) > 1:
                 track_regions.append(row[0])
-        if track_regions is not None and len(track_regions)>1:
-            path = utils.get_path(track_regions)
+        
+        path,gates,direction = utils.get_path_gates_direction(track_regions,veh)
+        if veh == 2:
+            brek = 4
+        if gates[0] is None and gates[1] is None:
             if not path[0] is 'NA' and not path[1] is 'NA':
                 o,d = path[0][3],path[1][3]
-            else:
-                q_string = "SELECT ENTRY_GATE,EXIT_GATE FROM TRAJECTORY_MOVEMENTS WHERE TRACK_ID = "+str(veh)
-                c.execute(q_string)
-                res = c.fetchall()
-                for row in res:
-                    if row[0] is not None:
-                        e_g = int(row[0])
-                    if row[1] is not None:
-                        ex_g = int(row[1])
-                o,d = None,None
-                for k,v in gate_map.items():
-                    if e_g in v:
-                        o = k[0]
-                    if ex_g in v:
-                        d = k[0]
-            if o is not None and d is not None:
                 if (o,d) == ('n','s') or (o,d) == ('s','n') or (o,d) == ('e','w') or (o,d) == ('w','e'):
-                    traffic_segments = ['ln_'+o+'_','int_entry_'+o,'ln_'+d+'_']
-                else:
-                    traffic_segments = ['ln_'+o+'_','prepare-turn_'+o,'execute-turn_'+o,'ln_'+d+'_']
-        
-        u_string = "UPDATE TRAJECTORY_MOVEMENTS SET TRAFFIC_SEGMENT_SEQ=? WHERE TRACK_ID=?"
-        print(u_string)
-        c.execute(u_string,(str(traffic_segments),str(veh)))
+                    traffic_segments = [path[0],'int_entry_'+o,path[1]]
+                elif (o,d) == ('n','e') or (o,d) == ('s','w') or (o,d) == ('e','s'):
+                    traffic_segments = [path[0],'prep-turn_'+o,'exec-turn_'+o,path[0]]
+                elif (o,d) == ('n','w') or (o,d) == ('e','n'):
+                    traffic_segments = [path[0],'l_'+o+'_'+d,path[1]]
+                elif (o,d) == ('s','e') or (o,d) == ('w','s'):
+                    traffic_segments = [path[0],'rt-stop_'+o,'rt_prep_turn_'+o,'rt-exec-turn_'+o,path[1]]
+                u_string = "UPDATE TRAJECTORY_MOVEMENTS SET TRAFFIC_SEGMENT_SEQ='"+str(traffic_segments)+"' WHERE TRACK_ID="+str(veh)
+                u_strings.append(["UPDATE TRAJECTORY_MOVEMENTS SET TRAFFIC_SEGMENT_SEQ=? WHERE TRACK_ID=?",str(traffic_segments),str(veh)])
+                print(u_string)
+        else:
+            if gates[0] is not None and gates[1] is not None:
+                traffic_segments = utils.get_traffic_segment_from_gates(gates)
+                u_string = "UPDATE TRAJECTORY_MOVEMENTS SET TRAFFIC_SEGMENT_SEQ='"+str(traffic_segments)+"' WHERE TRACK_ID="+str(veh)
+                u_strings.append(["UPDATE TRAJECTORY_MOVEMENTS SET TRAFFIC_SEGMENT_SEQ=? WHERE TRACK_ID=?",str(traffic_segments),str(veh)])
+                print(u_string)
+            else:
+                if len(gates) > 0:
+                    direction_less.append(veh)
+    if len(direction_less) > 0:
+        print(direction_less)
+        sys.exit(str(len(direction_less))+' direction less vehicles found. please fix them first')
+    else:
+        for u in u_strings:
+            c.execute(u[0],(u[1],u[2]))
+            
+        '''
+        if o is not None and d is not None:
+            if (o,d) == ('n','s') or (o,d) == ('s','n') or (o,d) == ('e','w') or (o,d) == ('w','e'):
+                traffic_segments = ['ln_'+o+'_','int_entry_'+o,'ln_'+d+'_']
+            else:
+                traffic_segments = ['ln_'+o+'_','prep-turn_'+o,'exec-turn_'+o,'ln_'+d+'_']
+        '''
+        #u_string = "UPDATE TRAJECTORY_MOVEMENTS SET TRAFFIC_SEGMENT_SEQ=? WHERE TRACK_ID=?"
+        #print(u_string)
+        #c.execute(u_string,(str(traffic_segments),str(veh)))
     conn.commit()
     conn.close()
 
@@ -220,7 +232,7 @@ def insert_gate_crossings():
     
 def insert_trajectory_movements():
     
-    file_path = "D:\\intersections_dataset\\all_tracks\\exported\\DJI_0769_traj_movement.csv"
+    file_path = "D:\\intersections_dataset\\all_tracks\\exported\\2401\\DJI_0769_traj_movement.csv"
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
     '''
@@ -235,12 +247,12 @@ def insert_trajectory_movements():
             ins_list = row[:-1]
             ins_list = [None if x=='---' else x for x in ins_list]
             if ct > 0:
-                q_string = "INSERT INTO TRAJECTORY_MOVEMENTS VALUES (0769,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                q_string = "INSERT INTO TRAJECTORY_MOVEMENTS VALUES (0769,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
                 
                 c.execute(q_string, (ins_list[0],ins_list[1],ins_list[2],ins_list[3],ins_list[4],ins_list[5],ins_list[6],ins_list[7],ins_list[8],ins_list[9],ins_list[10],ins_list[11], 
                           ins_list[12],ins_list[13],ins_list[14],ins_list[15],ins_list[16],ins_list[17],ins_list[18],ins_list[19],ins_list[20],ins_list[21],
                           ins_list[22],ins_list[23],ins_list[24],ins_list[25],ins_list[26],ins_list[27],ins_list[28],ins_list[29],ins_list[30],ins_list[31],
-                          ins_list[32],ins_list[33],ins_list[34]))
+                          ins_list[32],ins_list[33],ins_list[34],None))
                 
                 print(ins_list)
                 
@@ -251,7 +263,7 @@ def insert_trajectory_movements():
     
     
 def insert_gate_crossing_events():
-    file_path = "D:\\intersections_dataset\\all_tracks\\exported\\DJI_0769_gate_crossings.csv"
+    file_path = "D:\\intersections_dataset\\all_tracks\\exported\\2401\\DJI_0769_gate_crossings.csv"
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
     with open(file_path, newline='') as csvfile:
@@ -378,4 +390,5 @@ def get_relevant_agents():
     '''
     conn.close()
             
-assign_traffic_regions()
+
+#assign_traffic_segment_seq()

@@ -60,7 +60,31 @@ LATERAL_TOLERANCE_EXITLINE = [1,0.5,-0.5,-1]
 
 LANE_BOUNDARY = {'prep-turn_s|proceed':'l_s_n|left_boundary'}
 
-L1_ACTION_MAP = {'prep_turn_':['wait','go'],'exec_turn_':['wait','go'],'int_entry_':['track_speed','follow_lead'],
+TASK_MAP = {'L_N_S':'STRAIGHT',
+            'L_N_W':'DEDICATED_RIGHT_TURN',
+            'L_N_E':'LEFT_TURN',
+            'L_S_N':'STRAIGHT',
+            'L_S_W':'LEFT_TURN',
+            'L_S_E':'RIGHT_TURN',
+            'L_E_W':'STRAIGHT',
+            'L_E_N':'DEDICATED_RIGHT_TURN',
+            'L_E_S':'LEFT_TURN',
+            'L_W_E':'STRAIGHT',
+            'L_W_N':'LEFT_TURN',
+            'L_W_S':'RIGHT_TURN',
+            }
+
+LANE_MAP = {'n_2-s_-1':'l_n_s_l',
+            'n_3-s_-2':'l_n_s_r',
+            's_3-n_-2':'l_s_n_r',
+            's_2-n_-1':'l_s_n_l',
+            'e_2-w_-1':'l_e_w_l',
+            'e_3-w_-2':'l_e_w_e',
+            'w_3-e_-2':'l_w_e_r',
+            'w_2-e_-1':'l_w_e_l',
+            }
+
+L1_ACTION_MAP = {'prep_turn_':['wait','proceed'],'exec_turn_':['wait','proceed'],'int_entry_':['track_speed','follow_lead'],
               'ln_n_':['track_speed','follow_lead'],
               'ln_s__':['track_speed','follow_lead'],
               'ln_n__':['track_speed','follow_lead'],
@@ -83,3 +107,7 @@ gate_map = {'north_exit':[72,73],
 
 RELEV_VEHS_TIME_THRESH = 1
 VEH_ARRIVAL_HORIZON = 3
+
+L2_ACTIONS = ['AGGRESSIVE','NORMAL']
+
+MAX_L3_ACTIONS = 1

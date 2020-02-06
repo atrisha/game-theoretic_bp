@@ -151,16 +151,16 @@ def quartic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_
             rj.append(j)
         
         if max([abs(i) for i in ra]) <= max_accel:
-            #if max([abs(i) for i in rj]) <= max_jerk:
-            print("found path!!",T)
-            traj_found = True
-            break
-            #else:
-            #    f = 1
-            #    print('couldnt find path for',T,'max jerk:',max([abs(i) for i in rj]))
-        else:
+            if max([abs(i) for i in rj]) <= max_jerk:
+                print("found path!!",T)
+                traj_found = True
+                break
+            else:
                 f = 1
-                #print('couldnt find path for',T,'max acc/dec:',max([abs(i) for i in ra]))
+                print('couldnt find path for',T,'max jerk:',max([abs(i) for i in rj]))
+        else:
+            f = 1
+            print('couldnt find path for',T,'max acc/dec:',max([abs(i) for i in ra]))
 
     if show_animation and traj_found:  # pragma: no cover
         for i, _ in enumerate(time):
@@ -271,25 +271,22 @@ def main():
     max_jerk = 5  # max jerk [m/sss]
     dt = 0.1  # time tick [s]
     '''
-    gx_l = np.random.normal(538840.044317,1,10)
-    gy_l = np.random.normal(4813992.77308,1,10)
-    gv_l = np.random.normal(17.19,3,100)
-    plt.plot(gx_l,gy_l,'.')
-    plt.show()
+    
+    #gx_l = np.random.normal(538840.044317,1,10)
+    #gy_l = np.random.normal(4813992.77308,1,10)
+    #gv_l = np.random.normal(17.19,3,100)
     ct = 0
-    for gx,gy in zip(gx_l,gy_l):
-        for gv in gv_l:
-            sx,sy,syaw,sv,sa,gx,gy,gyaw,gv,ga,max_accel,max_jerk,dt,lane_boundary = 538817.08,4814032.29,5.3031,17.19,0,gx,gy,5.3031,gv,0.158210506064,2.5,2,0.1,None
-            res = quartic_polynomials_planner(
-                sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary)
-            if res is not None:
-                print('found path for',gx,gy,gv)
-                time, x, y, yaw, v, a, j, px_l, py_l, vx_l, vy_l = res
-                show_summary(time, x, y, yaw, v, a, j, px_l, py_l, vx_l, vy_l)
-            else:
-                print('cannot find path for',gx,gy,gv)
-            ct += 1
-            print(ct)
+    sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt,lane_boundary,center_line = 538839.93,4813997.24,5.3094,14.766527777777778,0.0014616499114032647,-0.0021502510403426916,None,None,None,None,None,None,'NORMAL',2,0.1,None,[(538822.54,4814023.19),(538842.94,4813993.87)]
+    res = quartic_polynomials_planner(
+        0, 0, 0, 14.76, 0.00018545, 5, 0, 0, 13.999, 0.001, 1.47, 2, 0.1,lane_boundary)
+    if res is not None:
+        print('found path for',5,0,0)
+        time, x, y, yaw, v, a, j, px_l, py_l, vx_l, vy_l = res
+        show_summary(time, x, y, yaw, v, a, j, px_l, py_l, vx_l, vy_l)
+    else:
+        print('cannot find path for',5,0,0)
+    ct += 1
+    print(ct)
     
     '''
     if show_animation or show_simple_plot:  # pragma: no cover

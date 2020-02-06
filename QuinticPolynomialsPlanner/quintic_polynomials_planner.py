@@ -18,6 +18,7 @@ import sqlite3
 import utils
 from scipy.stats import halfnorm
 import constants
+import sys
 
 # parameter
 
@@ -71,9 +72,10 @@ class QuinticPolynomial:
 
 def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary):
     #print('called with')
-    MAX_T = 10.0  # maximum time to the goal [s]
+    MAX_T = 20.0  # maximum time to the goal [s]
     MIN_T = 1  # minimum time to the goal[s]
-    
+    T_STEP = 1
+    #print(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt, lane_boundary)
     if show_log:
         print(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt, lane_boundary)
         print('target_pos',(gx,gy),'target vel', gv, 'target acc' , ga)
@@ -125,7 +127,7 @@ def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_
 
     time, rx, ry, ryaw, rv, ra, rj, d2g = [], [], [], [], [], [], [], []
     traj_found = False
-    for T in np.arange(MIN_T, MAX_T, MIN_T):
+    for T in np.arange(MIN_T, MAX_T, T_STEP):
         xqp = QuinticPolynomial(sx, vxs, axs, gx, vxg, axg, T)
         yqp = QuinticPolynomial(sy, vys, ays, gy, vyg, ayg, T)
 
@@ -176,12 +178,14 @@ def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_
                     traj_found = True
                     break
                 else:
-                    f = 1
-                    #print('couldnt find path for',T,'max jerk:',max([abs(i) for i in rj]), min(d2g))
+                    if show_log:
+                        print('couldnt find path for',T,'max jerk:',max([abs(i) for i in rj]))
             else:
-                    f = 1
-                    #print('couldnt find path for',T,'max acc/dec:',max([abs(i) for i in ra]), min(d2g))
-        
+                    if show_log:
+                        print('couldnt find path for',T,'max acc/dec:',max([abs(i) for i in ra]))
+        else:
+            if show_log:
+                print('trajectory outside lane boundary')
     if show_animation:  # pragma: no cover
         for i, _ in enumerate(time):
             plt.cla()
@@ -202,8 +206,9 @@ def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_
                       )
             plt.pause(0.001)
         plt.show()
-    
-    if T == MAX_T-1 and not traj_found:
+    if traj_found:
+        print('trajectory horizon',T,'secs')
+    if not traj_found:
         return None
     else:
         return time, rx, ry, ryaw, rv, ra, rj, T
@@ -216,11 +221,13 @@ def check_traj_safety(rx,vx,ax,jx,max_accel,max_jerk,dt,axis):
                 print("found path!!",T)
             return True
         else:
-            print('couldnt find',axis,' path for',T,'max jerk:',max([abs(i) for i in jx]))
+            if show_log:
+                print('couldnt find',axis,' path for',T,'max jerk:',max([abs(i) for i in jx]))
             return False
             
     else:
-        print('couldnt find',axis,' path for',T,'max acc:',max([abs(i) for i in ax]))
+        if show_log:
+            print('couldnt find',axis,' path for',T,'max acc:',max([abs(i) for i in ax]))
         return False
 
 def check_collision(rx,dist_to_lead,vxg,lvax,dt):
@@ -229,12 +236,52 @@ def check_collision(rx,dist_to_lead,vxg,lvax,dt):
         dist_to_lead += (vxg*dt + (0.5*lvax*dt**2))
         lx.append(dist_to_lead)
     dist = [math.hypot(x, y) for x,y in zip(rx,lx)]
-    print('dist values',min(dist),max(dist)) 
+    #print('dist values',min(dist),max(dist)) 
+    
+def linear_planner(sx, vxs, axs, gx, vxg, axg, max_accel,max_jerk,dt):
+    goal_reached = False
+    t = 0
+    time_x, rx, rvx, rax, rjx = [], [], [], [], []
+    time_x.append(t)
+    rx.append(sx)
+    rvx.append(vxs)
+    rax.append(axs)
+    rjx.append(0)
+    a = axs
+    v = vxs
+    while not goal_reached:
+        t += dt
+        time_x.append(t)
+        if vxg > vxs:
+            a = a + (max_jerk*dt)
+            if a > max_accel:
+                a = max_accel
+            d = sx + (vxs * dt) + (0.5*a*dt**2)
+            v = v + a*dt
+            rx.append(rx[-1]+d)
+            rvx.append(v)
+            rax.append(a)
+            rjx.append((abs(rax[-2]-rax[-1]))/dt)
+            if rx[-1] > gx or v > vxg:
+                goal_reached = True
+        else:
+            a = a - (max_jerk*dt)
+            if abs(a) > max_accel:
+                a = -max_accel
+            d = sx + (vxs * dt) + (0.5*a*dt**2)
+            v = v + a*dt
+            rx.append(rx[-1]+d)
+            rvx.append(v)
+            rax.append(a)
+            rjx.append((abs(rax[-2]-rax[-1]))/dt)
+            if rx[-1] > gx or v < vxg:
+                goal_reached = True
+    return time_x, rx, rvx, rax, rjx
+            
+        
+         
 
 def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line):
-    MAX_T = 10.0  # maximum time to the goal [s]
-    MIN_T = .01  # minimum time to the goal[s]
-    MAX_TX = 5.0
     max_accel_long = constants.MAX_LONG_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LONG_ACC_AGGR
     max_accel_lat = constants.MAX_LAT_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LAT_ACC_AGGR
     #print('called with')
@@ -282,9 +329,14 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
     lead_vehicle_present = False
     if lvx is not None:
         lead_vehicle_present = True
-        MAX_T = 10.0  # maximum time to the goal [s]
+        MAX_TY = 20.0  # maximum time to the goal [s]
         MIN_T = 1  # minimum time to the goal[s]
-        MAX_TX = 10.0
+        MAX_TX = 20.0
+        T_STEP = 0.1
+    else:
+        MAX_TY = 20.0  # maximum time to the goal [s]
+        MIN_T = .01  # minimum time to the goal[s]
+        MAX_TX = 20.0
         T_STEP = 0.1
     
     center_line_angle = math.atan2((center_line[0][1]-center_line[1][1]),(center_line[0][0]-center_line[1][0]))
@@ -308,6 +360,12 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
         vyg = lvv * math.sin(lv_angle_with_cl)
         #lvax = 
         goal_x = dist_to_lead_cl_proj - constants.CAR_FOLLOWING_SAFETY_DISTANCE
+        if acc > 0:
+            axg_list = [0]
+            axg_list = np.arange(0,acc+.5,0.5)
+        else:
+            axg_list = [0]
+            axg_list = np.arange(0,acc-.5,-0.5)
     else:
         vyg = constants.TARGET_VEL*math.sin(sv_angle_with_cl)
         if constants.TARGET_VEL*math.cos(sv_angle_with_cl) - vxs > 0:
@@ -319,43 +377,56 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
         dist_to_target_vel = vxs*time_to_target_vel + (0.5*acc*time_to_target_vel**2)
         goal_x = dist_to_target_vel
         vxg = constants.TARGET_VEL * math.cos(sv_angle_with_cl)
-        axg = 0
+        if acc > 0:
+            axg_list = [0]
+            axg_list = np.arange(0,acc+.5,0.5)
+        else:
+            axg_list = [0]
+            axg_list = np.arange(0,acc-.5,-0.5)
     goal_y = 0
     
     traj_found = False
-    for TX in np.arange(MIN_T, MAX_TX, T_STEP):
-        if lead_vehicle_present:
-            goal_x_upper = goal_x + max(0,vxg*TX + 0.5*lvax*(TX**2))
-            end_states = [goal_x_upper - x for x in halfnorm.rvs(loc=0,scale=10,size=100)]
-        else:
-            end_states = np.random.normal(goal_x,10,size=100)
-        for gx in end_states:
-            xqp = QuinticPolynomial(0, vxs, axs, gx, vxg, axg, TX)
-            time_x, rx, rvx, rax, rjx = [], [], [], [], []
-            traj_x_found = False
-            for t in np.arange(0.0, TX + dt, dt):
-                time_x.append(t)
-                rx.append(xqp.calc_point(t))
-                vx = xqp.calc_first_derivative(t)
-                rvx.append(vx)
-                ax = xqp.calc_second_derivative(t)
-                rax.append(ax)
-                jx = xqp.calc_third_derivative(t)
-                rjx.append(jx)
-            if check_traj_safety(rx,rvx,rax,rjx,max_accel_long,max_jerk,dt,'lon'):
-                traj_found = True
-                print('found path for',gx,TX)
-                break
-        if traj_found:
+    for axg in axg_list:
+        for TX in np.arange(MIN_T, MAX_TX, T_STEP):
             if lead_vehicle_present:
-                check_collision(rx,dist_to_lead,vxg,lvax,dt)
-                traj_x_found = True
-                break
+                goal_x_upper = goal_x + max(0,vxg*TX + 0.5*lvax*(TX**2))
+                end_states = [goal_x_upper - x for x in halfnorm.rvs(loc=0,scale=10,size=10)]
             else:
-                traj_x_found = True
-                break
-            
-    for TY in np.arange(MIN_T, MAX_T, T_STEP):
+                end_states = [goal_x + (0.25*x) for x in np.arange(100)]
+            for gx in end_states:
+                xqp = QuinticPolynomial(0, vxs, axs, gx, vxg, axg, TX)
+                time_x, rx, rvx, rax, rjx = [], [], [], [], []
+                traj_x_found = False
+                for t in np.arange(0.0, TX + dt, dt):
+                    time_x.append(t)
+                    rx.append(xqp.calc_point(t))
+                    vx = xqp.calc_first_derivative(t)
+                    rvx.append(vx)
+                    ax = xqp.calc_second_derivative(t)
+                    rax.append(ax)
+                    jx = xqp.calc_third_derivative(t)
+                    rjx.append(jx)
+                if check_traj_safety(rx,rvx,rax,rjx,max_accel_long,max_jerk,dt,'lon'):
+                    traj_found = True
+                    #print('found path for',gx,TX)
+                    break
+            if traj_found:
+                if lead_vehicle_present:
+                    check_collision(rx,dist_to_lead,vxg,lvax,dt)
+                    traj_x_found = True
+                    break
+                else:
+                    traj_x_found = True
+                    break
+        if traj_found:
+            break
+    if not traj_x_found:
+        #print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line)
+        #print('lead vehicle present',lead_vehicle_present)
+        time_x, rx, rvx, rax, rjx = linear_planner(0, vxs, axs, goal_x, vxg, axg, max_accel_long, max_jerk, dt)
+        traj_x_found = True
+        #sys.exit('car following planner trajectory not found')       
+    for TY in np.arange(MIN_T, MAX_TY, T_STEP):
         yqp = QuinticPolynomial(dist_to_centerline, vys, ays, goal_y, vyg, ayg, TY)
         time_y, ry, rvy, ray, rjy = [], [], [], [], []
         traj_y_found = False
@@ -371,7 +442,15 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
         if check_traj_safety(ry,rvy,ray,rjy,max_accel_lat,max_jerk,dt,'lat'):
             traj_y_found = True
             break
-    #print('times are',TX,TY)
+    if show_log and traj_x_found and traj_y_found:
+        print('times are',TX,TY,axg)
+    
+    if not traj_y_found:
+        #print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line)
+        #print('lead vehicle present',lead_vehicle_present)
+        #sys.exit('car following planner trajectory not found')
+        time_y, ry, rvy, ray, rjy = linear_planner(dist_to_centerline, vys, ays, goal_y, vyg, ayg, max_accel_lat, max_jerk, dt)
+        traj_y_found = True       
     
     if traj_x_found and traj_y_found:
         ''' padding lateral and longitudinal trajectory for the same length '''
@@ -415,9 +494,9 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
         time = time_x
         rx_map, ry_map = utils.fresnet_to_map(fresnet_origin[0], fresnet_origin[1], rx, ry, center_line_angle)    
         ryaw_map = [y - abs(center_line_angle) for y in ryaw]
-        plt.plot([center_line[0][0],center_line[1][0]],[center_line[0][1],center_line[1][1]],'b-')
-        show_summary(time, rx_map, ry_map, ryaw_map, rv, ra, rj)
-        print('traj found', T)
+        #plt.plot([center_line[0][0],center_line[1][0]],[center_line[0][1],center_line[1][1]],'b-')
+        #show_summary(time, rx_map, ry_map, ryaw_map, rv, ra, rj)
+        #print('traj found', T)
         return time, rx_map, ry_map, ryaw_map, rv, ra, rj, T
     else:
         return None
@@ -525,8 +604,12 @@ def main():
         plt.show()
         
 ''' with a lead vehicle '''    
-#sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt,lane_boundary,center_line = 538830.52,4814012.16,5.3031,17.19,0.0,-0.0,538839.93,4813997.24,5.3094,utils.kph_to_mps(53.1595),-0.1741,0.0026,'NORMAL',2,0.1,None,[(538822.54,4814023.19),(538842.94,4813993.87)]
+#sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt,lane_boundary,center_line = 538879.7122240972,4814019.592224097,5.274310542614675,16.986472222222222,0.0,-0.0,538835.08,4814005.55,5.3053,17.876722222222224,0.6537,0.0555,'NORMAL',2,0.1,None,[(538822.54,4814023.19),(538842.94,4813993.87)]
 ''' without a lead vehicle '''
-#sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt,lane_boundary,center_line = 538817.08,4814032.29,5.3031,17.19,0.0,-0.0,None,None,None,None,None,None,'NORMAL',2,0.1,None,[(538822.54,4814023.19),(538842.94,4813993.87)]
+#sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt,lane_boundary,center_line = 538839.93,4813997.24,5.3094,14.766527777777778,0.0014616499114032647,-0.0021502510403426916,None,None,None,None,None,None,'NORMAL',2,0.1,None,[(538822.54,4814023.19),(538842.94,4813993.87)]
 
 #car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, 'NORMAL', max_jerk, dt, lane_boundary, center_line)
+
+''' left turn '''
+sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary = 538842.39,4814000.65,2.1566,0.1291111111111111,-0.0003,538814.15,4814007.58,-2.765017735489607,7.50979619831,0.884725431993,1.47,2,0.1,[[538827.81,538847.55],[4814025.31,4813996.34]]
+quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt, lane_boundary)

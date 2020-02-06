@@ -13,7 +13,6 @@ import ast
 import sys
 import constants
 from jsonschema.exceptions import relevance
-import motion_planner
 
 # from: https://gist.github.com/nim65s/5e9902cd67f094ce65b0
 def distance_numpy(A, B, P):
@@ -161,9 +160,8 @@ def get_track_segment_seq(track_id):
     return ast.literal_eval(seq) if seq is not None else None
 
 
-def get_track(veh_state):
+def get_track(veh_state,curr_time):
     agent_id = veh_state.id
-    curr_time = veh_state.current_time
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
     if curr_time is not None:
@@ -366,86 +364,6 @@ def query_agent(conflict,subject_path,veh_state):
     return vehicles
         
 
-def get_leading_vehicles(veh_state):
-    
-    path = veh_state.segment_seq
-    curr_time = veh_state.current_time
-    current_segment = veh_state.current_segment
-    if current_segment[0:-1] == 'ln_s_-':
-        return None
-    
-    next_segment_idx = veh_state.segment_seq.index(current_segment)+1
-    next_segment = veh_state.segment_seq[next_segment_idx] if next_segment_idx < len(veh_state.segment_seq) else veh_state.segment_seq[-1]
-    veh_id = veh_state.id
-    veh_pos_x = float(veh_state.x)
-    veh_pos_y = float(veh_state.y)
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
-    c = conn.cursor()
-    ''' find the exit boundaries of the current and next segment. This will help calculate which vehicles are ahead.'''
-    q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF WHERE (NAME like '"+current_segment+"%' OR NAME like '"+next_segment+"') and REGION_PROPERTY = 'exit_boundary'"
-    ex_b_positions = dict()
-    c.execute(q_string)
-    res_exit_b = c.fetchall()
-    for ex_b in res_exit_b:
-        ex_b_positions[ex_b[0]] = (ast.literal_eval(ex_b[4]),ast.literal_eval(ex_b[5]))
-    print(list(ex_b_positions.keys()))
-    veh_dist_to_segment_exit = (math.hypot(ex_b_positions[current_segment][0][0] - veh_pos_x, ex_b_positions[current_segment][1][0] - veh_pos_y) + \
-                                math.hypot(ex_b_positions[current_segment][0][1] - veh_pos_x, ex_b_positions[current_segment][1][1] - veh_pos_y))/2
-    
-    ''' find the vehicles that are in the current segment or the next and appears within the window of the subject vehicle '''
-    q_string = "SELECT T.TRACK_ID FROM TRAJECTORY_MOVEMENTS T, v_TIMES V WHERE (T.TRAFFIC_SEGMENT_SEQ LIKE '%"+current_segment+"%' OR T.TRAFFIC_SEGMENT_SEQ LIKE '%"+next_segment+"%') AND T.TRACK_ID = V.TRACK_ID AND (V.ENTRY_TIME <= "+str(curr_time)+" AND V.EXIT_TIME >= "+str(curr_time)+") AND T.TRACK_ID <> "+str(veh_id)
-    c.execute(q_string)
-    res = c.fetchall()
-    potential_lead_vehicles = []
-    if len(res) > 0:
-        for row in res:
-            leading_vehicle_id = row[0]
-            ''' find the position of the potential lead vehicle in the current time '''
-            q_string = "select * from trajectories_0769 where track_id="+str(leading_vehicle_id)+" and time = "+str(curr_time)
-            c.execute(q_string)
-            pt_res = c.fetchone()
-            l_v_state = motion_planner.VehicleState()
-            l_v_state.set_id(pt_res[0])
-            l_v_state.set_current_time(curr_time)
-            l_v_track = get_track(l_v_state)
-            l_v_state.set_track_info(l_v_track[0,])
-            if len(l_v_track) == 0 or (len(l_v_track) > 0 and len(l_v_track[0,8]) == 0) :
-                l_v_track_region = guess_track_info(l_v_state)[8,]
-                if l_v_track_region is None:
-                    sys.exit('need to guess traffic region for relev agent')
-            else:
-                l_v_track_region = l_v_track[0,8]
-            l_v_track_segment_seq = get_track_segment_seq(l_v_state.id)
-            l_v_current_segment = get_current_segment(l_v_state,l_v_track_region,l_v_track_segment_seq,curr_time)
-            if l_v_current_segment not in ex_b_positions.keys():
-                ''' potential lead vehicle is not in the path, so ignore '''
-                continue
-            else:
-                lead_vehicle_pos = (float(pt_res[1]),float(pt_res[2]))
-                l_v_segment_ex_b = ex_b_positions[l_v_current_segment]
-                l_v_dist_to_segment_exit = (math.hypot(ex_b_positions[l_v_current_segment][0][0] - lead_vehicle_pos[0], ex_b_positions[l_v_current_segment][1][0] - lead_vehicle_pos[1]) + \
-                                    math.hypot(ex_b_positions[l_v_current_segment][0][1] - lead_vehicle_pos[0], ex_b_positions[l_v_current_segment][1][1] - lead_vehicle_pos[1]))/2
-                l_v_state.set_dist_to_segment_exit(l_v_dist_to_segment_exit)
-                if l_v_current_segment == current_segment and l_v_dist_to_segment_exit > veh_dist_to_segment_exit:
-                    ''' this vehicle is behind the subject vehicle '''
-                    continue
-                else:
-                    potential_lead_vehicles.append(l_v_state)
-            
-        if len(potential_lead_vehicles) > 1:
-            #sys.exit('need to resolve multiple potential lead vehicles ')
-            lv_idx,min_dist = 0,np.inf
-            for idx, lv in enumerate(potential_lead_vehicles):
-                dist_from_subject = math.hypot(float(lv.x)-veh_pos_x, float(lv.y)-veh_pos_y)
-                if dist_from_subject < min_dist:
-                    lv_idx = idx
-            return potential_lead_vehicles[lv_idx]
-                    
-                
-        else:
-            return potential_lead_vehicles[0] if len(potential_lead_vehicles) ==1 else None
-    else:
-        return None    
 
 
 def get_relevant_agents(veh_state):
@@ -645,7 +563,7 @@ def interpolate_track_info(veh_state,forward,backward,partial_track=None):
         track_info[3] = veh_entry_speed
         track_info[4] = 0
         track_info[5] = 0
-        track_info[7] = angle_of_centerline if angle_of_centerline > 0 else 2 * math.pi + angle_of_centerline
+        track_info[7] = math.pi + (angle_of_centerline if angle_of_centerline > 0 else 2 * math.pi + angle_of_centerline)
     conn.close()
     return track_info    
     

@@ -12,7 +12,9 @@ import matplotlib.pyplot as plt
 import ast
 import sys
 import constants
-from jsonschema.exceptions import relevance
+import pickle
+from planning_objects import VehicleState
+import os,shutil
 
 # from: https://gist.github.com/nim65s/5e9902cd67f094ce65b0
 def distance_numpy(A, B, P):
@@ -43,7 +45,16 @@ def get_centerline(lane_segment):
     conn.close()
     return center_coordinates
 
+def pickle_load(file_key):
+    l3_actions = pickle.load( open( file_key, "rb" ) )
+    return l3_actions
 
+def pickle_dump(file_key,l3_actions):
+    directory = os.path.dirname(file_key)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    pickle.dump( l3_actions, open( file_key, "wb" ) )
+    
 def dist_along_yaw(pt1,pt2,yaw,pos):
     ''' r*cos(yaw-slope + 90) = d '''
     d = abs(distance_numpy([pt1[0],pt1[1]], [pt2[0],pt2[1]], [pos[0],pos[1]]))
@@ -51,8 +62,24 @@ def dist_along_yaw(pt1,pt2,yaw,pos):
     r = d / (math.cos(yaw - slope + (.5*math.pi)))
     return abs(r)
 
+def find_nearest_in_array(array, value):
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return idx
+
 def kph_to_mps(kph):
     return kph/3.6
+
+def clear_cache(folder):
+    for filename in os.listdir(folder):
+        file_path = os.path.join(folder, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
 
 def fresnet_to_map(o_x,o_y,X,Y,centerline_angle):
     theta = abs(centerline_angle)
@@ -456,21 +483,102 @@ def region_equivalence(track_region,track_segment):
             if track_region[0:4] == 'l_'+track_segment[-1]+'_':
                 return True
         return False 
+    
+def has_crossed(segment,pos):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    
+    ''' for each segment loop and check if the vehicle has not yet crossed it'''
+    
+    q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF WHERE NAME = '"+segment+"' AND REGION_PROPERTY = 'exit_boundary'"
+    c.execute(q_string)
+    res = c.fetchone()
+    exit_pos_X = ast.literal_eval(res[4])
+    exit_pos_Y = ast.literal_eval(res[5])
+    veh_pos_x,veh_pos_y = pos[0],pos[1]
+    dist_to_exit_boundary = distance_numpy([exit_pos_X[0],exit_pos_Y[0]], [exit_pos_X[1],exit_pos_Y[1]], [veh_pos_x,veh_pos_y])
+    return True if dist_to_exit_boundary > 0 else False
 
-def assign_curent_segment(traffic_region_list,track_segment):
-    traffic_region_list = str(traffic_region_list).replace(' ','').strip(',')
-    #current_segment = []
-    #all_segments = ['int-entr_','execute-turn_','prepare-turn_','rt-stop_','rt-prep_turn_','rt_exec_turn_']
-    traffic_region_list = traffic_region_list.split(',')
-    for segment in reversed(track_segment):
-        for track_region in traffic_region_list:
-            if region_equivalence(track_region, segment):
-                return segment
-    return None  
-
+def assign_curent_segment(traffic_region_list,veh_state,simulation=False):
+    track_segment = veh_state.segment_seq
+    ''' if it is simulation, then we would have to assign a segment to the 
+    point not seen in the data. '''
+    if not simulation:
+        traffic_region_list = str(traffic_region_list).replace(' ','').strip(',')
+        #current_segment = []
+        #all_segments = ['int-entr_','execute-turn_','prepare-turn_','rt-stop_','rt-prep_turn_','rt_exec_turn_']
+        traffic_region_list = traffic_region_list.split(',')
+        for segment in reversed(track_segment):
+            for track_region in traffic_region_list:
+                if region_equivalence(track_region, segment):
+                    return segment
+        return None  
+    else:
+        curr_time = veh_state.current_time
+        if veh_state.gate_crossing_times[0] is not None and curr_time < veh_state.gate_crossing_times[0]:
+            ''' the vehicle hasn't entered the intersection, so return the first segment.'''
+            return track_segment[0]
+        elif veh_state.gate_crossing_times[1] is not None and curr_time > veh_state.gate_crossing_times[1]:
+            ''' the vehicle has left the intersection, so return the last segment'''
+            return track_segment[-1]
+        else:
+            ''' vehicle is on the intersection'''
+            ''' get the first segment. This should be set to the correct value for time=0 since we start the simulation
+            from the real scene.'''
+            prev_segment = None
+            try:
+                prev_segment = veh_state.current_segment
+            except AttributeError:
+                sys.exit('previous segment is not set (possibly for the initial scene)')
+            
+            if has_crossed(prev_segment, (veh_state.x,veh_state.y)):
+                return track_segment[track_segment.index(prev_segment)+1] 
+            else:
+                return prev_segment
+                
+def linear_planner(sx, vxs, axs, gx, vxg, axg, max_accel,max_jerk,dt):
+    goal_reached = False
+    t = 0
+    time_x, rx, rvx, rax, rjx = [], [], [], [], []
+    time_x.append(t)
+    rx.append(sx)
+    rvx.append(vxs)
+    rax.append(axs)
+    rjx.append(0)
+    a = axs
+    v = vxs
+    while not goal_reached:
+        t += dt
+        time_x.append(t)
+        if vxg > vxs:
+            a = a + (max_jerk*dt)
+            if a > max_accel:
+                a = max_accel
+            d = sx + (vxs * dt) + (0.5*a*dt**2)
+            v = v + a*dt
+            rx.append(rx[-1]+d)
+            rvx.append(v)
+            rax.append(a)
+            rjx.append((abs(rax[-2]-rax[-1]))/dt)
+            if rx[-1] > gx or v > vxg:
+                goal_reached = True
+        else:
+            a = a - (max_jerk*dt)
+            if abs(a) > max_accel:
+                a = -max_accel
+            d = sx + (vxs * dt) + (0.5*a*dt**2)
+            v = v + a*dt
+            rx.append(rx[-1]+d)
+            rvx.append(v)
+            rax.append(a)
+            rjx.append((abs(rax[-2]-rax[-1]))/dt)
+            if rx[-1] > gx or v < vxg:
+                goal_reached = True
+    return time_x, rx, rvx, rax, rjx
+      
 
 def get_current_segment(r_a_state,r_a_track_region,r_a_track_segment_seq,curr_time):
-    r_a_current_segment = assign_curent_segment(r_a_track_region,r_a_track_segment_seq)
+    r_a_current_segment = assign_curent_segment(r_a_track_region,r_a_state,False)
     if hasattr(r_a_state, 'entry_exit_time') and r_a_current_segment is None:
         entry_exit_time = r_a_state.entry_exit_time
         if curr_time < entry_exit_time[0]:
@@ -482,7 +590,7 @@ def get_current_segment(r_a_state,r_a_track_region,r_a_track_segment_seq,curr_ti
         sys.exit('no current segment found for relev agent')
     return r_a_current_segment
 
-
+''' this function interpolates track information only for real trajectories '''
 def interpolate_track_info(veh_state,forward,backward,partial_track=None):
     if partial_track is not None:
         track_info = partial_track
@@ -694,3 +802,10 @@ def entry_exit_gate_cond(entry_gate,exit_gate):
     return  "WHERE ((ENTRY_GATE = "+str(entry_gate)+" AND EXIT_GATE = "+str(exit_gate)+" )" + \
                         " OR (EXIT_GATE = "+str(exit_gate)+" AND ENTRY_GATE IS NULL))"
                         
+
+  
+    
+    
+    
+    
+    

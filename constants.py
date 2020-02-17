@@ -50,10 +50,10 @@ N_STOP_VEL_SAMPLES = {'prep-turn_s':5}
 
 CAR_FOLLOWING_SAFETY_DISTANCE = 2
 
-N_PROCEED_POS_SAMPLES = {'prep-turn_s':5,'int-entry_n':10}
-N_PROCEED_VEL_SAMPLES = {'prep-turn_s':5,'int-entry_n':100}
+N_PROCEED_POS_SAMPLES = {'prep-turn_s':5,'int-entry_n':10,'exec-turn_s':5}
+N_PROCEED_VEL_SAMPLES = {'prep-turn_s':5,'int-entry_n':100,'exec-turn_s':5}
 
-EXIT_SEGMENTS = {'prep-turn_s':'exec-turn_s','int-entry_n':'l_n_s_l'}
+EXIT_SEGMENTS = {'prep-turn_s':'exec-turn_s','int-entry_n':'l_n_s_l','exec-turn_s':'ln_w_-1'}
 
 LATERAL_TOLERANCE_STOPLINE = [1,0.5,-0.5,-1]
 LATERAL_TOLERANCE_EXITLINE = [1,0.5,-0.5,-1]
@@ -84,7 +84,7 @@ LANE_MAP = {'n_2-s_-1':'l_n_s_l',
             'w_2-e_-1':'l_w_e_l',
             }
 
-L1_ACTION_MAP = {'prep_turn_':['wait','proceed'],'exec_turn_':['wait','proceed'],'int_entry_':['track_speed','follow_lead'],
+L1_ACTION_MAP = {'prep_turn_':['wait','proceed'],'exec_turn_':['proceed'],'int_entry_':['track_speed','follow_lead'],
               'ln_n_':['track_speed','follow_lead'],
               'ln_s__':['track_speed','follow_lead'],
               'ln_n__':['track_speed','follow_lead'],
@@ -93,6 +93,12 @@ L1_ACTION_MAP = {'prep_turn_':['wait','proceed'],'exec_turn_':['wait','proceed']
               'ln_s_':['track_speed','follow_lead'],
               'ln_e_':['track_speed','follow_lead']}
 LP_FREQ = 0.1
+PLAN_FREQ = 1
+
+L1_ACTION_CODES = {'wait':1,
+                   'proceed':2,
+                   'track_speed':3,
+                   'follow_lead':4}
 
 gate_map = {'north_exit':[72,73],
                 'south_exit':[18,130],
@@ -108,6 +114,20 @@ gate_map = {'north_exit':[72,73],
 RELEV_VEHS_TIME_THRESH = 1
 VEH_ARRIVAL_HORIZON = 3
 
-L2_ACTIONS = ['AGGRESSIVE','NORMAL']
+L2_ACTION_MAP = {'wait':['AGGRESSIVE','NORMAL'],
+                 'proceed':['AGGRESSIVE','NORMAL'],
+                 'track_speed':['AGGRESSIVE','NORMAL'],
+                 'follow_lead':['AGGRESSIVE','NORMAL']}
 
-MAX_L3_ACTIONS = 1
+L2_ACTION_CODES = {'AGGRESSIVE':1,
+                   'NORMAL':2} 
+
+MAX_L3_ACTIONS = 10
+
+L3_ACTION_CACHE = 'l3_action_trajectories/'
+
+DIST_COST_MEAN = 4
+DIST_COST_SD = 0.5
+
+SPEED_COST_MEAN = 11
+SPEED_COST_SD = 5

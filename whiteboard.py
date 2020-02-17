@@ -9,6 +9,8 @@ import math
 import utils
 import sqlite3
 import ast
+import pandas as pd
+
 
 
 def translate(pt1,pt2,yaw,pos):
@@ -80,5 +82,10 @@ def q_p():
             #plt.plot(T,Y)
             #plt.show()
     print(coeff_matrix)       
-q_p()
+
+def pad_test():
+    z = str(198)
+    print(z.zfill(3))
+    
+#def panda_test():
                     

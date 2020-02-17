@@ -72,9 +72,10 @@ class QuinticPolynomial:
 
 def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary):
     #print('called with')
-    MAX_T = 20.0  # maximum time to the goal [s]
+    plan_type = 'QP'
+    MAX_T = 15.0  # maximum time to the goal [s]
     MIN_T = 1  # minimum time to the goal[s]
-    T_STEP = 1
+    T_STEP = 0.1
     #print(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt, lane_boundary)
     if show_log:
         print(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt, lane_boundary)
@@ -207,11 +208,12 @@ def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_
             plt.pause(0.001)
         plt.show()
     if traj_found:
-        print('trajectory horizon',T,'secs')
+        if show_log:
+            print('trajectory horizon',T,'secs')
     if not traj_found:
         return None
     else:
-        return time, rx, ry, ryaw, rv, ra, rj, T
+        return np.array(time), np.array(rx), np.array(ry), np.array(ryaw), np.array(rv), np.array(ra), np.array(rj), T, plan_type
 
 def check_traj_safety(rx,vx,ax,jx,max_accel,max_jerk,dt,axis):
     T = len(rx)*dt
@@ -238,45 +240,7 @@ def check_collision(rx,dist_to_lead,vxg,lvax,dt):
     dist = [math.hypot(x, y) for x,y in zip(rx,lx)]
     #print('dist values',min(dist),max(dist)) 
     
-def linear_planner(sx, vxs, axs, gx, vxg, axg, max_accel,max_jerk,dt):
-    goal_reached = False
-    t = 0
-    time_x, rx, rvx, rax, rjx = [], [], [], [], []
-    time_x.append(t)
-    rx.append(sx)
-    rvx.append(vxs)
-    rax.append(axs)
-    rjx.append(0)
-    a = axs
-    v = vxs
-    while not goal_reached:
-        t += dt
-        time_x.append(t)
-        if vxg > vxs:
-            a = a + (max_jerk*dt)
-            if a > max_accel:
-                a = max_accel
-            d = sx + (vxs * dt) + (0.5*a*dt**2)
-            v = v + a*dt
-            rx.append(rx[-1]+d)
-            rvx.append(v)
-            rax.append(a)
-            rjx.append((abs(rax[-2]-rax[-1]))/dt)
-            if rx[-1] > gx or v > vxg:
-                goal_reached = True
-        else:
-            a = a - (max_jerk*dt)
-            if abs(a) > max_accel:
-                a = -max_accel
-            d = sx + (vxs * dt) + (0.5*a*dt**2)
-            v = v + a*dt
-            rx.append(rx[-1]+d)
-            rvx.append(v)
-            rax.append(a)
-            rjx.append((abs(rax[-2]-rax[-1]))/dt)
-            if rx[-1] > gx or v < vxg:
-                goal_reached = True
-    return time_x, rx, rvx, rax, rjx
+
             
         
          
@@ -285,7 +249,7 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
     max_accel_long = constants.MAX_LONG_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LONG_ACC_AGGR
     max_accel_lat = constants.MAX_LAT_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LAT_ACC_AGGR
     #print('called with')
-    print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line)
+    plan_type = 'QP'
     '''
     if show_log:
         print(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt, lane_boundary)
@@ -423,7 +387,8 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
     if not traj_x_found:
         #print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line)
         #print('lead vehicle present',lead_vehicle_present)
-        time_x, rx, rvx, rax, rjx = linear_planner(0, vxs, axs, goal_x, vxg, axg, max_accel_long, max_jerk, dt)
+        time_x, rx, rvx, rax, rjx = utils.linear_planner(0, vxs, axs, goal_x, vxg, axg, max_accel_long, max_jerk, dt)
+        plan_type = 'LP'
         traj_x_found = True
         #sys.exit('car following planner trajectory not found')       
     for TY in np.arange(MIN_T, MAX_TY, T_STEP):
@@ -449,9 +414,10 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
         #print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line)
         #print('lead vehicle present',lead_vehicle_present)
         #sys.exit('car following planner trajectory not found')
-        time_y, ry, rvy, ray, rjy = linear_planner(dist_to_centerline, vys, ays, goal_y, vyg, ayg, max_accel_lat, max_jerk, dt)
+        time_y, ry, rvy, ray, rjy = utils.linear_planner(dist_to_centerline, vys, ays, goal_y, vyg, ayg, max_accel_lat, max_jerk, dt)
+        plan_type = 'LP'
         traj_y_found = True       
-    
+    T = 0
     if traj_x_found and traj_y_found:
         ''' padding lateral and longitudinal trajectory for the same length '''
         if len(rx) > len(ry):
@@ -497,8 +463,9 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
         #plt.plot([center_line[0][0],center_line[1][0]],[center_line[0][1],center_line[1][1]],'b-')
         #show_summary(time, rx_map, ry_map, ryaw_map, rv, ra, rj)
         #print('traj found', T)
-        return time, rx_map, ry_map, ryaw_map, rv, ra, rj, T
+        return np.array(time), np.array(rx_map), np.array(ry_map), np.array(ryaw_map), np.array(rv), np.array(ra), np.array(rj), T, plan_type
     else:
+        print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line)
         return None
     
     
@@ -611,5 +578,5 @@ def main():
 #car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, 'NORMAL', max_jerk, dt, lane_boundary, center_line)
 
 ''' left turn '''
-sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary = 538842.39,4814000.65,2.1566,0.1291111111111111,-0.0003,538814.15,4814007.58,-2.765017735489607,7.50979619831,0.884725431993,1.47,2,0.1,[[538827.81,538847.55],[4814025.31,4813996.34]]
-quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt, lane_boundary)
+#sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary = 538842.39,4814000.65,2.1566,0.1291111111111111,-0.0003,538814.15,4814007.58,-2.765017735489607,7.50979619831,0.884725431993,1.47,2,0.1,[[538827.81,538847.55],[4814025.31,4813996.34]]
+#quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt, lane_boundary)

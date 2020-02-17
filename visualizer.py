@@ -7,7 +7,7 @@ import csv
 import matplotlib.pyplot as plt
 import numpy as np
 
-def show_qre_plot():
+def show_qre_plot_toy_example():
     x_lambdas,x_ax = [],[]
     p1_n1,p1_n2,p2_n1,p2_n2 = [],[],[],[]
     csv_file_loc = "D:\\gambit\\my games\\toy_lane_change_qre.csv"
@@ -45,4 +45,26 @@ def show_qre_plot():
     plt.show()
     
 
-show_qre_plot()
+def show_animation(data_arr_x,data_arr_y):
+    time_len = max([len(x) for x in data_arr_x])
+    for i in np.arange(time_len):
+        plt.cla()
+        # for stopping simulation with the esc key.
+        plt.gcf().canvas.mpl_connect('key_release_event',
+                                     lambda event: [exit(0) if event.key == 'escape' else None])
+        plt.grid(True)
+        plt.axis("equal")
+        for _aidx, arr in enumerate(data_arr_x):
+            if i < arr.shape[0]:
+                plt.plot([arr[:i]],[data_arr_y[_aidx][:i]],'.') 
+                plt.title(str(i)+'\\'+str(time_len))
+        
+        '''
+        plt.title("Time[s]:" + str(time[i])[0:4] +
+                  " v[m/s]:" + str(rv[i])[0:4] +
+                  " a[m/ss]:" + str(ra[i])[0:4] +
+                  " jerk[m/sss]:" + str(rj[i])[0:4],
+                  )
+        '''
+        plt.pause(.1)
+    plt.show()

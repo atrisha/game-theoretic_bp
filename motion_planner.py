@@ -8,67 +8,15 @@ import constants
 import math
 import sqlite3
 import ast 
-import utils
 import numpy as np
 import itertools
 from QuinticPolynomialsPlanner.quintic_polynomials_planner import *
 from quartic_planner import *
 import matplotlib.pyplot as plt
-import motion_planner
 import sys
+import utils
+from planning_objects import VehicleState
 
-
-class VehicleState:
-    def set_track_info(self,vehicle_track_info):
-        self.track_info_set = True
-        self.track_id = vehicle_track_info[0,]
-        self.x = float(vehicle_track_info[1,])
-        self.y = float(vehicle_track_info[2,])
-        self.speed = utils.kph_to_mps(float(vehicle_track_info[3,]))
-        self.tan_acc = float(vehicle_track_info[4,])
-        self.long_acc = float(vehicle_track_info[5,])
-        self.time = float(vehicle_track_info[6,])
-        self.yaw = float(vehicle_track_info[7,])
-        self.traffic_region = vehicle_track_info[8,]
-        
-    def __init__(self):
-        self.track_info_set = True
-    
-    def set_current_segment(self,segment):
-        self.current_segment = segment
-    
-    def set_current_lane(self,current_lane):
-        self.current_lane = current_lane
-    
-    def set_segment_seq(self,segment_seq):
-        self.segment_seq = segment_seq
-        
-    def set_current_time(self,time):
-        if time is not None:
-            self.current_time = float(time)
-        else:
-            self.current_time = None
-        
-    def set_gates(self,gates):
-        self.gates = gates
-        
-    def set_traffic_light(self,signal):
-        self.signal = signal
-    
-    def set_entry_exit_time(self,time_tuple):
-        self.entry_exit_time = time_tuple
-        
-    def set_id(self,id):
-        self.id = id
-        
-    def set_gate_crossing_times(self,times):
-        self.gate_crossing_times = times
-        
-    def set_dist_to_segment_exit(self,dist):
-        self.dist_to_segment_exit= dist
-        
-    def set_out_of_view(self,oov):
-        self.out_of_view = oov
     
     
 class TrajectoryPlan:
@@ -88,18 +36,18 @@ class TrajectoryPlan:
         l2_action = self.l2_action
         lane_boundary = None
         dt = constants.LP_FREQ
-        
-        
         #boundary_state_list += get_wait_states(veh_state, init_segment)
         #boundary_state_list += get_proceed_states(veh_state, init_segment)
         boundary_lane_spec = constants.LANE_BOUNDARY[init_segment+'|'+l1_action] if init_segment+'|'+l1_action in constants.LANE_BOUNDARY else None
         if boundary_lane_spec is not None:
             lane_boundary = get_lane_boundary(boundary_lane_spec)
         
-        if self.task == 'LEFT_TURN':
+        if self.task == 'LEFT_TURN' and veh_state.current_segment[0:2] != 'ln':
             l3_action_found = False
             boundary_state_list = []
             boundary_state_list = get_boundary_states(veh_state,l1_action,l2_action)
+            if boundary_state_list is None or len(boundary_state_list) == 0:
+                sys.exit('no boundary state list found for '+str(l1_action))
             N = len(boundary_state_list)
             for i,b_s in enumerate(boundary_state_list):
                 #if math.hypot(init_pos_x-b_s[0], init_pos_y-b_s[1]) < constants.CAR_LENGTH/2:
@@ -110,10 +58,10 @@ class TrajectoryPlan:
                     lane_boundary)
                 if res is not None:
                     l3_action_found = True
-                    time, x, y, yaw, v, a, j, T = res
-                    if len(traj_list) == constants.MAX_L3_ACTIONS:
-                        break
-                    traj_list.append([time, x, y, yaw, v, a, j])
+                    time, x, y, yaw, v, a, j, T, plan_type = res
+                    #if len(traj_list) == constants.MAX_L3_ACTIONS:
+                    #    break
+                    traj_list.append((np.array([time, x, y, yaw, v, a, j]), plan_type))
                     #print(i,'/',N,T)
                     '''
                     goal_sign = np.sign(utils.distance_numpy([lb_xs[0],lb_ys[0]], [lb_xs[1],lb_ys[1]], [b_s[0], b_s[1]]))
@@ -132,16 +80,20 @@ class TrajectoryPlan:
                     continue
             if not l3_action_found:
                 print('no path found left turn')
-        elif self.task == 'STRAIGHT':
+            else:
+                l3_action_len = len(traj_list)
+        elif self.task == 'STRAIGHT' or (self.task == 'LEFT_TURN' and veh_state.current_segment[0:2] == 'ln'):
             center_line = utils.get_centerline(veh_state.current_lane)
+            if center_line is None:
+                sys.exit('center line not found for '+str(veh_state.current_lane))
             if self.lead_vehicle is None:
                 for tries in [1,2,3]:
                     #print('try',tries)
                     accel_param = self.l2_action
                     res = car_following_planner(init_pos_x, init_pos_y, init_yaw_rads, init_v, init_a_x, init_a_y, None, None, None, None, None, None, accel_param, abs(constants.MAX_ACC_JERK_AGGR), dt, None, center_line)
                     if res is not None:
-                        time, x, y, yaw, v, a, j, T = res
-                        traj_list.append([time, x, y, yaw, v, a, j])
+                        time, x, y, yaw, v, a, j, T, plan_type = res
+                        traj_list.append((np.array([time, x, y, yaw, v, a, j]), plan_type))
                         #print(T)
                         #plt.axis('equal')
                         #plt.plot(x,y,'-')
@@ -159,8 +111,8 @@ class TrajectoryPlan:
                     accel_param = self.l2_action
                     res = car_following_planner(init_pos_x, init_pos_y, init_yaw_rads, init_v, init_a_x, init_a_y, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, abs(constants.MAX_ACC_JERK_AGGR), dt, None, center_line)
                     if res is not None:
-                        time, x, y, yaw, v, a, j, T = res
-                        traj_list.append([time, x, y, yaw, v, a, j])
+                        time, x, y, yaw, v, a, j, T, plan_type = res
+                        traj_list.append((np.array([time, x, y, yaw, v, a, j]), plan_type))
                         #print(T)
                         #plt.axis('equal')
                         #plt.plot(x,y,'-')
@@ -196,7 +148,7 @@ class TrajectoryPlan:
 
 def get_boundary_states(veh_state,l1_action,l2_action):
     if l1_action == 'wait':
-        return get_wait_states(veh_state)
+        return get_wait_states(veh_state,l2_action)
     elif l1_action == 'proceed':
         return get_proceed_states(veh_state, l2_action)
     
@@ -228,7 +180,7 @@ def get_exitline(exit_segment):
     conn.close()
     return stop_coordinates
 
-def get_wait_states(veh_state):
+def get_wait_states(veh_state,l2_action):
     ''' sample boundary points for WAIT maneuver '''
     init_segment = veh_state.current_segment
     boundary_state_list = []
@@ -246,13 +198,15 @@ def get_wait_states(veh_state):
     max_abs_dec_aggr = abs(constants.MAX_LONG_DEC_AGGR)
     #max_dec_normal = np.arange(0.1,max_abs_dec_normal,(max_abs_dec_normal-0.1)/6)
     #max_dec_aggr = np.arange(max_abs_dec_normal,max_abs_dec_aggr,(max_abs_dec_aggr-max_abs_dec_normal)/6)
-    max_dec_normal = [max_abs_dec_normal]*5
-    max_dec_aggr = [max_abs_dec_aggr]*5
+    
+    if l2_action == 'AGGRESSIVE':
+        max_dec = [max_abs_dec_aggr]*5
+    elif l2_action == 'NORMAL': 
+        max_dec = [max_abs_dec_normal]*5
+    
     for s_c in stop_poss:
         for p,v,y in zip(s_c,goal_vels_zero,goal_yaws):
-            for d in max_dec_normal:
-                boundary_state_list.append((p[0],p[1],y,v,0,d))
-            for d in max_dec_aggr:
+            for d in max_dec:
                 boundary_state_list.append((p[0],p[1],y,v,0,d))
     
     return boundary_state_list

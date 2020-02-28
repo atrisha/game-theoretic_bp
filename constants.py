@@ -31,6 +31,9 @@ STOP_VEL_TOLERANCE = 0.5
 PROCEED_VEL_MEAN = 8
 PROCEED_VEL_SD = 1
 
+MAX_SAMPLES_TRACK_SPEED = 20
+MAX_SAMPLES_FOLLOW_LEAD = 20
+
 MAINTAIN_VEL_SD = 2
 TARGET_VEL = 14
 
@@ -94,11 +97,19 @@ L1_ACTION_MAP = {'prep_turn_':['wait','proceed'],'exec_turn_':['proceed'],'int_e
               'ln_e_':['track_speed','follow_lead']}
 LP_FREQ = 0.1
 PLAN_FREQ = 1
+DATASET_FPS = 30
+
+colors = ['k','g','r','c','m','b','w']
 
 L1_ACTION_CODES = {'wait':1,
                    'proceed':2,
                    'track_speed':3,
                    'follow_lead':4}
+
+L1_ACTION_CODES_2_NAME = {1:'wait',
+                   2:'proceed',
+                   3:'track_speed',
+                   4:'follow_lead'}
 
 gate_map = {'north_exit':[72,73],
                 'south_exit':[18,130],
@@ -122,12 +133,22 @@ L2_ACTION_MAP = {'wait':['AGGRESSIVE','NORMAL'],
 L2_ACTION_CODES = {'AGGRESSIVE':1,
                    'NORMAL':2} 
 
+L2_ACTION_CODES_2_NAME = {1:'AGGRESSIVE',
+                   2:'NORMAL'}
+
 MAX_L3_ACTIONS = 10
 
 L3_ACTION_CACHE = 'l3_action_trajectories/'
 
-DIST_COST_MEAN = 4
+DIST_COST_MEAN = 3
 DIST_COST_SD = 0.5
 
 SPEED_COST_MEAN = 11
 SPEED_COST_SD = 5
+
+INHIBITORY_PAYOFF_WEIGHT = 0.9
+EXCITATORY_PAYOFF_WEIGHT = 0.1
+L2_ACTION_PAYOFF_ADDITIVE = 0.3
+
+''' This is kept here so that we don't have to query the db everytime'''
+VIEWPORT = ([538782.42,538861.33,538892.67,538811.68],[4814012.83,4814060.05,4814013.85,4813967.66])

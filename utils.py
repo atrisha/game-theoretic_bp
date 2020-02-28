@@ -12,9 +12,11 @@ import matplotlib.pyplot as plt
 import ast
 import sys
 import constants
+from matplotlib import cm
 import pickle
 from planning_objects import VehicleState
 import os,shutil
+from matplotlib import path
 
 # from: https://gist.github.com/nim65s/5e9902cd67f094ce65b0
 def distance_numpy(A, B, P):
@@ -461,17 +463,30 @@ def get_relevant_agents(veh_state):
                 relev_agents.append(c_a)
     return relev_agents
     
+def dict_factory(cursor, row):
+    d = {}
+    for idx, col in enumerate(cursor.description):
+        d[col[0]] = row[idx]
+    return d
 
-def get_traffic_signal(time,direction):
+def get_traffic_signal(time,direction,file_id='769'):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
-    c = conn.cursor()
-    signal = None
-    q_string = "SELECT MAX(TIME),"+direction+" FROM TRAFFIC_LIGHTS WHERE TIME - "+str(time)+" <= 0"
-    c.execute(q_string)
-    res = c.fetchone()
-    signal = res[1]
-    conn.close()
-    return signal
+    if direction == 'ALL':
+        conn.row_factory = dict_factory
+        c = conn.cursor()
+        q_string = "SELECT * FROM TRAFFIC_LIGHTS WHERE TIME - "+str(time)+" > 0 AND FILE_ID = "+file_id+" ORDER BY TIME"
+        c.execute(q_string)
+        res = c.fetchall()
+        return res
+    else:
+        c = conn.cursor()
+        signal = None
+        q_string = "SELECT MAX(TIME),"+direction+" FROM TRAFFIC_LIGHTS WHERE TIME - "+str(time)+" <= 0 AND FILE_ID = "+file_id+" "
+        c.execute(q_string)
+        res = c.fetchone()
+        signal = res[1]
+        conn.close()
+        return signal
     
 def region_equivalence(track_region,track_segment):
     if track_region == track_segment or track_region.replace('-','_') == track_segment.replace('-','_'):
@@ -535,6 +550,62 @@ def assign_curent_segment(traffic_region_list,veh_state,simulation=False):
                 return track_segment[track_segment.index(prev_segment)+1] 
             else:
                 return prev_segment
+
+def find_index_in_list(s_sum, dist_from_origin):
+    idx = None
+    for i,x in enumerate(list(zip(dist_from_origin[:-1],dist_from_origin[1:]))):
+        if x[0] <= s_sum <= x[1]:
+            idx = i
+            break
+    return idx
+    
+def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt):
+    birds_eye_dist = math.hypot(path[-1][0]-path[0][0], path[-1][1]-path[0][1])
+    dist_from_origin = [0] + [math.hypot(p2[0]-p1[0], p2[1]-p1[1]) for p1,p2 in list(zip(path[:-1],path[1:]))]
+    dist_from_origin = [sum(dist_from_origin[:i]) for i in np.arange(1,len(dist_from_origin))]
+    dist,vels,accs = [],[],[]
+    new_path = [(path[0][0],path[0][1])]
+    v,a = v_s,a_s
+    time = np.arange(dt,time[-1],dt)
+    s_sum = 0
+    new_time = []
+    for i in time:
+        
+        s = v*dt + (0.5*a*dt**2)
+        s_sum += s
+        v = v + a * dt
+        if a < max_acc:
+            a = a + (max_jerk*dt)
+        else:
+            a = max_acc
+        if v > v_g:
+            a = a - (max_jerk*dt)
+        if abs(v - v_g) < 0.2:
+            a = 0
+        path_idx = find_index_in_list(s_sum, dist_from_origin)
+        if path_idx is None:
+            ''' this has crossed the distance along the path'''
+            break
+        overflow = dist_from_origin[path_idx+1] - s_sum
+        point = path[path_idx]
+        r = overflow/math.hypot(path[path_idx+1][0]-path[path_idx][0], path[path_idx+1][1]-path[path_idx][1])
+        point_x = path[path_idx][0] + r*(path[path_idx+1][0] - path[path_idx][0])
+        point_y = path[path_idx][1] + r*(path[path_idx+1][1] - path[path_idx][1])
+        point = (point_x,point_y)
+        new_path.append(point)
+        f=1
+        dist.append(s)
+        vels.append(v)
+        accs.append(a)
+        new_time.append(i)
+    dist = [sum(dist[:i]) for i in np.arange(1,len(dist))]
+    plt.plot(new_time,vels,'g',new_time,accs,'r')
+    plt.show()
+    plt.plot([x[0] for x in new_path],[x[1] for x in new_path])
+    plt.show()
+        
+        
+
                 
 def linear_planner(sx, vxs, axs, gx, vxg, axg, max_accel,max_jerk,dt):
     goal_reached = False
@@ -589,6 +660,35 @@ def get_current_segment(r_a_state,r_a_track_region,r_a_track_segment_seq,curr_ti
         print(r_a_track_region,r_a_track_segment_seq,r_a_state.id,curr_time)
         sys.exit('no current segment found for relev agent')
     return r_a_current_segment
+
+
+def clip_trajectory_to_viewport(res):
+    time, x, y, yaw, v, a, j, T, plan_type = res
+    viewport = list(zip(constants.VIEWPORT[0],constants.VIEWPORT[1]))
+    p = path.Path(viewport)
+    clip_idx = None
+    for i in np.arange(len(time)-1,-1,-1):
+        in_view = p.contains_points([(x[i], y[i])])
+        if in_view[0]:
+            clip_idx = i
+            if clip_idx < len(time)-1:
+                brk=1
+            break
+    if clip_idx is None:
+        return None
+    else:
+        res = np.array([time[:clip_idx+1], x[:clip_idx+1], y[:clip_idx+1], yaw[:clip_idx+1], v[:clip_idx+1], a[:clip_idx+1], j[:clip_idx+1]])
+        return res
+            
+            
+def get_agents_for_task(task_str):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "SELECT TRACK_ID FROM TRAJECTORY_MOVEMENTS WHERE TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ = '[''ln_s_1'', ''prep-turn_s'', ''exec-turn_s'', ''ln_w_-1'']'"
+    c.execute(q_string)
+    res = c.fetchall()       
+    agents = [int(x[0]) for x in res]
+    return [11] 
 
 ''' this function interpolates track information only for real trajectories '''
 def interpolate_track_info(veh_state,forward,backward,partial_track=None):

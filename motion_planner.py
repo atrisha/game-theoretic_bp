@@ -59,9 +59,11 @@ class TrajectoryPlan:
                 if res is not None:
                     l3_action_found = True
                     time, x, y, yaw, v, a, j, T, plan_type = res
+                    clipped_res = utils.clip_trajectory_to_viewport(res)
                     #if len(traj_list) == constants.MAX_L3_ACTIONS:
                     #    break
-                    traj_list.append((np.array([time, x, y, yaw, v, a, j]), plan_type))
+                    if clipped_res is not None:
+                        traj_list.append((clipped_res, plan_type))
                     #print(i,'/',N,T)
                     '''
                     goal_sign = np.sign(utils.distance_numpy([lb_xs[0],lb_ys[0]], [lb_xs[1],lb_ys[1]], [b_s[0], b_s[1]]))
@@ -86,42 +88,55 @@ class TrajectoryPlan:
             center_line = utils.get_centerline(veh_state.current_lane)
             if center_line is None:
                 sys.exit('center line not found for '+str(veh_state.current_lane))
+            accel_param = self.l2_action
+            
+            max_accel_long = constants.MAX_LONG_ACC_NORMAL+.5 if accel_param is 'NORMAL' else constants.MAX_LONG_ACC_AGGR-.5
+            max_accel_lat = constants.MAX_LAT_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LAT_ACC_AGGR
             if self.lead_vehicle is None:
-                for tries in [1,2,3]:
+                acc_long_vals = np.random.normal(loc=max_accel_long, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_TRACK_SPEED)
+                acc_lat_vals = np.random.normal(loc=max_accel_lat, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_TRACK_SPEED)
+                acc_vals = list(zip(acc_long_vals,acc_lat_vals))
+                for i,accel_val in enumerate(acc_vals):
                     #print('try',tries)
-                    accel_param = self.l2_action
-                    res = car_following_planner(init_pos_x, init_pos_y, init_yaw_rads, init_v, init_a_x, init_a_y, None, None, None, None, None, None, accel_param, abs(constants.MAX_ACC_JERK_AGGR), dt, None, center_line)
+                    
+                    res = car_following_planner(init_pos_x, init_pos_y, init_yaw_rads, init_v, init_a_x, init_a_y, None, None, None, None, None, None, accel_val, abs(constants.MAX_ACC_JERK_AGGR), dt, None, center_line)
                     if res is not None:
                         time, x, y, yaw, v, a, j, T, plan_type = res
-                        traj_list.append((np.array([time, x, y, yaw, v, a, j]), plan_type))
+                        clipped_res = utils.clip_trajectory_to_viewport(res)
+                        if clipped_res is not None:
+                            traj_list.append((clipped_res, plan_type))
                         #print(T)
                         #plt.axis('equal')
                         #plt.plot(x,y,'-')
                         #plt.plot([center_line[0][0],center_line[1][0]],[center_line[0][1],center_line[1][1]],'b-')
                         #plt.show()
-                        break
+                        
                     else:
                         sys.exit('no path found track speed')
-                    print('no path found',tries)
+                    print('no path found')
             else:
                 lead_vehicle = self.lead_vehicle
+                acc_long_vals = np.random.normal(loc=max_accel_long, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_FOLLOW_LEAD)
+                acc_lat_vals = np.random.normal(loc=max_accel_lat, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_FOLLOW_LEAD)
+                acc_vals = list(zip(acc_long_vals,acc_lat_vals))
                 lvx, lvy, lvyaw, lvv, lvax, lvay = lead_vehicle.x, lead_vehicle.y, lead_vehicle.yaw, lead_vehicle.speed, lead_vehicle.tan_acc, lead_vehicle.long_acc
-                for tries in [1,2,3]:
+                for i,accel_val in enumerate(acc_vals):
                     #print('try',tries)
-                    accel_param = self.l2_action
-                    res = car_following_planner(init_pos_x, init_pos_y, init_yaw_rads, init_v, init_a_x, init_a_y, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, abs(constants.MAX_ACC_JERK_AGGR), dt, None, center_line)
+                    res = car_following_planner(init_pos_x, init_pos_y, init_yaw_rads, init_v, init_a_x, init_a_y, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_val, abs(constants.MAX_ACC_JERK_AGGR), dt, None, center_line)
                     if res is not None:
                         time, x, y, yaw, v, a, j, T, plan_type = res
-                        traj_list.append((np.array([time, x, y, yaw, v, a, j]), plan_type))
+                        clipped_res = utils.clip_trajectory_to_viewport(res)
+                        if clipped_res is not None:
+                            traj_list.append((clipped_res, plan_type))
                         #print(T)
                         #plt.axis('equal')
                         #plt.plot(x,y,'-')
                         #plt.plot([center_line[0][0],center_line[1][0]],[center_line[0][1],center_line[1][1]],'b-')
                         #plt.show()
-                        break
+                        
                     else:
                         sys.exit('no path found follow lead')
-                    print('no path found',tries)
+                    print('no path found')
         else:
             sys.exit('task '+self.task+' is not implemented')
             

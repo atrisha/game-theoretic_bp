@@ -16,6 +16,8 @@ import cost_evaluation
 import pickle
 import os.path
 from planning_objects import VehicleState
+import matplotlib.pyplot as plt
+import visualizer
 
 
 def setup_lead_vehicle(v_state,from_ra):
@@ -201,6 +203,8 @@ def generate_action_plans(veh_state,index_in_track):
     if curr_time not in veh_state.action_plans:
         veh_state.action_plans[curr_time] = dict()
     actions_l1 = constants.L1_ACTION_MAP[current_segment[:-1].replace('-','_')]
+    sub_v_lead_vehicle = get_leading_vehicles(veh_state)
+    veh_state.set_leading_vehicle(sub_v_lead_vehicle)
     for l1 in actions_l1:
         actions_l2 = constants.L2_ACTION_MAP[l1]
         for l2 in actions_l2:
@@ -213,13 +217,18 @@ def generate_action_plans(veh_state,index_in_track):
             file_key = constants.L3_ACTION_CACHE+get_l3_action_file(None, agent_id, 0, curr_time, l1, l2)
             if not os.path.isfile(file_key):
                 l3_actions = trajectory_plan.generate_trajectory(veh_state)
-                utils.pickle_dump(file_key, l3_actions)
+                if len(l3_actions) > 0:
+                    utils.pickle_dump(file_key, l3_actions)
+                print('loaded from cache: False')
             else:
+                print('loaded from cache: True')
                 l3_actions = utils.pickle_load(file_key)
             veh_state.action_plans[curr_time][l1][l2] = np.copy(l3_actions)
             print('time',curr_time,'agent',agent_id,l1,l2)
     ''' find the relevant agents for the current subject agent. '''
     relev_agents = utils.get_relevant_agents(veh_state)
+    if sub_v_lead_vehicle is not None:
+        relev_agents.append(veh_state.leading_vehicle.id)
     for r_a in relev_agents:
         if r_a == agent_id:
             continue
@@ -285,9 +294,12 @@ def generate_action_plans(veh_state,index_in_track):
                 print('time',curr_time,'agent',agent_id,'relev agent',r_a_state.id,l1,l2)
                 if not os.path.isfile(file_key):
                     l3_actions = trajectory_plan.generate_trajectory(r_a_state)
-                    utils.pickle_dump(file_key, l3_actions)
+                    if len(l3_actions) > 0:
+                        utils.pickle_dump(file_key, l3_actions)
+                    print('loaded from cache: False')
                 else:
                     l3_actions = utils.pickle_load(file_key)
+                    print('loaded from cache: True')
                 l3_action_size = l3_actions.shape[0] if l3_actions is not None else 0
                 r_a_state.action_plans[curr_time][l1][l2] = np.copy(l3_actions)
                     
@@ -303,29 +315,30 @@ def generate_action_plans(veh_state,index_in_track):
 and stores trajectory plans in L3_ACTION_CACHE. It's called hopping because at every time interval the state hops back
 to the real state in the trajectory. '''
 def generate_hopping_plans():
-    agent_id = 11
-    ''' veh_state object maintains details about an agent'''
-    veh_state = motion_planner.VehicleState()
-    veh_state.set_id(agent_id)
-    veh_state.set_current_time(None)
-    
-    ''' find the sequence of segments of the agent. This defines its path. '''
-    track_region_seq = utils.get_track_segment_seq(veh_state.id)
-    veh_state.set_segment_seq(track_region_seq)
-    
-    ''' get the agent's trajectory'''
-    agent_track = utils.get_track(veh_state,None)
-    veh_state.set_full_track(agent_track)
-    veh_state.action_plans = dict()
-    veh_state.relev_agents = []
-    
-    ''' we will build the plans with actions @ 1Hz'''
-    timestamp_l = []
-    for i in np.arange(0,len(agent_track),30):
-        track_info = agent_track[i]
-        curr_time = float(track_info[6,])
-        timestamp_l.append(curr_time)
-        generate_action_plans(veh_state,i)
+    agent_ids = utils.get_agents_for_task('S_E')
+    for agent_id in agent_ids: 
+        ''' veh_state object maintains details about an agent'''
+        veh_state = motion_planner.VehicleState()
+        veh_state.set_id(agent_id)
+        veh_state.set_current_time(None)
+        
+        ''' find the sequence of segments of the agent. This defines its path. '''
+        track_region_seq = utils.get_track_segment_seq(veh_state.id)
+        veh_state.set_segment_seq(track_region_seq)
+        
+        ''' get the agent's trajectory'''
+        agent_track = utils.get_track(veh_state,None)
+        veh_state.set_full_track(agent_track)
+        veh_state.action_plans = dict()
+        veh_state.relev_agents = []
+        
+        ''' we will build the plans with actions @ 1Hz'''
+        timestamp_l = []
+        for i in np.arange(0,len(agent_track),60):
+            track_info = agent_track[i]
+            curr_time = float(track_info[6,])
+            timestamp_l.append(curr_time)
+            generate_action_plans(veh_state,i)
 
 ''' this set's up the initial scene from an agent's perspective from the real data and returns
 the veh_state object for that vehicle.'''
@@ -529,7 +542,7 @@ to a Nash-Q equilibrium plan. Since we are calculating the Nash equilibrium exha
  follow an equilibrium path.'''
 def generate_equilibrium_trajectories():
     ''' the use of subject vehicle in this trajectory generation is a misnomer.
-    We are using the terrm 'subject vehicle' since the real trajectory plans were
+    We are using the term 'subject vehicle' since the real trajectory plans were
     generated keeping in mind a single subject vehicle and getting other relevant
     agents with respect to the vehicle. '''
     subject_agent_id_str = '011'
@@ -544,16 +557,17 @@ def generate_equilibrium_trajectories():
     eq_tree_key = ''
     traj_pattern = '769'+str(subject_agent_id_str)+'......._'+str(start_ts)
     ''' we will work with only the mean payoff equilibria for now'''
-    eq_list = cost_evaluation.calc_equilibria(constants.L3_ACTION_CACHE,traj_pattern,'mean')
+    eq_list = cost_evaluation.calc_equilibria(constants.L3_ACTION_CACHE,traj_pattern,'mean',start_ts)
     eq_tree_key = eq_tree_key + '_' + str(start_ts)
     if eq_tree_key not in eq_dict:
         eq_dict[eq_tree_key] = eq_list
     
-    for eq_idx, eqs in enumerate(eq_dict[eq_tree_key]):
+    for eq_idx, eq_info in enumerate(eq_dict[eq_tree_key]):
+        eqs, eq_payoffs = eq_info[0], eq_info[1]
+        strategies = eqs[0]
+        traj_idx = eqs[1]
         while curr_eq_ts <= end_ts:
             ts = curr_eq_ts
-            strategies = eqs[0]
-            traj_idx = eqs[1]
             sv_info,list_of_rv_info = dict(),[]
             ts = ts+1
             for i,strtg_key in enumerate(strategies):
@@ -565,8 +579,9 @@ def generate_equilibrium_trajectories():
                 traj = utils.pickle_load(file_key)
                 
                 ''' we will work with only the mean payoff equilibria for now'''
-                traj_type = traj[int(traj_idx[i])][1]
-                plan_horizon_slice = constants.PLAN_FREQ / constants.LP_FREQ
+                #traj_type = traj[int(traj_idx[i])][1]
+                plan_horizon_slice = int(constants.PLAN_FREQ / constants.LP_FREQ)
+                #utils.plot_velocity(traj[int(traj_idx[i])][0][4,:plan_horizon_slice],11,(0,30))
                 traj = traj[int(traj_idx[i])][0][:,plan_horizon_slice]
                 ''' get the subject and relevant vehicle info into a dict
                 to be used for constructing the vehicle states for planning '''
@@ -583,17 +598,54 @@ def generate_equilibrium_trajectories():
                     rv_info['current_time'] = ts
                     rv_info['trajectories'] = traj
                     list_of_rv_info.append(rv_info)
+            '''
             #cache_dir = '769'+subject_agent_id_str+'_'+str(ts)
             veh_state_ts_plus_one = generate_simulation_action_plans(veh_state_ts,sv_info, list_of_rv_info,cache_dir)
             veh_state_ts = veh_state_ts_plus_one
             traj_pattern = '769'+str(subject_agent_id_str)+'......._'+str(ts)
             equilibria_t_plus_one = cost_evaluation.calc_equilibria(os.path.join(constants.L3_ACTION_CACHE, cache_dir),traj_pattern,'mean')
             dict_key = str(curr_eq_ts)+'('+str(eq_idx)+')'+'_'+str(ts)
+            strategies = equilibria_t_plus_one[0]
+            traj_idx = equilibria_t_plus_one[1]
             eq_dict[dict_key] = equilibria_t_plus_one
             #utils.clear_cache(os.path.join(constants.L3_ACTION_CACHE, cache_dir))
             curr_eq_ts = curr_eq_ts + 1
+            '''
+
+''' this method calculates the equilibria based on the trajectories that were generated in the hopping plans.
+Assumes that the trajectories are already present in the cache.'''
+def calc_eqs_for_hopping_trajectories():
+    show_plots = True
+    ''' since this is the time horizon'''
+    step_size_secs = 2
+    agent_id_str = '011'
+    for i in np.arange(0,13,step_size_secs):
+        print('------starting timestamp',i)
+        if i!= 0:
+            pattern = '769'+agent_id_str+'......._'+str(i)+'0..$'
+        else:
+            pattern = '769'+agent_id_str+'......._'+str(i)+'$'
+        eq_list = cost_evaluation.calc_equilibria(constants.L3_ACTION_CACHE,pattern,'mean',i)
+        if show_plots:
+            for eq_idx, eq_info in enumerate(eq_list):
+                eqs, traj_idx, eq_payoffs = eq_info[0], eq_info[1], eq_info[2]
+                fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
+                for _ag_idx,act in enumerate(eqs):
+                    agent_id = int(act[6:9]) if int(act[6:9])!=0 else int(act[3:6]) 
+                    file_key = constants.L3_ACTION_CACHE+act
+                    traj = utils.pickle_load(file_key)
+                    visualizer.plot_all_trajectories(traj,ax1,ax2,ax3)
+                    plan_horizon_slice = step_size_secs * int(constants.PLAN_FREQ / constants.LP_FREQ)
+                    ''' we can cut the slice from 0 since the trajectory begins at the given timestamp (i) and not from the beginning of the scene '''
+                    traj_slice = traj[int(traj_idx[_ag_idx])][0][:,:plan_horizon_slice]
+                    traj_vels = traj_slice[4,:] 
+                    '''get the timestamp in ms and convert it to seconds'''
+                    horizon_start = int(act.split('_')[1])/1000
+                    horizon_end = step_size_secs + (int(act.split('_')[1])+step_size_secs)/1000
+                    traj_vels_times = [horizon_start + x for x in traj_slice[0,:]]
+                    visualizer.plot_velocity(list(zip(traj_vels_times,traj_vels)),agent_id,(horizon_start,horizon_end),_ag_idx,ax4)
+                plt.show()
+                plt.clf()
 
 
-
-
-generate_equilibrium_trajectories()
+calc_eqs_for_hopping_trajectories()

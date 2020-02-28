@@ -25,7 +25,7 @@ import sys
 
 show_animation = False
 show_simple_plot = False
-show_log = False
+show_log = True
 
 class QuinticPolynomial:
 
@@ -69,6 +69,9 @@ class QuinticPolynomial:
         xt = 6 * self.a3 + 24 * self.a4 * t + 60 * self.a5 * t ** 2
 
         return xt
+    
+    def print_coeff(self,str):
+        print(str,self.a0,self.a1,self.a3,self.a4,self.a5)
 
 def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary):
     #print('called with')
@@ -125,13 +128,18 @@ def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_
     ays = sa * math.sin(syaw)
     axg = ga * math.cos(gyaw)
     ayg = ga * math.sin(gyaw)
-
+    
+    #linear_plan_x = utils.linear_planner(sx, vxs, axs, gx, vxg, axg, max_accel, max_jerk, dt)
+    #linear_plan_y = utils.linear_planner(sy, vys, ays, gy, vyg, ayg, constants.MAX_LAT_ACC_NORMAL, constants.MAX_ACC_JERK_AGGR, dt)
+    
+    
     time, rx, ry, ryaw, rv, ra, rj, d2g = [], [], [], [], [], [], [], []
     traj_found = False
     for T in np.arange(MIN_T, MAX_T, T_STEP):
         xqp = QuinticPolynomial(sx, vxs, axs, gx, vxg, axg, T)
         yqp = QuinticPolynomial(sy, vys, ays, gy, vyg, ayg, T)
-
+        #xqp.print_coeff('x')
+        #yqp.print_coeff('y')
         time, rx, ry, ryaw, rv, ra, rj, d2g = [], [], [], [], [], [], [], []
         within_lane = True
         goal_reached = False
@@ -245,9 +253,10 @@ def check_collision(rx,dist_to_lead,vxg,lvax,dt):
         
          
 
-def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line):
-    max_accel_long = constants.MAX_LONG_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LONG_ACC_AGGR
-    max_accel_lat = constants.MAX_LAT_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LAT_ACC_AGGR
+def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_val, max_jerk, dt,lane_boundary,center_line):
+    #max_accel_long = constants.MAX_LONG_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LONG_ACC_AGGR
+    #max_accel_lat = constants.MAX_LAT_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LAT_ACC_AGGR
+    max_accel_long,max_accel_lat = accel_val[0],accel_val[1]
     #print('called with')
     plan_type = 'QP'
     '''
@@ -376,7 +385,7 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
                     break
             if traj_found:
                 if lead_vehicle_present:
-                    check_collision(rx,dist_to_lead,vxg,lvax,dt)
+                    #check_collision(rx,dist_to_lead,vxg,lvax,dt)
                     traj_x_found = True
                     break
                 else:
@@ -465,7 +474,7 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
         #print('traj found', T)
         return np.array(time), np.array(rx_map), np.array(ry_map), np.array(ryaw_map), np.array(rv), np.array(ra), np.array(rj), T, plan_type
     else:
-        print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line)
+        print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_val, max_jerk, dt,lane_boundary,center_line)
         return None
     
     
@@ -578,5 +587,5 @@ def main():
 #car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, 'NORMAL', max_jerk, dt, lane_boundary, center_line)
 
 ''' left turn '''
-#sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary = 538842.39,4814000.65,2.1566,0.1291111111111111,-0.0003,538814.15,4814007.58,-2.765017735489607,7.50979619831,0.884725431993,1.47,2,0.1,[[538827.81,538847.55],[4814025.31,4813996.34]]
-#quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt, lane_boundary)
+sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary = 538842.39,4814000.65,2.1566,0.1291111111111111,-0.0003,538814.15,4814007.58,-2.765017735489607,7.50979619831,0.884725431993,3.6,2,0.1,[[538827.81,538847.55],[4814025.31,4813996.34]]
+quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt, lane_boundary)

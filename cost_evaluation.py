@@ -23,6 +23,7 @@ import pandas as pd
 import scipy.special,scipy.stats
 import visualizer
 import equilibria
+from scipy.interpolate import CubicSpline
 
 def dist_payoffs(dist_arr):
     return scipy.special.erf((dist_arr - constants.DIST_COST_MEAN) / (constants.DIST_COST_SD * math.sqrt(2)))
@@ -30,40 +31,27 @@ def dist_payoffs(dist_arr):
 def progress_payoffs(dist_arr):
     return scipy.special.erf((dist_arr - constants.SPEED_COST_MEAN) / (constants.SPEED_COST_SD * math.sqrt(2)))
 
-''' given a strategy combination, evaluate the vector of payoffs for each agent.'''
-def eval_inhibitory(traj_list,a_c):
-    disp_arr_x,disp_arr_y = [],[] 
+def eval_regulatory(traj_list,curr_time,dist_arr,traffic_signal,strat_str):
+    g = 1
+
+def calc_total_payoffs(inhibitory,excitatory,traj_list,strategy_tuple,traffic_signal):
     num_agents = len(traj_list)
+    eval_trajectory_complexity(traj_list)
     len_of_trajectories = [len(x) for x in traj_list]
-    all_trajectory_indices = list(itertools.product(*[np.arange(x) for x in len_of_trajectories]))
-    all_possible_payoffs = dict()
-    for traj_idx_tuple in all_trajectory_indices:
-        trajectory_dataframes = []
-        for i in np.arange(num_agents):
-            _data_frames = traj_list[i][traj_idx_tuple[i]]
-            trajectory_dataframes.append(_data_frames)
-        ''' pair-wise min distance matrix '''
-        dist_among_agents = np.full(shape=(num_agents,num_agents),fill_value=np.inf)
-        dist = np.full(shape=(num_agents),fill_value=np.inf)
-        for i in np.arange(num_agents):
-            for j in np.arange(i,num_agents):
-                if i != j:
-                    s_x,r_x = trajectory_dataframes[i]['x'].as_matrix(),trajectory_dataframes[j]['x'].as_matrix()
-                    ''' for now calculate the plan payoffs instead of payoffs for the next 1 second '''
-                    slice_len = min(s_x.shape[0],r_x.shape[0])
-                    #slice_len = min(constants.PLAN_FREQ/constants.LP_FREQ,s_x.shape[0],r_x.shape[0])
-                    s_x,r_x = s_x[:slice_len],r_x[:slice_len]
-                    s_y,r_y = trajectory_dataframes[i]['y'].as_matrix(),trajectory_dataframes[j]['y'].as_matrix()
-                    slice_len = min(s_y.shape[0],r_y.shape[0])
-                    s_y,r_y = s_y[:slice_len],r_y[:slice_len]
-                    _d = np.hypot(s_x-r_x,s_y-r_y)
-                    dist_among_agents[i,j] = min(_d)
-        ''' to be safe, make the matrix symmetric '''
-        dist_among_agents = np.minimum(dist_among_agents,dist_among_agents.T)
-        ''' find the minimum distance for a vehicle action given all other agent actions '''
-        dist = np.amin(dist_among_agents,axis=1)
-        payoffs = dist_payoffs(dist)
-        all_possible_payoffs[traj_idx_tuple] = payoffs
+    #print('N=',len_of_trajectories)
+    all_trajectory_indices = list(itertools.product(*[np.random.choice(np.arange(x),size = max(1,x//5,x//4), replace=False) for x in len_of_trajectories]))
+    #print('N*=',len(all_trajectory_indices))
+    all_possible_payoffs = dict(zip(all_trajectory_indices, [0]*len(all_trajectory_indices)))
+    all_possible_payoffs_inh,all_possible_payoffs_exc = 0,0
+    if inhibitory:
+        all_possible_payoffs_inh = eval_inhibitory(traj_list, strategy_tuple,all_trajectory_indices)
+    if excitatory:
+        all_possible_payoffs_exc = eval_excitatory(traj_list, strategy_tuple,all_trajectory_indices)
+    for k in all_trajectory_indices:
+        if inhibitory:
+            all_possible_payoffs[k] = all_possible_payoffs[k] + (constants.INHIBITORY_PAYOFF_WEIGHT * all_possible_payoffs_inh[k])
+        if excitatory:
+            all_possible_payoffs[k] = all_possible_payoffs[k] + (constants.EXCITATORY_PAYOFF_WEIGHT * all_possible_payoffs_exc[k])
     all_possible_payoffs_vals = np.asarray([v for v in all_possible_payoffs.values()])
     all_possible_payoffs_keys = np.asarray([v for v in all_possible_payoffs.keys()])
     ''' calculate max,min,mean,sd respectively'''
@@ -81,19 +69,90 @@ def eval_inhibitory(traj_list,a_c):
     for i in np.arange(num_agents):
         payoff_stats_trajectories[2,i] = all_possible_payoffs_keys[utils.find_nearest_in_array(all_possible_payoffs_vals[:,i],payoff_stats[2,i])][i]
     payoff_stats[3,] = np.std(all_possible_payoffs_vals,axis = 0)
-    return payoff_stats,payoff_stats_trajectories
+    return payoff_stats,payoff_stats_trajectories        
     
-def eval_excitatory(traj_arr,a_c):
-    payoffs = np.empty(shape=(len(traj_arr)))
-    for i,s_v in enumerate(a_c):
-        s_V= traj_arr[i]['v'].as_matrix()
-        ''' for now calculate the plan payoffs '''
-        payoffs[i] = progress_payoffs(np.mean(traj_arr[i]['v'].as_matrix()))
-    return np.reshape(payoffs,newshape=(len(a_c),1))
+def eval_trajectory_complexity(traj_list):
+    f = 1
+    '''
+    plt.plot(time,rv,'g')
+    plt.plot(time,ra,'r')
+    plt.show()
+    #linear_plan_x = utils.linear_planner(sx, vxs, axs, gx, vxg, axg, max_accel, max_jerk, dt)
+    hpx = [rx[0],rx[len(rx)//3],rx[2*len(rx)//3],rx[-1]]
+    hpy = [ry[0],ry[len(ry)//3],ry[2*len(ry)//3],ry[-1]]
+    if hpx[-1] < hpx[0]:
+        hpx.reverse()
+        hpy.reverse()
+    cs = CubicSpline(hpx, hpy)
+    residuals = sum([abs(cs(x)-ry[_i]) for _i,x in enumerate(rx)])
+    utils.generate_baseline_trajectory(time,[(x,cs(x)) for x in rx],rv[0],ra[0],max_accel,max_jerk,rv[-1],dt)
+    plt.plot(rx, ry, 'b', rx, cs(rx), 'r')
+    plt.show()
+    '''        
         
+''' given a strategy combination, evaluate the vector of payoffs for each agent.'''
+def eval_inhibitory(traj_list,a_c,all_trajectory_indices):
+    disp_arr_x,disp_arr_y = [],[] 
+    num_agents = len(traj_list)
+    len_of_trajectories = [len(x) for x in traj_list]
+    all_possible_payoffs = dict()
+    for traj_idx_tuple in all_trajectory_indices:
+        trajectory_dataframes = []
+        for i in np.arange(num_agents):
+            _data_frames = traj_list[i][traj_idx_tuple[i]]
+            trajectory_dataframes.append(_data_frames)
+        ''' pair-wise min distance matrix '''
+        dist_among_agents = np.full(shape=(num_agents,num_agents),fill_value=np.inf)
+        dist = np.full(shape=(num_agents),fill_value=np.inf)
+        for i in np.arange(num_agents):
+            for j in np.arange(i,num_agents):
+                if i != j:
+                    s_x,r_x = trajectory_dataframes[i]['x'].as_matrix(),trajectory_dataframes[j]['x'].as_matrix()
+                    ''' for now calculate the plan payoffs instead of payoffs for the next 1 second '''
+                    #slice_len = min(s_x.shape[0],r_x.shape[0])
+                    slice_len = int(min(5*constants.PLAN_FREQ/constants.LP_FREQ,s_x.shape[0],r_x.shape[0]))
+                    s_x,r_x = s_x[:slice_len],r_x[:slice_len]
+                    s_y,r_y = trajectory_dataframes[i]['y'].as_matrix(),trajectory_dataframes[j]['y'].as_matrix()
+                    #slice_len = min(s_y.shape[0],r_y.shape[0])
+                    slice_len = int(min(5*constants.PLAN_FREQ/constants.LP_FREQ,s_y.shape[0],r_y.shape[0]))
+                    s_y,r_y = s_y[:slice_len],r_y[:slice_len]
+                    _d = np.hypot(s_x-r_x,s_y-r_y)
+                    dist_among_agents[i,j] = min(_d)
+        ''' to be safe, make the matrix symmetric '''
+        dist_among_agents = np.minimum(dist_among_agents,dist_among_agents.T)
+        ''' find the minimum distance for a vehicle action given all other agent actions '''
+        dist = np.amin(dist_among_agents,axis=1)
+        payoffs = dist_payoffs(dist) +constants.L2_ACTION_PAYOFF_ADDITIVE
+        all_possible_payoffs[traj_idx_tuple] = payoffs
+    return all_possible_payoffs
+    
+def eval_excitatory(traj_list,a_c,all_trajectory_indices):
+    num_agents = len(traj_list)
+    payoff_stats_trajectories = np.full(shape=(4,num_agents),fill_value=np.inf)
+    payoff_stats = np.full(shape=(4,num_agents),fill_value=np.inf)
+    len_of_trajectories = [len(x) for x in traj_list]
+    all_possible_payoffs = dict()
+    for traj_idx_tuple in all_trajectory_indices:
+        payoffs = np.full(shape=(num_agents,),fill_value=np.inf)
+        for i in np.arange(num_agents):
+            _data_frames = traj_list[i][traj_idx_tuple[i]]
+            s_V= _data_frames['v'].as_matrix()
+            ''' for now calculate the plan payoffs '''
+            payoffs[i] = progress_payoffs(np.mean(s_V)) + constants.L2_ACTION_PAYOFF_ADDITIVE
+        all_possible_payoffs[traj_idx_tuple] = payoffs
+    return all_possible_payoffs
+    
+   
+def print_readable(eq):
+    readable_eq = []
+    for s in eq:
+        readable_eq.append(s[3:6]+'_'+s[6:9]+'_'+constants.L1_ACTION_CODES_2_NAME[int(s[9:11])]+'_'+constants.L2_ACTION_CODES_2_NAME[int(s[11:13])])
+    return readable_eq
 
-def calc_equilibria(cache_dir,pattern,payoff_type):
+''' calculate equilibria in a brute force method '''
+def calc_equilibria(cache_dir,pattern,payoff_type,curr_time):
     print(pattern)
+    traffic_signal = utils.get_traffic_signal(curr_time, 'ALL',pattern[0:3])
     dir = cache_dir
     data_index = ['time', 'x', 'y', 'yaw', 'v', 'a', 'j']
     action_dict = dict()
@@ -125,20 +184,18 @@ def calc_equilibria(cache_dir,pattern,payoff_type):
     pay_off_dict = dict()
     num_agents = len(agent_ids)
     payoff_trajectories_indices_dict = dict()
-    payoff_str = ''
     for a_c in all_action_combinations:
         traj_list = []
         for a in a_c:
             if a not in traj_dict:
                 traj = utils.pickle_load(os.path.join(dir, a))
-                #traj = np.array(traj[0])
                 p_d_list = []
                 for i in np.arange(traj.shape[0]):
                     _t_data,_t_type = traj[i][0],traj[i][1]
                     if isinstance(_t_data,np.ndarray):
                         s = pd.DataFrame(_t_data, index=data_index, dtype = np.float).T
                         p_d_list.append(s)
-                #p_d_list = pd.DataFrame(traj[0], index=data_index).T
+                
                     
                 traj_dict[a] = p_d_list
                 traj_list.append(p_d_list)
@@ -146,37 +203,17 @@ def calc_equilibria(cache_dir,pattern,payoff_type):
                 traj_list.append(traj_dict[a])
             #print(a_c,a,traj[1])
                 
-        #traj_arr = np.array(traj_list)
-        #print(a_c)
-        if a_c == ('7690110000202_1000', '7690110010401_1000', '7690110030301_1000', '7690110200401_1000'):
-            brk = 1
-        inhibitory_payoffs,traj_indices = eval_inhibitory(traj_list,a_c)
-        #excitatory_payoffs = 0 * eval_excitatory(traj_list, a_c)
-        #print(a_c,np.concatenate((inhibitory_payoffs,excitatory_payoffs),axis=1))
-        #pay_offs = np.reshape(inhibitory_payoffs+excitatory_payoffs,newshape=(4,1))
-        #print(a_c,(inhibitory_payoffs+excitatory_payoffs).tolist())
+        ''' these strategies are not valid since once of them has no trajectory'''
+        if 0 in [len(x) for x in traj_list]:
+            continue
+        #print('calculating payoffs')
+        payoffs,traj_indices = calc_total_payoffs(True,True,traj_list,a_c,traffic_signal)
+        #print('calculating payoffs....DONE')
         if a_c not in pay_off_dict:
-            #pay_off_dict[a_c] = [x[0] for x in np.reshape((inhibitory_payoffs+excitatory_payoffs),newshape=(4,1)).tolist()]
-            pay_off_dict[a_c] = inhibitory_payoffs
+            pay_off_dict[a_c] = payoffs
             payoff_trajectories_indices_dict[a_c] = traj_indices
         traj_ct += 1
-        #print(traj_ct)
-        '''
-        for t in traj_list:
-            t_arr = np.asarray(t)
-            eval_inhibitory(t_arr)
-            if t_arr.shape[0] > 1:
-                t_arr = t_arr[0,:]
-                t_X = t_arr[1,]
-                t_Y = t_arr[2,]
-            else:
-                t_X = t_arr[0,1]
-                t_Y = t_arr[0,2]
-            #ax.plot(t_X,t_Y,'-')
-        #print(traj_ct)
-        ax.ticklabel_format(useOffset=False)
-        plt.show()
-        '''
+        print(traj_ct)
     seq = ['max','min','mean']
     equilibria_actions = []
     for i in np.arange(len(seq)):
@@ -189,9 +226,9 @@ def calc_equilibria(cache_dir,pattern,payoff_type):
         
         print(seq[i],'equilibria are')
         for e in eq:
-            print(e)
+            print(print_readable(e), [round(float(p),4) for p in _t_p_dict[e]])
             traj_indices = payoff_trajectories_indices_dict[e]
-            equilibria_actions.append((e,traj_indices[i,:]))
+            equilibria_actions.append((e,traj_indices[i,:],_t_p_dict[e]))
             traj_xs,traj_ys = [],[]
             for j in np.arange(num_agents):
                 traj_xs.append(traj_dict[e[j]][int(traj_indices[0,j])]['x'])
@@ -202,13 +239,7 @@ def calc_equilibria(cache_dir,pattern,payoff_type):
     #print(len(all_action_combinations))
     return equilibria_actions
 
-def calc_eqs_for_hopping_trajectories():
-    ''' since this is the time horizon'''
-    for i in np.arange(13):
-        if i!= 0:
-            pattern = '769011......._'+str(i)+'0..'
-        else:
-            pattern = '769011......._'+str(i)
-        calc_equilibria(pattern)
+
                 
 
+#calc_eqs_for_hopping_trajectories()

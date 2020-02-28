@@ -6,6 +6,9 @@ Created on Jan 8, 2020
 import csv
 import matplotlib.pyplot as plt
 import numpy as np
+import sqlite3
+from utils import kph_to_mps
+import constants
 
 def show_qre_plot_toy_example():
     x_lambdas,x_ax = [],[]
@@ -68,3 +71,36 @@ def show_animation(data_arr_x,data_arr_y):
         '''
         plt.pause(.1)
     plt.show()
+
+
+def plot_velocity(vel_list,agent_id,horizon,ag_idx,ax4):
+    if agent_id is not None:
+        q_string = "select SPEED,TIME from trajectories_0769 where track_id="+str(agent_id)+" and (TIME BETWEEN "+str(horizon[0])+" AND "+str(horizon[1])+") order by time"
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+        c = conn.cursor()
+        c.execute(q_string)
+        res = c.fetchall()
+        v_signal = []
+        X = []
+        for r in res:
+            v_signal.append(kph_to_mps(float(r[0])))
+            X.append(float(r[1]))
+        #X = [X[i] for i in np.arange(horizon[0],horizon[1],int(constants.DATASET_FPS*constants.LP_FREQ))]
+        #v_signal = [v_signal[i] for i in np.arange(horizon[0],horizon[1],int(constants.DATASET_FPS*constants.LP_FREQ))]
+        ax4.plot(X,v_signal,color=constants.colors[ag_idx])
+    if vel_list is not None:
+        ax4.plot([x[0] for x in vel_list],[x[1] for x in vel_list],color=constants.colors[ag_idx],ls='--')
+
+
+def plot_all_trajectories(traj,ax1,ax2,ax3):
+    
+    X,Y,V,A = [],[],[],[]
+    traj = traj[:,0]
+    for traj_slice in traj:
+        X = traj_slice[1,:].tolist()
+        Y = traj_slice[2,:].tolist()
+        V = traj_slice[4,:].tolist()
+        A = traj_slice[5,:].tolist()
+        ax1.plot(X,Y)
+        ax2.plot(np.arange(len(V)),V)
+        ax3.plot(np.arange(len(A)),A)

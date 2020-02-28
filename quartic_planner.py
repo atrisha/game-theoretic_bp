@@ -1,15 +1,3 @@
-"""
-
-Quintic Polynomials Planner
-
-author: Atsushi Sakai (@Atsushi_twi)
-
-Ref:
-
-- [Local Path planning And Motion Control For Agv In Positioning](http://ieeexplore.ieee.org/document/637936/)
-
-"""
-
 import math
 
 import matplotlib.pyplot as plt
@@ -68,7 +56,7 @@ class QuarticPolynomial:
 
 def quartic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary):
     #print('called with')
-    #print('target_pos',(gx,gy),'target vel', gv, 'target acc' , ga, max_accel, max_jerk, dt)
+    print('starts pos,vel,acc',(sx,sy,sv,sa),'target_pos',(gx,gy),'target vel', gv, 'target acc' , ga, max_accel, max_jerk, dt)
     acc = True
     if max_accel < 0:
         acc = False
@@ -277,16 +265,17 @@ def main():
     #gv_l = np.random.normal(17.19,3,100)
     ct = 0
     sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt,lane_boundary,center_line = 538839.93,4813997.24,5.3094,14.766527777777778,0.0014616499114032647,-0.0021502510403426916,None,None,None,None,None,None,'NORMAL',2,0.1,None,[(538822.54,4814023.19),(538842.94,4813993.87)]
-    res = quartic_polynomials_planner(
-        0, 0, 0, 14.76, 0.00018545, 5, 0, 0, 13.999, 0.001, 1.47, 2, 0.1,lane_boundary)
-    if res is not None:
-        print('found path for',5,0,0)
-        time, x, y, yaw, v, a, j, px_l, py_l, vx_l, vy_l = res
-        show_summary(time, x, y, yaw, v, a, j, px_l, py_l, vx_l, vy_l)
-    else:
-        print('cannot find path for',5,0,0)
-    ct += 1
-    print(ct)
+    for tv in np.arange(18,22,.1):
+        res = quartic_polynomials_planner(
+            0, 0, 0, 14.76, 0.00018545, 5, 0, 0, tv, 0.0001, 1.47, 2, 0.1,lane_boundary)
+        if res is not None:
+            print('found path for',5,0,0)
+            time, x, y, yaw, v, a, j, px_l, py_l, vx_l, vy_l = res
+            show_summary(time, x, y, yaw, v, a, j, px_l, py_l, vx_l, vy_l)
+        else:
+            print('cannot find path for',5,0,0)
+        ct += 1
+        print(ct)
     
     '''
     if show_animation or show_simple_plot:  # pragma: no cover

@@ -10,7 +10,7 @@ import utils
 import sqlite3
 import ast
 import pandas as pd
-
+import ruptures as rpt
 
 
 def translate(pt1,pt2,yaw,pos):
@@ -50,6 +50,15 @@ def show_dist_to_lane_boundary():
 
 import math 
 
+def show_poly():
+    a1,a2,a3,a4,a5 = 538842.39, -0.071381561358092, 0.0147584958045, -0.00264942905716, 7.43072092442e-05
+    X = np.arange(0,15,.1)
+    Y = [0 + (a1*t) + (a2*t**2) + (a3*t**3) + (a4*t**4) + (a5*t**5) for t in X]
+    plt.plot(X,Y)
+    plt.show()
+
+
+
 def q_p():
     a_0 = 0
     a_1 = 10
@@ -86,6 +95,47 @@ def q_p():
 def pad_test():
     z = str(198)
     print(z.zfill(3))
-    
+
 #def panda_test():
-                    
+import re
+def regex_test():
+    s = '769011......._10..$'
+    f1 = '7690110000202_1000'
+    f2 = '7690110000301_10010'
+    for _f in [f1,f2]:
+        if re.match(s, _f):
+            print(_f,True)
+        else:
+            print(_f,False)
+
+
+def ruptures_test():
+    q_string = "select SPEED from trajectories_0769 where track_id=11 order by time"
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    c.execute(q_string)
+    res = c.fetchall()
+    v_signal = []
+    for r in res:
+        v_signal.append(float(r[0]))
+    v_signal = np.asarray(v_signal)
+    model = "rbf"  # "l1", "rbf", "linear", "normal", "ar"
+    algo = rpt.Binseg(model=model).fit(v_signal)
+    #algo = rpt.Window(width=50, model=model).fit(v_signal)
+    #algo = rpt.Dynp(model=model, min_size=3, jump=5).fit(v_signal)
+    result = algo.predict(n_bkps=3)
+    #algo = rpt.Pelt(model="rbf").fit(v_signal)
+    #result = algo.predict(pen=10)
+    tru_brkpts = []
+    thresh_kph = [.2,40]
+    for t in thresh_kph:
+        for _i,v in enumerate(v_signal):
+            if v > t:
+                tru_brkpts.append(_i)
+                break
+    tru_brkpts.append(len(v_signal)-1)
+    rpt.display(v_signal, tru_brkpts, result)
+    plt.show()
+    
+show_poly()
+    

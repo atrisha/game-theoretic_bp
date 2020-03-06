@@ -4,13 +4,11 @@ Created on Jan 24, 2020
 @author: Atrisha
 '''
 import numpy as np
-import matplotlib.pyplot as plt
 import math
 import utils
+import matplotlib.pyplot as plt
 import sqlite3
-import ast
-import pandas as pd
-import ruptures as rpt
+
 
 
 def translate(pt1,pt2,yaw,pos):
@@ -120,10 +118,10 @@ def ruptures_test():
         v_signal.append(float(r[0]))
     v_signal = np.asarray(v_signal)
     model = "rbf"  # "l1", "rbf", "linear", "normal", "ar"
-    algo = rpt.Binseg(model=model).fit(v_signal)
+    #algo = rpt.Binseg(model=model).fit(v_signal)
     #algo = rpt.Window(width=50, model=model).fit(v_signal)
     #algo = rpt.Dynp(model=model, min_size=3, jump=5).fit(v_signal)
-    result = algo.predict(n_bkps=3)
+    #result = algo.predict(n_bkps=3)
     #algo = rpt.Pelt(model="rbf").fit(v_signal)
     #result = algo.predict(pen=10)
     tru_brkpts = []
@@ -134,8 +132,13 @@ def ruptures_test():
                 tru_brkpts.append(_i)
                 break
     tru_brkpts.append(len(v_signal)-1)
-    rpt.display(v_signal, tru_brkpts, result)
+    #rpt.display(v_signal, tru_brkpts, result)
+    plt.axvspan(8, 14, alpha=0.5, color='red')
     plt.show()
-    
-show_poly()
-    
+
+plt.axis('equal')
+plt.plot( [538798.3, 538796.58],  [4813995.35, 4813998.65], '-')
+plt.plot([538814.15,538816.08], [4814007.58,4814004.26], 'b-')
+plt.plot([538852.12],[4813985.8],'o')
+plt.plot([538814.87],[4814004.97],'x')
+plt.show()

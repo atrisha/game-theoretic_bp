@@ -17,6 +17,8 @@ import pickle
 from planning_objects import VehicleState
 import os,shutil
 from matplotlib import path
+from decimal import Decimal
+
 
 # from: https://gist.github.com/nim65s/5e9902cd67f094ce65b0
 def distance_numpy(A, B, P):
@@ -499,7 +501,7 @@ def region_equivalence(track_region,track_segment):
                 return True
         return False 
     
-def has_crossed(segment,pos):
+def has_crossed(segment,veh_state):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
     
@@ -508,17 +510,32 @@ def has_crossed(segment,pos):
     q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF WHERE NAME = '"+segment+"' AND REGION_PROPERTY = 'exit_boundary'"
     c.execute(q_string)
     res = c.fetchone()
+    if res is None or len(res) < 1:
+        sys.exit('exit boundary not found for '+str(segment))
     exit_pos_X = ast.literal_eval(res[4])
     exit_pos_Y = ast.literal_eval(res[5])
-    veh_pos_x,veh_pos_y = pos[0],pos[1]
-    dist_to_exit_boundary = distance_numpy([exit_pos_X[0],exit_pos_Y[0]], [exit_pos_X[1],exit_pos_Y[1]], [veh_pos_x,veh_pos_y])
-    return True if dist_to_exit_boundary > 0 else False
+    m = float((exit_pos_Y[1] - exit_pos_Y[0])) / float(exit_pos_X[1] - exit_pos_X[0])
+    c = (exit_pos_Y[0] - (m * exit_pos_X[0]))
+    
+    veh_pos_x, veh_pos_y = veh_state.x,veh_state.y
+    if veh_state.gate_crossing_times[0] is not None:
+        veh_orig_x, veh_orig_y = veh_state.track[0][1],veh_state.track[0][2]
+    else:
+        veh_orig_x, veh_orig_y = veh_state.path_origin[0],veh_state.path_origin[1]
+    #dist_to_exit_boundary = distance_numpy([exit_pos_X[0],exit_pos_Y[0]], [exit_pos_X[1],exit_pos_Y[1]], [veh_pos_x,veh_pos_y])
+    #dist_from_veh_origin_to_exit_boundary = distance_numpy([exit_pos_X[0],exit_pos_Y[0]], [exit_pos_X[1],exit_pos_Y[1]], [veh_orig_x,veh_orig_y])
+    res_wrt_origin = veh_orig_y - (m*veh_orig_x) - c
+    res_wrt_point = veh_pos_y - (m*veh_pos_x) - c
+    
+    conn.close()
+    return True if np.sign(res_wrt_origin) != np.sign(res_wrt_point) else False
 
 def assign_curent_segment(traffic_region_list,veh_state,simulation=False):
     track_segment = veh_state.segment_seq
     ''' if it is simulation, then we would have to assign a segment to the 
     point not seen in the data. '''
-    if not simulation:
+    assignment_from_region_failed = False
+    if not simulation and traffic_region_list is not None:
         traffic_region_list = str(traffic_region_list).replace(' ','').strip(',')
         #current_segment = []
         #all_segments = ['int-entr_','execute-turn_','prepare-turn_','rt-stop_','rt-prep_turn_','rt_exec_turn_']
@@ -527,29 +544,44 @@ def assign_curent_segment(traffic_region_list,veh_state,simulation=False):
             for track_region in traffic_region_list:
                 if region_equivalence(track_region, segment):
                     return segment
-        return None  
-    else:
+        ''' assigning based on region failed '''
+        
+        assignment_from_region_failed = True  
+    if simulation or assignment_from_region_failed or traffic_region_list is None:
         curr_time = veh_state.current_time
+        if simulation:
+                ''' get the first segment. This should be set to the correct value for time=0 since we start the simulation
+                from the real scene.'''
+                prev_segment = None
+                try:
+                    prev_segment = veh_state.current_segment
+                except AttributeError:
+                    sys.exit('previous segment is not set (possibly for the initial scene)')
+                
+                if has_crossed(prev_segment, (veh_state.x,veh_state.y)):
+                    return track_segment[track_segment.index(prev_segment)+1] 
+                else:
+                    return prev_segment
+        else:
+            if not has_crossed(track_segment[0], veh_state):
+                return track_segment[0]
+            elif has_crossed(track_segment[-1], veh_state):
+                return track_segment[-1]
+            else:
+                for seg,next_seg in zip(track_segment[:-1],track_segment[1:]):
+                    if not has_crossed(next_seg, veh_state) and has_crossed(seg, veh_state):
+                        return next_seg
+        ''' if still unable to assign, try with gate crossing times'''   
         if veh_state.gate_crossing_times[0] is not None and curr_time < veh_state.gate_crossing_times[0]:
             ''' the vehicle hasn't entered the intersection, so return the first segment.'''
             return track_segment[0]
         elif veh_state.gate_crossing_times[1] is not None and curr_time > veh_state.gate_crossing_times[1]:
             ''' the vehicle has left the intersection, so return the last segment'''
             return track_segment[-1]
-        else:
-            ''' vehicle is on the intersection'''
-            ''' get the first segment. This should be set to the correct value for time=0 since we start the simulation
-            from the real scene.'''
-            prev_segment = None
-            try:
-                prev_segment = veh_state.current_segment
-            except AttributeError:
-                sys.exit('previous segment is not set (possibly for the initial scene)')
-            
-            if has_crossed(prev_segment, (veh_state.x,veh_state.y)):
-                return track_segment[track_segment.index(prev_segment)+1] 
-            else:
-                return prev_segment
+        ''' everything failed'''
+        return None 
+                        
+                    
 
 def find_index_in_list(s_sum, dist_from_origin):
     idx = None
@@ -559,8 +591,9 @@ def find_index_in_list(s_sum, dist_from_origin):
             break
     return idx
     
-def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt):
+def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,l1_action):
     birds_eye_dist = math.hypot(path[-1][0]-path[0][0], path[-1][1]-path[0][1])
+    acc = False if l1_action == 'wait' else True
     dist_from_origin = [0] + [math.hypot(p2[0]-p1[0], p2[1]-p1[1]) for p1,p2 in list(zip(path[:-1],path[1:]))]
     dist_from_origin = [sum(dist_from_origin[:i]) for i in np.arange(1,len(dist_from_origin))]
     dist,vels,accs = [],[],[]
@@ -570,18 +603,15 @@ def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt):
     s_sum = 0
     new_time = []
     for i in time:
-        
         s = v*dt + (0.5*a*dt**2)
         s_sum += s
-        v = v + a * dt
-        if a < max_acc:
+        v = max(v + a * dt, 0)
+        if (acc and a < max_acc) or (not acc and a > max_acc):
             a = a + (max_jerk*dt)
         else:
             a = max_acc
-        if v > v_g:
+        if (acc and v > v_g):
             a = a - (max_jerk*dt)
-        if abs(v - v_g) < 0.2:
-            a = 0
         path_idx = find_index_in_list(s_sum, dist_from_origin)
         if path_idx is None:
             ''' this has crossed the distance along the path'''
@@ -599,11 +629,17 @@ def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt):
         accs.append(a)
         new_time.append(i)
     dist = [sum(dist[:i]) for i in np.arange(1,len(dist))]
+    '''
     plt.plot(new_time,vels,'g',new_time,accs,'r')
     plt.show()
     plt.plot([x[0] for x in new_path],[x[1] for x in new_path])
     plt.show()
-        
+    '''
+    if not acc and vels[-1] == 0 and len(vels) < len(time):
+        ''' pad the trajectory'''
+        vels = vels + [0]*(len(time)-len(vels))
+    return np.asarray(vels)
+     
         
 
                 
@@ -688,7 +724,7 @@ def get_agents_for_task(task_str):
     c.execute(q_string)
     res = c.fetchall()       
     agents = [int(x[0]) for x in res]
-    return [11] 
+    return agents
 
 ''' this function interpolates track information only for real trajectories '''
 def interpolate_track_info(veh_state,forward,backward,partial_track=None):
@@ -699,19 +735,24 @@ def interpolate_track_info(veh_state,forward,backward,partial_track=None):
     veh_id,curr_time = veh_state.id,veh_state.current_time
     track_info[0],track_info[6] = veh_id,curr_time
     veh_entry_segment, veh_exit_segment = veh_state.segment_seq[0],veh_state.segment_seq[-1]
-    q_string = "select TIME,TRAFFIC_REGIONS,X,Y,SPEED from trajectories_0769 where track_id="+str(veh_id)+" and time between "+str(curr_time-2)+" and "+str(curr_time+2)+" order by time"
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
-    c = conn.cursor()
-    c.execute(q_string)
-    res = c.fetchall()
-    traffic_regions = []
-    for r in res:
-        traffic_regions.append((float(r[0]),r[1]))
-    veh_entry_speed, veh_exit_speed = res[0][4],res[-1][4]
-    for_idx,back_idx = 0,0
+    if not hasattr(veh_state, 'track'):
+        q_string = "select TIME,TRAFFIC_REGIONS,X,Y,SPEED from trajectories_0769 where track_id="+str(veh_id)+" and time between "+str(curr_time-2)+" and "+str(curr_time+2)+" order by time"
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+        c = conn.cursor()
+        c.execute(q_string)
+        res = c.fetchall()
+        traffic_regions = []
+        for r in res:
+            traffic_regions.append((float(r[0]),r[1]))
+        veh_entry_speed, veh_exit_speed = res[0][4],res[-1][4]
+        conn.close()
+    else:
+        for r in veh_state.track:
+            traffic_regions = [(float(x[6]),x[8]) for x in veh_state.track]
+        veh_entry_speed, veh_exit_speed = veh_state.track[0][3],veh_state.track[-1][3]
+    for_idx,back_idx = None,None
     if not forward and not backward:
         ''' interpolate in the middle'''
-        track_info
         idx = [x[0] for x in traffic_regions].index(curr_time)
         for i in np.arange(idx,len(traffic_regions)):
             if traffic_regions[i][1] is not None and len(traffic_regions[i][1]) > 1:
@@ -721,12 +762,22 @@ def interpolate_track_info(veh_state,forward,backward,partial_track=None):
             if traffic_regions[j][1] is not None and len(traffic_regions[j][1]) > 1:
                 back_idx = j
                 break
-        if idx - back_idx < for_idx - idx:
-            track_info[8] = traffic_regions[back_idx][1]
+        if for_idx is None:
+            ''' the missing entry is the last one '''
+            track_info[8] = veh_exit_segment
+        elif back_idx is None:
+            ''' the missing entry is the first one'''
+            track_info[8] = veh_entry_segment
         else:
-            track_info[8] = traffic_regions[for_idx][1]
+            if abs(idx - back_idx) < abs(for_idx - idx):
+                ''' missing idx is closer to a previously assigned value in the past'''
+                track_info[8] = traffic_regions[back_idx][1]
+            else:
+                track_info[8] = traffic_regions[for_idx][1]
     elif forward:
         ''' extrapolate forward in time '''
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+        c = conn.cursor()
         q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF WHERE NAME = '"+veh_exit_segment+"' AND REGION_PROPERTY = 'center_line'"
         c.execute(q_string)
         res = c.fetchone()
@@ -749,10 +800,12 @@ def interpolate_track_info(veh_state,forward,backward,partial_track=None):
         track_info[4] = 0
         track_info[5] = 0
         track_info[7] = angle_of_centerline if angle_of_centerline > 0 else 2 * math.pi + angle_of_centerline 
-        
+        conn.close()
     elif backward:
         ''' extrapolate backward in time '''
         idx = 0
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+        c = conn.cursor()
         q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF WHERE NAME = '"+veh_entry_segment+"' AND REGION_PROPERTY = 'center_line'"
         c.execute(q_string)
         res = c.fetchone()
@@ -772,18 +825,13 @@ def interpolate_track_info(veh_state,forward,backward,partial_track=None):
         track_info[4] = 0
         track_info[5] = 0
         track_info[7] = math.pi + (angle_of_centerline if angle_of_centerline > 0 else 2 * math.pi + angle_of_centerline)
-    conn.close()
+        conn.close()
     return track_info    
     
 def guess_track_info(veh_state,partial_track=None):
     veh_id,curr_time = veh_state.id,veh_state.current_time
     curr_time = float(curr_time)
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
-    c = conn.cursor()
-    q_string = "SELECT ENTRY_TIME,EXIT_TIME FROM v_TIMES WHERE TRACK_ID = "+str(veh_id)
-    c.execute(q_string)
-    res = c.fetchone()
-    entry_time,exit_time = res[0],res[1]
+    entry_time,exit_time = veh_state.entry_exit_time[0],veh_state.entry_exit_time[1]
     veh_state.set_entry_exit_time((entry_time,exit_time))
     if entry_time <= curr_time <= exit_time:
         ''' need to interpolate '''
@@ -794,7 +842,6 @@ def guess_track_info(veh_state,partial_track=None):
     elif curr_time < entry_time:
         ''' need to extrapolate backward in time'''
         track_info = interpolate_track_info(veh_state,False,True,partial_track)
-    conn.close()
     return np.asarray(track_info)
     
 

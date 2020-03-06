@@ -9,8 +9,11 @@ def calc_pure_strategy_nash_equilibrium_exhaustive(pay_off_dict):
     num_players = len(list(pay_off_dict.values())[0])
     eq = list(pay_off_dict.keys())
     N = len(pay_off_dict)
+    ct = 0
     for i in np.arange(num_players):
         for k1,v1 in pay_off_dict.items():
+            #print(ct,'/',N)
+            #ct += 1
             for k2,v2 in pay_off_dict.items():
                 ''' agent i's strategy changes'''
                 if k1[i] != k2[i] and v2[i] > v1[i]:

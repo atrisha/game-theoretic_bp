@@ -72,7 +72,18 @@ def show_animation(data_arr_x,data_arr_y):
         plt.pause(.1)
     plt.show()
 
-
+def plot_payoff_grid(payoff_arr):
+    import scipy.special
+    import math
+    fig, (ax1,ax2) = plt.subplots(2, 1)
+    c = ax1.pcolor(payoff_arr)
+    fig.colorbar(c, ax=ax1)
+    X = np.arange(0,20)
+    Y = [scipy.special.erf((x - constants.DIST_COST_MEAN) / (constants.DIST_COST_SD * math.sqrt(2))) for x in X]
+    ax2.plot(X,Y)
+    fig.tight_layout()
+    plt.show()
+    
 def plot_velocity(vel_list,agent_id,horizon,ag_idx,ax4):
     if agent_id is not None:
         q_string = "select SPEED,TIME from trajectories_0769 where track_id="+str(agent_id)+" and (TIME BETWEEN "+str(horizon[0])+" AND "+str(horizon[1])+") order by time"

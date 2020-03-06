@@ -143,7 +143,10 @@ def get_leading_vehicles(veh_state):
         return None    
 
 def get_l3_action_file(file_id,agent_id,relev_agent_id, curr_time, l1_action,l2_action):
-    curr_time = math.floor(float(curr_time)*1000)
+    _t = float(curr_time)
+    _t1 = _t * 1000
+    _t2 = round(_t1)
+    curr_time = round(float(curr_time)*1000)
     file_id = '769'
     agent_id = str(agent_id).zfill(3)
     relev_agent_id = str(relev_agent_id).zfill(3)
@@ -153,7 +156,7 @@ def get_l3_action_file(file_id,agent_id,relev_agent_id, curr_time, l1_action,l2_
     return file_key
 
 def get_simulation_cache_dir(file_id,agent_id,curr_time):
-    curr_time = math.floor(float(curr_time)*1000)
+    curr_time = round(float(curr_time)*1000)
     file_id = '769'
     agent_id = str(agent_id).zfill(3)
     dir_key = file_id+agent_id+'_'+str(curr_time)
@@ -334,7 +337,7 @@ def generate_hopping_plans():
         
         ''' we will build the plans with actions @ 1Hz'''
         timestamp_l = []
-        for i in np.arange(0,len(agent_track),60):
+        for i in np.arange(0,len(agent_track),constants.DATASET_FPS*constants.PLAN_FREQ):
             track_info = agent_track[i]
             curr_time = float(track_info[6,])
             timestamp_l.append(curr_time)

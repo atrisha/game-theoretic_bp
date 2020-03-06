@@ -96,7 +96,7 @@ L1_ACTION_MAP = {'prep_turn_':['wait','proceed'],'exec_turn_':['proceed'],'int_e
               'ln_s_':['track_speed','follow_lead'],
               'ln_e_':['track_speed','follow_lead']}
 LP_FREQ = 0.1
-PLAN_FREQ = 1
+PLAN_FREQ = 2
 DATASET_FPS = 30
 
 colors = ['k','g','r','c','m','b','w']

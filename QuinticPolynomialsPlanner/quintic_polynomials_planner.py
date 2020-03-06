@@ -25,7 +25,7 @@ import sys
 
 show_animation = False
 show_simple_plot = False
-show_log = True
+show_log = False
 
 class QuinticPolynomial:
 
@@ -258,6 +258,7 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
     #max_accel_lat = constants.MAX_LAT_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LAT_ACC_AGGR
     max_accel_long,max_accel_lat = accel_val[0],accel_val[1]
     #print('called with')
+    #print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_val, max_jerk, dt,lane_boundary,center_line)
     plan_type = 'QP'
     '''
     if show_log:
@@ -365,7 +366,7 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
                 goal_x_upper = goal_x + max(0,vxg*TX + 0.5*lvax*(TX**2))
                 end_states = [goal_x_upper - x for x in halfnorm.rvs(loc=0,scale=10,size=10)]
             else:
-                end_states = [goal_x + (0.25*x) for x in np.arange(100)]
+                end_states = [goal_x + x for x in np.arange(.25,25,.25)]
             for gx in end_states:
                 xqp = QuinticPolynomial(0, vxs, axs, gx, vxg, axg, TX)
                 time_x, rx, rvx, rax, rjx = [], [], [], [], []
@@ -582,10 +583,10 @@ def main():
 ''' with a lead vehicle '''    
 #sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt,lane_boundary,center_line = 538879.7122240972,4814019.592224097,5.274310542614675,16.986472222222222,0.0,-0.0,538835.08,4814005.55,5.3053,17.876722222222224,0.6537,0.0555,'NORMAL',2,0.1,None,[(538822.54,4814023.19),(538842.94,4813993.87)]
 ''' without a lead vehicle '''
-#sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt,lane_boundary,center_line = 538839.93,4813997.24,5.3094,14.766527777777778,0.0014616499114032647,-0.0021502510403426916,None,None,None,None,None,None,'NORMAL',2,0.1,None,[(538822.54,4814023.19),(538842.94,4813993.87)]
+#sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt,lane_boundary,center_line = 538839.93,4813997.24,5.3094,14.766527777777778,0.0014616499114032647,-0.0021502510403426916,None,None,None,None,None,None,(3.6,6),2,0.1,None,[(538822.54,4814023.19),(538842.94,4813993.87)]
 
-#car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, 'NORMAL', max_jerk, dt, lane_boundary, center_line)
+#car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt, lane_boundary, center_line)
 
 ''' left turn '''
-sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary = 538842.39,4814000.65,2.1566,0.1291111111111111,-0.0003,538814.15,4814007.58,-2.765017735489607,7.50979619831,0.884725431993,3.6,2,0.1,[[538827.81,538847.55],[4814025.31,4813996.34]]
-quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt, lane_boundary)
+#sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary = 538842.39,4814000.65,2.1566,0.1291111111111111,-0.0003,538814.15,4814007.58,-2.765017735489607,7.50979619831,0.884725431993,3.6,2,0.1,[[538827.81,538847.55],[4814025.31,4813996.34]]
+#quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt, lane_boundary)

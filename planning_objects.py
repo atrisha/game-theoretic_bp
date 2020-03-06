@@ -4,6 +4,8 @@ Created on Feb 13, 2020
 @author: Atrisha
 '''
 
+import constants
+
 
 class VehicleState:
     def set_track_info(self,vehicle_track_info):
@@ -62,9 +64,29 @@ class VehicleState:
     
     def set_leading_vehicle(self,leading_vehicle):
         self.leading_vehicle = leading_vehicle
-
+    
+    def set_path_origin(self,point):
+        self.path_origin = point
 
 def kph_to_mps(kph):
     return kph/3.6
 
+class TrajectoryDef:
+    
+    def __init__(self,string_rep):
+        self.file_id = string_rep[0:2]
+        self.agent_id = string_rep[3:6]
+        self.relev_agent_id = string_rep[6:9]
+        self.l1_action = string_rep[9:11]
+        self.l1_action_readable = constants.L1_ACTION_CODES_2_NAME[int(string_rep[9:11])]
+        self.l2_action = string_rep[11:13]
+        self.l2_action_readable = constants.L2_ACTION_CODES_2_NAME[int(string_rep[11:13])]
+        acc = False if self.l1_action_readable == 'wait' else True
+        if acc:
+            self.max_acc_long = constants.MAX_LONG_ACC_NORMAL if self.l2_action_readable is 'NORMAL' else constants.MAX_LONG_ACC_AGGR
+            self.max_jerk = constants.MAX_ACC_JERK_AGGR
+        else:
+            self.max_acc_long = constants.MAX_LONG_DEC_NORMAL if self.l2_action_readable is 'NORMAL' else constants.MAX_LONG_DEC_AGGR
+            self.max_jerk = constants.MAX_DEC_JERK_AGGR
+        
 

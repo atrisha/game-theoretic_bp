@@ -113,7 +113,7 @@ class TrajectoryPlan:
                         
                     else:
                         sys.exit('no path found track speed')
-                    print('no path found')
+                        #print('no path found')
             else:
                 lead_vehicle = self.lead_vehicle
                 acc_long_vals = np.random.normal(loc=max_accel_long, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_FOLLOW_LEAD)
@@ -136,7 +136,7 @@ class TrajectoryPlan:
                         
                     else:
                         sys.exit('no path found follow lead')
-                    print('no path found')
+                        #print('no path found')
         else:
             sys.exit('task '+self.task+' is not implemented')
             

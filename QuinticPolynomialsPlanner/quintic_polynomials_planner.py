@@ -18,14 +18,15 @@ import sqlite3
 import utils
 from scipy.stats import halfnorm
 import constants
+from matplotlib import path
 import sys
 
 # parameter
 
 
-show_animation = False
-show_simple_plot = False
-show_log = False
+show_animation = True
+show_simple_plot = True
+show_log = True
 
 class QuinticPolynomial:
 
@@ -196,25 +197,7 @@ def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_
             if show_log:
                 print('trajectory outside lane boundary')
     if show_animation:  # pragma: no cover
-        for i, _ in enumerate(time):
-            plt.cla()
-            # for stopping simulation with the esc key.
-            plt.gcf().canvas.mpl_connect('key_release_event',
-                                         lambda event: [exit(0) if event.key == 'escape' else None])
-            plt.grid(True)
-            plt.axis("equal")
-            
-            plot_arrow(sx, sy, syaw)
-            plot_arrow(gx, gy, gyaw)
-            plot_arrow(rx[i], ry[i], ryaw[i])
-            
-            plt.title("Time[s]:" + str(time[i])[0:4] +
-                      " v[m/s]:" + str(rv[i])[0:4] +
-                      " a[m/ss]:" + str(ra[i])[0:4] +
-                      " jerk[m/sss]:" + str(rj[i])[0:4],
-                      )
-            plt.pause(0.001)
-        plt.show()
+        show_animation_plot(time,gx,gy,gyaw,rx,ry,ryaw,rv,rv,ra,rj)
     if traj_found:
         if show_log:
             print('trajectory horizon',T,'secs')
@@ -239,6 +222,39 @@ def check_traj_safety(rx,vx,ax,jx,max_accel,max_jerk,dt,axis):
         if show_log:
             print('couldnt find',axis,' path for',T,'max acc:',max([abs(i) for i in ax]))
         return False
+
+def show_animation_plot(time,gx,gy,gyaw,rx,ry,ryaw,rv,ra,rj,with_lead=False):
+    viewport = list(zip(constants.VIEWPORT[0],constants.VIEWPORT[1]))
+    p = path.Path(viewport)
+    for i, _ in enumerate(time):
+        in_view = p.contains_points([(rx[i], ry[i])])
+        if not in_view:
+            plt.plot(constants.VIEWPORT[0]+[constants.VIEWPORT[0][-1]],constants.VIEWPORT[1]+[constants.VIEWPORT[1][-1]],'-')
+            plt.plot([rx[0]],[ry[0]],'x')
+            plt.plot([gx],[gy],'x',c='red')
+            plt.plot(rx,ry,'g')
+            plt.plot([rx[-1]],[ry[-1]],'x',c='lime')
+        else:
+            plt.cla()
+            # for stopping simulation with the esc key.
+            plt.gcf().canvas.mpl_connect('key_release_event',
+                                         lambda event: [exit(0) if event.key == 'escape' else None])
+            plt.grid(True)
+            plt.axis("equal")
+            
+            plot_arrow(sx, sy, syaw)
+            plot_arrow(gx, gy, gyaw)
+            plot_arrow(rx[i], ry[i], ryaw[i])
+            
+            plt.title("Time[s]:" + str(time[i])[0:4] +
+                      " v[m/s]:" + str(rv[i])[0:4] +
+                      " a[m/ss]:" + str(ra[i])[0:4] +
+                      " jerk[m/sss]:" + str(rj[i])[0:4],
+                      )
+            plt.pause(0.1)
+    plt.axis('equal')
+    plt.show()
+    
 
 def check_collision(rx,dist_to_lead,vxg,lvax,dt):
     lx = [dist_to_lead]
@@ -473,6 +489,8 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
         #plt.plot([center_line[0][0],center_line[1][0]],[center_line[0][1],center_line[1][1]],'b-')
         #show_summary(time, rx_map, ry_map, ryaw_map, rv, ra, rj)
         #print('traj found', T)
+        if show_animation:
+            show_animation_plot(time,lvx,lvy,lvyaw,rx_map,ry_map,ryaw_map,rv,ra,rj,True)
         return np.array(time), np.array(rx_map), np.array(ry_map), np.array(ryaw_map), np.array(rv), np.array(ra), np.array(rj), T, plan_type
     else:
         print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_val, max_jerk, dt,lane_boundary,center_line)
@@ -581,11 +599,11 @@ def main():
         plt.show()
         
 ''' with a lead vehicle '''    
-#sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt,lane_boundary,center_line = 538879.7122240972,4814019.592224097,5.274310542614675,16.986472222222222,0.0,-0.0,538835.08,4814005.55,5.3053,17.876722222222224,0.6537,0.0555,'NORMAL',2,0.1,None,[(538822.54,4814023.19),(538842.94,4813993.87)]
+sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt,lane_boundary,center_line = 538879.7122240972,4814019.592224097,5.274310542614675,16.986472222222222,0.0,-0.0,538835.08,4814005.55,5.3053,17.876722222222224,0.6537,0.0555,(2,5),2,0.1,None,[(538822.54,4814023.19),(538842.94,4813993.87)]
 ''' without a lead vehicle '''
 #sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt,lane_boundary,center_line = 538839.93,4813997.24,5.3094,14.766527777777778,0.0014616499114032647,-0.0021502510403426916,None,None,None,None,None,None,(3.6,6),2,0.1,None,[(538822.54,4814023.19),(538842.94,4813993.87)]
 
-#car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt, lane_boundary, center_line)
+car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, max_accel, max_jerk, dt, lane_boundary, center_line)
 
 ''' left turn '''
 #sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary = 538842.39,4814000.65,2.1566,0.1291111111111111,-0.0003,538814.15,4814007.58,-2.765017735489607,7.50979619831,0.884725431993,3.6,2,0.1,[[538827.81,538847.55],[4814025.31,4813996.34]]

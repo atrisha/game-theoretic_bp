@@ -18,6 +18,7 @@ from planning_objects import VehicleState
 import os,shutil
 from matplotlib import path
 from decimal import Decimal
+import ast
 
 
 # from: https://gist.github.com/nim65s/5e9902cd67f094ce65b0
@@ -35,6 +36,13 @@ def distance_numpy(A, B, P):
     #return norm(cross(A-B, A-P))/norm(B-A),
     return cross(A-B, A-P)/norm(B-A)
 
+'''
+def line_intersection(line_1,line_2):
+    x1,y1,x2,y2,x3,y3,x4,y4 = line_1[0][0], line_1[1][0], line_1[0][1], line_1[1][1], line_2[0][0], line_2[1][0], line_2[0][1], line_2[1][1]
+    px= ( (x1*y2-y1*x2)*(x3-x4)-(x1-x2)*(x3*y4-y3*x4) ) / ( (x1-x2)*(y3-y4)-(y1-y2)*(x3-x4) ) 
+    py= ( (x1*y2-y1*x2)*(y3-y4)-(y1-y2)*(x3*y4-y3*x4) ) / ( (x1-x2)*(y3-y4)-(y1-y2)*(x3-x4) )
+    return (px, py)
+'''
 def get_centerline(lane_segment):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
@@ -86,15 +94,30 @@ def clear_cache(folder):
             print('Failed to delete %s. Reason: %s' % (file_path, e))
 
 def fresnet_to_map(o_x,o_y,X,Y,centerline_angle):
-    theta = abs(centerline_angle)
     M_X,M_Y = [],[]
+    a = centerline_angle
+    h,k = o_x,o_y
+    ''' we had our points in right hand rule, so we need to reflect the y'''
+    Y = [-y for y in Y]
+    ''' from https://pages.mtu.edu/~shene/COURSES/cs3621/NOTES/geometry/geo-tran.html
+    rotation_and_translation_matrix = np.asarray([[np.cos(a), -np.sin(a), h],\
+                                                 [np.sin(a), np.cos(a), k],\
+                                                 [0, 0, 1]])
+    '''
+    translation_matrix = np.asarray([[1, 0, h],\
+                                    [0, 1, k],\
+                                    [0, 0, 1]])
+    
+    rotation_matrix = np.asarray([[np.cos(a), -np.sin(a), 0],\
+                                 [np.sin(a), np.cos(a), 0],\
+                                 [0, 0, 1]])
+    
     for x,y in zip(X,Y):
-        m_x = o_x + x*math.cos(theta)
-        point_angle_with_fresnet = math.atan2(y, x)
-        _a = math.hypot(x, y)
-        m_y = o_y - (math.hypot(x, y) * math.sin(theta-point_angle_with_fresnet))
-        M_X.append(m_x)
-        M_Y.append(m_y)
+        point = np.asarray([x, y, 1]).T
+        rotated_point = np.matmul(rotation_matrix, point)
+        new_point = np.matmul(translation_matrix,rotated_point)
+        M_X.append(new_point[0])
+        M_Y.append(new_point[1])
     return M_X,M_Y
         
         
@@ -108,11 +131,17 @@ def split_in_n(pt1,pt2,N):
     y_coords = y_coords + [pt2[1]]
     return list(zip(x_coords,y_coords))
 
-def construct_state_grid(pt1,pt2,N,tol):
+def construct_state_grid(pt1,pt2,N,tol,grid_type):
     slope = math.atan((pt2[1]-pt1[1])/(pt2[0]-pt1[0]))
     slope_comp = (math.pi/2) - slope
-    central_coords = split_in_n(pt1,pt2,N)
-    grid = [central_coords]
+    
+    if grid_type == 'line':
+        central_coords = split_in_n(pt1,pt2,N)
+        grid = [central_coords]
+    else:
+        ''' grid type is point. return stop positions along a line '''
+        central_coords = [(pt1[0]+(pt2[0]-pt1[0])/2,pt1[1](pt2[1]-pt1[1])/2)]
+        grid = [central_coords]
     for r in tol:
         grid.append([(x[0]-(r*math.cos(slope_comp)),x[1]+(r*math.sin(slope_comp))) for x in central_coords])
     return grid
@@ -191,14 +220,17 @@ def get_track_segment_seq(track_id):
     return ast.literal_eval(seq) if seq is not None else None
 
 
-def get_track(veh_state,curr_time):
+def get_track(veh_state,curr_time,from_current=None):
     agent_id = veh_state.id
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
     if curr_time is not None:
-        q_string = "select * from trajectories_0769 where track_id="+str(agent_id)+" and time="+str(curr_time)+" order by time"
+        if not from_current:
+            q_string = "select * from trajectories_0769,trajectories_0769_ext where trajectories_0769.track_id=trajectories_0769_ext.track_id and trajectories_0769.time=trajectories_0769_ext.time and trajectories_0769.track_id="+str(agent_id)+" and trajectories_0769.time="+str(curr_time)+" order by trajectories_0769.time"
+        else:
+            q_string = "select * from trajectories_0769,trajectories_0769_ext where trajectories_0769.track_id=trajectories_0769_ext.track_id and trajectories_0769.time=trajectories_0769_ext.time and trajectories_0769.track_id="+str(agent_id)+" and trajectories_0769.time >="+str(curr_time)+" order by trajectories_0769.time"
     else:
-        q_string = "select * from trajectories_0769 where track_id="+str(agent_id)+" order by time"
+        q_string = "select * from trajectories_0769,trajectories_0769_ext where trajectories_0769.track_id=trajectories_0769_ext.track_id and trajectories_0769.time=trajectories_0769_ext.time and trajectories_0769.track_id="+str(agent_id)+" order by trajectories_0769.time"
     c.execute(q_string)
     res = c.fetchall()
     l = []
@@ -358,14 +390,15 @@ def get_path_gates_direction(agent_track,agent_id):
 def get_traffic_segment_from_gates(gates):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    segment_seq = None
+    segment_seq = []
     q_string = "SELECT SEGMENT_SEQ FROM SEGMENT_SEQ_MAP WHERE ENTRY_GATE = "+str(gates[0])+" AND EXIT_GATE = "+str(gates[1])
     c.execute(q_string)
-    res = c.fetchone()
+    res = c.fetchall()
     if res is None:
         print(q_string)
         sys.exit('unknown gate sequence. update segment_seq table')
-    segment_seq = ast.literal_eval(res[0])
+    for row in res:
+        segment_seq.append(ast.literal_eval(row[0]))
     conn.close()
     return segment_seq
     
@@ -471,6 +504,7 @@ def dict_factory(cursor, row):
         d[col[0]] = row[idx]
     return d
 
+
 def get_traffic_signal(time,direction,file_id='769'):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     if direction == 'ALL':
@@ -489,7 +523,24 @@ def get_traffic_signal(time,direction,file_id='769'):
         signal = res[1]
         conn.close()
         return signal
-    
+
+def get_actions(veh_state):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    segment = constants.SEGMENT_MAP[veh_state.current_segment]
+    if veh_state.leading_vehicle is not None:
+        q_string = "SELECT * FROM ACTIONS WHERE SEGMENT = '"+segment+"' AND LEAD_VEHICLE_PRESENT IN ('Y','*')"
+    else:
+        q_string = "SELECT * FROM ACTIONS WHERE SEGMENT = '"+segment+"' AND LEAD_VEHICLE_PRESENT IN ('N','*')"
+    c.execute(q_string)
+    rows = c.fetchall()
+    actions = dict() 
+    for res in rows:
+        if res[3] is not None and res[3] == veh_state.signal:
+            if res[1] not in  actions.items():
+                actions[res[1]] = ast.literal_eval(res[2])
+    return actions
+
 def region_equivalence(track_region,track_segment):
     if track_region == track_segment or track_region.replace('-','_') == track_segment.replace('-','_'):
         return True
@@ -514,7 +565,7 @@ def has_crossed(segment,veh_state):
         sys.exit('exit boundary not found for '+str(segment))
     exit_pos_X = ast.literal_eval(res[4])
     exit_pos_Y = ast.literal_eval(res[5])
-    m = float((exit_pos_Y[1] - exit_pos_Y[0])) / float(exit_pos_X[1] - exit_pos_X[0])
+    m = (exit_pos_Y[1] - exit_pos_Y[0]) / (exit_pos_X[1] - exit_pos_X[0])
     c = (exit_pos_Y[0] - (m * exit_pos_X[0]))
     
     veh_pos_x, veh_pos_y = veh_state.x,veh_state.y
@@ -591,9 +642,31 @@ def find_index_in_list(s_sum, dist_from_origin):
             break
     return idx
     
+def generate_trajectory_from_vel_profile(time,ref_path,vel_profile):
+    dist_from_origin = [0] + [math.hypot(p2[0]-p1[0], p2[1]-p1[1]) for p1,p2 in list(zip(ref_path[:-1],ref_path[1:]))]
+    dist_from_origin = [sum(dist_from_origin[:i]) for i in np.arange(1,len(dist_from_origin))]
+    new_path = [(ref_path[0][0],ref_path[0][1])]
+    s_sum = 0
+    for i,t in enumerate(time):
+        s = vel_profile[i]*constants.LP_FREQ
+        s_sum += s
+        path_idx = find_index_in_list(s_sum, dist_from_origin)
+        if path_idx is None:
+            brk = 1
+        overflow = dist_from_origin[path_idx+1] - s_sum
+        point = ref_path[path_idx]
+        r = overflow/math.hypot(ref_path[path_idx+1][0]-ref_path[path_idx][0], ref_path[path_idx+1][1]-ref_path[path_idx][1])
+        point_x = ref_path[path_idx][0] + r*(ref_path[path_idx+1][0] - ref_path[path_idx][0])
+        point_y = ref_path[path_idx][1] + r*(ref_path[path_idx+1][1] - ref_path[path_idx][1])
+        point = (point_x,point_y)
+        new_path.append(point)
+    return new_path
+        
+    
+    
 def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,l1_action):
     birds_eye_dist = math.hypot(path[-1][0]-path[0][0], path[-1][1]-path[0][1])
-    acc = False if l1_action == 'wait' else True
+    acc = False if l1_action == 'wait-for-oncoming' else True
     dist_from_origin = [0] + [math.hypot(p2[0]-p1[0], p2[1]-p1[1]) for p1,p2 in list(zip(path[:-1],path[1:]))]
     dist_from_origin = [sum(dist_from_origin[:i]) for i in np.arange(1,len(dist_from_origin))]
     dist,vels,accs = [],[],[]
@@ -641,7 +714,19 @@ def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,l1_ac
     return np.asarray(vels)
      
         
-
+def get_exit_boundary(segment):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF WHERE NAME = '"+segment+"' and REGION_PROPERTY = 'exit_boundary'"
+    c.execute(q_string)
+    res = c.fetchone()
+    if res is None:
+        sys.exit("cannot find centerline for"+segment)
+    exit_pos_X = ast.literal_eval(res[4])
+    exit_pos_Y = ast.literal_eval(res[5])
+    return[exit_pos_X,exit_pos_Y]
+    
+    
                 
 def linear_planner(sx, vxs, axs, gx, vxg, axg, max_accel,max_jerk,dt):
     goal_reached = False
@@ -720,11 +805,12 @@ def clip_trajectory_to_viewport(res):
 def get_agents_for_task(task_str):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    q_string = "SELECT TRACK_ID FROM TRAJECTORY_MOVEMENTS WHERE TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ = '[''ln_s_1'', ''prep-turn_s'', ''exec-turn_s'', ''ln_w_-1'']'"
+    q_string = "SELECT TRACK_ID FROM TRAJECTORY_MOVEMENTS WHERE TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ = '[''ln_s_1'', ''prep-turn_s'', ''exec-turn_s'', ''ln_w_-1'']' OR TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ = '[''ln_s_1'', ''prep-turn_s'', ''exec-turn_s'', ''ln_w_-2'']'"
     c.execute(q_string)
     res = c.fetchall()       
     agents = [int(x[0]) for x in res]
-    return agents
+    #return agents
+    return [88]
 
 ''' this function interpolates track information only for real trajectories '''
 def interpolate_track_info(veh_state,forward,backward,partial_track=None):

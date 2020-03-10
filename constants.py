@@ -3,6 +3,7 @@
 '''
 Values derived from https://www.mdpi.com/2079-9292/8/9/943
 '''
+import numpy as np
 MAX_LONG_ACC_NORMAL = 1.47
 MAX_LONG_ACC_AGGR = 3.5
 MAX_LONG_ACC_EMG = 5
@@ -28,14 +29,24 @@ MAX_DEC_JERK_AGGR = -2
 STOP_LOC_STD_DEV = 1.5
 STOP_VEL_TOLERANCE = 0.5
 
-PROCEED_VEL_MEAN = 8
-PROCEED_VEL_SD = 1
+PROCEED_VEL_MEAN_EXEC_TURN = 7
+PROCEED_VEL_SD_EXEC_TURN = 1
+PROCEED_VEL_AGGRESSIVE_ADDITIVE = 1.5
+PROCEED_VEL_MEAN_EXIT = 11
+PROCEED_VEL_SD_EXIT = 2
+PROCEED_VEL_AGGRESSIVE_ADDITIVE = 1
+
+
 
 MAX_SAMPLES_TRACK_SPEED = 20
 MAX_SAMPLES_FOLLOW_LEAD = 20
+MAX_SAMPLES_DEC_TO_STOP = 20
 
 MAINTAIN_VEL_SD = 2
 TARGET_VEL = 14
+LEFT_TURN_VEL_START_POS = 7
+LEFT_TURN_VEL_START_POS_AGGR_ADDITIVE = 1
+TARGET_VEL_SD = 1
 
 PROCEED_ACC_SD = 0.5
 PROCEED_ACC_MEAN = 1
@@ -58,8 +69,9 @@ N_PROCEED_VEL_SAMPLES = {'prep-turn_s':5,'int-entry_n':100,'exec-turn_s':5}
 
 EXIT_SEGMENTS = {'prep-turn_s':'exec-turn_s','int-entry_n':'l_n_s_l','exec-turn_s':'ln_w_-1'}
 
-LATERAL_TOLERANCE_STOPLINE = [1,0.5,-0.5,-1]
+LATERAL_TOLERANCE_STOPLINE = np.arange(-.25,6.25,.25)
 LATERAL_TOLERANCE_EXITLINE = [1,0.5,-0.5,-1]
+LATERAL_TOLERANCE_DISTANCE_GAPS = np.arange(0,6.25,.25)
 
 LANE_BOUNDARY = {'prep-turn_s|proceed':'l_s_n|left_boundary'}
 
@@ -87,24 +99,26 @@ LANE_MAP = {'n_2-s_-1':'l_n_s_l',
             'w_2-e_-1':'l_w_e_l',
             }
 
-L1_ACTION_MAP = {'prep_turn_':['wait','proceed'],'exec_turn_':['proceed'],'int_entry_':['track_speed','follow_lead'],
-              'ln_n_':['track_speed','follow_lead'],
-              'ln_s__':['track_speed','follow_lead'],
-              'ln_n__':['track_speed','follow_lead'],
-              'ln_w__':['track_speed','follow_lead'],
-              'ln_w_':['track_speed','follow_lead'],
-              'ln_s_':['track_speed','follow_lead'],
-              'ln_e_':['track_speed','follow_lead']}
+SEGMENT_MAP = {'ln_s_1':'left-turn-lane',
+               'prep-turn_s':'prep-left-turn',
+               'exec-turn_s':'exec-left-turn',
+               'ln_w_-1':'exit-lane',
+               'ln_w_-2':'exit-lane'}
+
+
 LP_FREQ = 0.1
 PLAN_FREQ = 2
 DATASET_FPS = 30
 
 colors = ['k','g','r','c','m','b','w']
 
-L1_ACTION_CODES = {'wait':1,
+L1_ACTION_CODES = {'wait-for-oncoming':1,
                    'proceed':2,
                    'track_speed':3,
-                   'follow_lead':4}
+                   'follow_lead':4,
+                   'decelerate-to-stop':5,
+                   'wait_for_lead_to_cross':6,
+                   'follow_lead_into_intersection':7}
 
 L1_ACTION_CODES_2_NAME = {1:'wait',
                    2:'proceed',
@@ -125,10 +139,6 @@ gate_map = {'north_exit':[72,73],
 RELEV_VEHS_TIME_THRESH = 1
 VEH_ARRIVAL_HORIZON = 3
 
-L2_ACTION_MAP = {'wait':['AGGRESSIVE','NORMAL'],
-                 'proceed':['AGGRESSIVE','NORMAL'],
-                 'track_speed':['AGGRESSIVE','NORMAL'],
-                 'follow_lead':['AGGRESSIVE','NORMAL']}
 
 L2_ACTION_CODES = {'AGGRESSIVE':1,
                    'NORMAL':2} 

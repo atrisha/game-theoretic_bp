@@ -71,7 +71,7 @@ def assign_traffic_segment_seq():
         c.execute(q_string)
         res = c.fetchall()
         track_regions = []
-        if veh == 8:
+        if veh == 99:
             brk = 8
         for row in res:
             if row[0] is not None and len(row[0]) > 1:
@@ -96,7 +96,21 @@ def assign_traffic_segment_seq():
                 print(u_string)
         else:
             if gates[0] is not None and gates[1] is not None:
-                traffic_segments = utils.get_traffic_segment_from_gates(gates)
+                possible_traffic_segments = utils.get_traffic_segment_from_gates(gates)
+                if path[0] == 'NA' and path[-1] == 'NA':
+                    traffic_segments = possible_traffic_segments[0]
+                else:
+                    for t_s in possible_traffic_segments:
+                        ''' there are multiple possible segments based on the gates, so reconcile with the path and decide which is the right one'''
+                        if path[0] == t_s[0] and path[-1] == t_s[-1]:
+                            traffic_segments = t_s
+                            break
+                        elif path[-1] != 'NA' and path[-1] == t_s[-1]:
+                            traffic_segments = t_s
+                        elif path[0] != 'NA' and path[0] == t_s[0]:
+                            traffic_segments = t_s
+                        else:
+                            traffic_segments = t_s
                 u_string = "UPDATE TRAJECTORY_MOVEMENTS SET TRAFFIC_SEGMENT_SEQ='"+str(traffic_segments)+"' WHERE TRACK_ID="+str(veh)
                 u_strings.append(["UPDATE TRAJECTORY_MOVEMENTS SET TRAFFIC_SEGMENT_SEQ=? WHERE TRACK_ID=?",str(traffic_segments),str(veh)])
                 print(u_string)
@@ -348,7 +362,7 @@ def assign_curent_segment():
                 traj_info[row[0]].append(row)
     N = sum([len(x) for x in traj_info.values()])
     ct = 1
-    color_map = {'ln_s_1':'g','prep-turn_s':'orange','exec-turn_s':'coral','ln_w_-1':'lime'}
+    color_map = {'ln_s_1':'g','prep-turn_s':'orange','exec-turn_s':'coral','ln_w_-1':'lime','ln_w_-2':'lime'}
     
     for agent_id, track in traj_info.items():
         colors = []
@@ -378,8 +392,6 @@ def assign_curent_segment():
             veh_state.set_current_time(track_pt[6])
             veh_state.x = float(track_pt[1])
             veh_state.y = float(track_pt[2])
-            if float(track_pt[6]) == 183.249733 and agent_id == 140:
-                brk = 1
             veh_track_region = None
             '''
             if track_pt[8] is None or len(track_pt[8]) == 0:
@@ -390,6 +402,9 @@ def assign_curent_segment():
             else:
                 veh_track_region = track_pt[8]
             '''
+            if veh_state.current_time == 88.421667:
+                brk = 1
+    
             current_segment = utils.assign_curent_segment(veh_track_region,veh_state)
             if len(assigned_segments) > 0 and current_segment != assigned_segments[-1]:
                 v_plots.append((track[t_idx][6],color_map[assigned_segments[-1]]))
@@ -417,10 +432,10 @@ def assign_curent_segment():
         plt.axis('equal')
         for b in boundaries:
             plt.plot(b[0],b[1],'-')
-        '''
+        
         plt.scatter([x[1] for x in track],[x[2] for x in track],c=colors)
         plt.show()
-        '''
+        
         l1_actions = []
         vel_color_map = {'decelerate':'orange','wait':'r','proceed':'g','track_speed':'b','NA':'black'}
         vel_colors = []
@@ -453,14 +468,14 @@ def assign_curent_segment():
                     action = 'track_speed'
                 l1_actions[i] = action
             vel_colors.append(vel_color_map[l1_actions[i]])
-        ''' 
+         
         plt.scatter([x[6] for x in track],[x[3] for x in track],c=vel_colors)
         plt.axvspan(track[0][6], v_plots[0][0], alpha=0.15, color=v_plots[0][1])
         for idx in np.arange(len(v_plots)-1):
             plt.axvspan(v_plots[idx][0], v_plots[idx+1][0], alpha=0.15, color=v_plots[idx+1][1])
         plt.axvspan(v_plots[-1][0], track[-1][6], alpha=0.15, color=color_map[assigned_segments[-1]])
         plt.show()
-        '''
+        
         for i in np.arange(len(track)):
             u_string = "INSERT INTO TRAJECTORIES_0769_EXT VALUES (?,?,?,?)"
             c.execute(u_string, (agent_id, track[i][6], assigned_segments[i], l1_actions[i]))
@@ -489,6 +504,6 @@ def assign_l1_actions():
         plt.show()
 
 
-assign_curent_segment()
+#assign_curent_segment()
 
 

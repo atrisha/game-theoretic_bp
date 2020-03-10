@@ -67,6 +67,9 @@ class VehicleState:
     
     def set_path_origin(self,point):
         self.path_origin = point
+        
+    def set_current_l1_action(self,l1_action):
+        self.l1_action = l1_action
 
 def kph_to_mps(kph):
     return kph/3.6

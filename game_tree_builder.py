@@ -60,7 +60,6 @@ def setup_lead_vehicle(v_state,from_ra):
 
 
 def get_leading_vehicles(veh_state):
-    
     path = veh_state.segment_seq
     curr_time = veh_state.current_time
     current_segment = veh_state.current_segment
@@ -86,7 +85,10 @@ def get_leading_vehicles(veh_state):
                                 math.hypot(ex_b_positions[current_segment][0][1] - veh_pos_x, ex_b_positions[current_segment][1][1] - veh_pos_y))/2
     
     ''' find the vehicles that are in the current segment or the next and appears within the window of the subject vehicle '''
-    q_string = "SELECT T.TRACK_ID FROM TRAJECTORY_MOVEMENTS T, v_TIMES V WHERE (T.TRAFFIC_SEGMENT_SEQ LIKE '%"+current_segment+"%' OR T.TRAFFIC_SEGMENT_SEQ LIKE '%"+next_segment+"%') AND T.TRACK_ID = V.TRACK_ID AND (V.ENTRY_TIME <= "+str(curr_time)+" AND V.EXIT_TIME >= "+str(curr_time)+") AND T.TRACK_ID <> "+str(veh_id)
+    if next_segment[-2] == '-':
+        q_string = "SELECT T.TRACK_ID FROM TRAJECTORY_MOVEMENTS T, v_TIMES V WHERE (T.TRAFFIC_SEGMENT_SEQ LIKE '%''"+current_segment+"''%' OR T.TRAFFIC_SEGMENT_SEQ LIKE '%''"+next_segment[:-1]+"%') AND T.TRACK_ID = V.TRACK_ID AND (V.ENTRY_TIME <= "+str(curr_time)+" AND V.EXIT_TIME >= "+str(curr_time)+") AND T.TRACK_ID <> "+str(veh_id)
+    else:
+        q_string = "SELECT T.TRACK_ID FROM TRAJECTORY_MOVEMENTS T, v_TIMES V WHERE (T.TRAFFIC_SEGMENT_SEQ LIKE '%''"+current_segment+"''%' OR T.TRAFFIC_SEGMENT_SEQ LIKE '%''"+next_segment+"''%') AND T.TRACK_ID = V.TRACK_ID AND (V.ENTRY_TIME <= "+str(curr_time)+" AND V.EXIT_TIME >= "+str(curr_time)+") AND T.TRACK_ID <> "+str(veh_id)
     c.execute(q_string)
     res = c.fetchall()
     potential_lead_vehicles = []
@@ -94,26 +96,24 @@ def get_leading_vehicles(veh_state):
         for row in res:
             leading_vehicle_id = row[0]
             ''' find the position of the potential lead vehicle in the current time '''
-            q_string = "select * from trajectories_0769 where track_id="+str(leading_vehicle_id)+" and time = "+str(curr_time)
+            q_string = "select * from trajectories_0769,trajectories_0769_ext where trajectories_0769.track_id=trajectories_0769_ext.track_id and trajectories_0769.time=trajectories_0769_ext.time and trajectories_0769.track_id="+str(leading_vehicle_id)+" and trajectories_0769.time = "+str(curr_time)
             c.execute(q_string)
             pt_res = c.fetchone()
             l_v_state = VehicleState()
+            if pt_res is None:
+                ''' this means that there is no entry for this vehicle in trajectories_0769_ext yet'''
+                continue
             l_v_state.set_id(pt_res[0])
             l_v_state.set_current_time(curr_time)
             l_v_track = utils.get_track(l_v_state,curr_time)
             l_v_state.set_track_info(l_v_track[0,])
-            if len(l_v_track) == 0 or (len(l_v_track) > 0 and len(l_v_track[0,8]) == 0) :
-                l_v_track_region = utils.guess_track_info(l_v_state)[8,]
-                if l_v_track_region is None:
-                    sys.exit('need to guess traffic region for relev agent')
-            else:
-                l_v_track_region = l_v_track[0,8]
             l_v_track_segment_seq = utils.get_track_segment_seq(l_v_state.id)
             l_v_state.set_segment_seq(l_v_track_segment_seq)
-            l_v_current_segment = utils.get_current_segment(l_v_state,l_v_track_region,l_v_track_segment_seq,curr_time)
+            l_v_current_segment = pt_res[11]
             l_v_state.set_current_segment(l_v_current_segment)
+            l_v_state.set_current_l1_action(pt_res[12])
             if l_v_current_segment not in ex_b_positions.keys():
-                ''' potential lead vehicle is not in the path, so ignore '''
+                ''' potential lead vehicle is not in the path (current or the next segment), so ignore '''
                 continue
             else:
                 lead_vehicle_pos = (float(pt_res[1]),float(pt_res[2]))
@@ -167,18 +167,10 @@ def generate_action_plans(veh_state,index_in_track):
     track_info = agent_track[index_in_track]
     agent_id = veh_state.id
     curr_time = float(track_info[6,])
+    veh_state.set_current_time(curr_time)
     track_region_seq = veh_state.segment_seq
     veh_state.set_track_info(track_info)
-    if track_info[8,] is None or len(track_info[8,]) == 0:
-        ''' if the trajectory data is not available, we need to guess it based on the information we have about the agent.'''
-        veh_track_region = utils.guess_track_info(veh_state,track_info)[8,]
-        if veh_track_region is None:
-            print(track_info[8,],agent_id,curr_time)
-            sys.exit('need to guess traffic region for agent')
-    else:
-        veh_track_region = track_info[8,]
-    ''' assign the segment the vehicle is currently on, and set other information that will be required to get the possible actions. '''
-    current_segment = utils.assign_curent_segment(veh_track_region,veh_state)
+    current_segment = track_info[11,]
     veh_state.set_current_segment(current_segment)
     path,gates,direction = utils.get_path_gates_direction(agent_track[:,8],agent_id)
     traffic_light = utils.get_traffic_signal(curr_time, direction)
@@ -205,17 +197,22 @@ def generate_action_plans(veh_state,index_in_track):
         
     if curr_time not in veh_state.action_plans:
         veh_state.action_plans[curr_time] = dict()
-    actions_l1 = constants.L1_ACTION_MAP[current_segment[:-1].replace('-','_')]
     sub_v_lead_vehicle = get_leading_vehicles(veh_state)
     veh_state.set_leading_vehicle(sub_v_lead_vehicle)
+    actions = utils.get_actions(veh_state)
+    if len(actions) == 0:
+        actions_l1 = constants.L1_ACTION_MAP[current_segment[:-1].replace('-','_')]
+    else:
+        actions_l1 = list(actions.keys())
+    print('curr_time',curr_time,'veh:',agent_id,'leading vehicle:',sub_v_lead_vehicle.id if sub_v_lead_vehicle is not None else 'None')
     for l1 in actions_l1:
-        actions_l2 = constants.L2_ACTION_MAP[l1]
+        actions_l2 = constants.L2_ACTION_MAP[l1] if len(actions) == 0 else actions[l1]
         for l2 in actions_l2:
             if l1 not in veh_state.action_plans[curr_time]:
                 veh_state.action_plans[curr_time][l1] = dict()
             veh_state.action_plans[curr_time][l1][l2] = None
             trajectory_plan = motion_planner.TrajectoryPlan(l1,l2,task)
-            trajectory_plan.set_lead_vehicle(None)
+            trajectory_plan.set_lead_vehicle(sub_v_lead_vehicle)
             ''' l3_action_trajectory file id: file_id(3),agent_id(3),relev_agent_id(3),l1_action(2),l2_action(2)'''
             file_key = constants.L3_ACTION_CACHE+get_l3_action_file(None, agent_id, 0, curr_time, l1, l2)
             if not os.path.isfile(file_key):
@@ -313,6 +310,8 @@ def generate_action_plans(veh_state,index_in_track):
             veh_state.action_plans[curr_time]['relev_agents'].append(r_a_state)
     #print(relev_agents)
     return veh_state
+    
+
 
 ''' this method generate plans for a vehicle from the start of its real trajectory time to the end of its trajectory
 and stores trajectory plans in L3_ACTION_CACHE. It's called hopping because at every time interval the state hops back
@@ -332,6 +331,7 @@ def generate_hopping_plans():
         ''' get the agent's trajectory'''
         agent_track = utils.get_track(veh_state,None)
         veh_state.set_full_track(agent_track)
+        veh_state.set_entry_exit_time((float(agent_track[0][6]), float(agent_track[-1][6])))
         veh_state.action_plans = dict()
         veh_state.relev_agents = []
         
@@ -651,4 +651,4 @@ def calc_eqs_for_hopping_trajectories():
                 plt.clf()
 
 
-calc_eqs_for_hopping_trajectories()
+generate_hopping_plans()

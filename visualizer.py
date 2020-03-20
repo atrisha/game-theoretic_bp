@@ -102,6 +102,37 @@ def plot_velocity(vel_list,agent_id,horizon,ag_idx,ax4):
     if vel_list is not None:
         ax4.plot([x[0] for x in vel_list],[x[1] for x in vel_list],color=constants.colors[ag_idx],ls='--')
 
+def plot_all_paths(veh_state):
+    import ast
+    q_string = "select * from traffic_regions_def where name in "+str(tuple(veh_state.segment_seq))
+    #print(q_string)
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    c.execute(q_string)
+    res = c.fetchall()
+    pos_plotted = False
+    for _l1,l2 in veh_state.action_plans[veh_state.current_time].items():
+        if _l1 == 'wait-for-oncoming':
+            for _l2,l3_action_list in l2.items():
+                print(_l1,_l2,len(l3_action_list))
+                for l in l3_action_list:
+                    for row in res:
+                        x_s = ast.literal_eval(row[4])
+                        y_s = ast.literal_eval(row[5])
+                        plt.plot(x_s,y_s)
+                    plt.plot(constants.VIEWPORT[0],constants.VIEWPORT[1])
+                    if l[1] == 'CP':
+                        brk = 1
+                    plt.plot(l[0][1],l[0][2],'-')
+                    plt.plot([l[0][1][-1]],[l[0][2][-1]],'x',c='lime')
+            if not pos_plotted:
+                plt.plot([veh_state.x],[veh_state.y],'x',c='g')
+                pos_plotted = True
+            plt.axis('equal')
+            plt.show()
+    conn.close()
+    
+    
 
 def plot_all_trajectories(traj,ax1,ax2,ax3):
     

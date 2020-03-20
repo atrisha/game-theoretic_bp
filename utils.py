@@ -144,7 +144,7 @@ def construct_state_grid(pt1,pt2,N,tol,grid_type):
         grid = [central_coords]
     for r in tol:
         grid.append([(x[0]-(r*math.cos(slope_comp)),x[1]+(r*math.sin(slope_comp))) for x in central_coords])
-    return grid
+    return np.asarray(grid)
 '''
 plt.plot([0,20],[0,30],'ro')
 split_pts = split_in_n((0,0), (20,30), 10)
@@ -225,7 +225,7 @@ def get_track(veh_state,curr_time,from_current=None):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
     if curr_time is not None:
-        if not from_current:
+        if from_current is None:
             q_string = "select * from trajectories_0769,trajectories_0769_ext where trajectories_0769.track_id=trajectories_0769_ext.track_id and trajectories_0769.time=trajectories_0769_ext.time and trajectories_0769.track_id="+str(agent_id)+" and trajectories_0769.time="+str(curr_time)+" order by trajectories_0769.time"
         else:
             q_string = "select * from trajectories_0769,trajectories_0769_ext where trajectories_0769.track_id=trajectories_0769_ext.track_id and trajectories_0769.time=trajectories_0769_ext.time and trajectories_0769.track_id="+str(agent_id)+" and trajectories_0769.time >="+str(curr_time)+" order by trajectories_0769.time"
@@ -395,7 +395,6 @@ def get_traffic_segment_from_gates(gates):
     c.execute(q_string)
     res = c.fetchall()
     if res is None:
-        print(q_string)
         sys.exit('unknown gate sequence. update segment_seq table')
     for row in res:
         segment_seq.append(ast.literal_eval(row[0]))
@@ -432,6 +431,9 @@ def query_agent(conflict,subject_path,veh_state):
 
 def get_relevant_agents(veh_state):
     relev_agents = []
+    if veh_state.signal == 'R' and constants.SEGMENT_MAP[veh_state.current_segment] in ['through-lane-entry','left-turn-lane']:
+        ''' only relevant agents is the leading vehicle if present, which will be determined later'''
+        return relev_agents
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
     path = veh_state.segment_seq
@@ -504,7 +506,17 @@ def dict_factory(cursor, row):
         d[col[0]] = row[idx]
     return d
 
+def get_entry_exit_time(track_id,file_id='769'):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "select * from v_TIMES where track_id="+str(track_id)
+    c.execute(q_string)
+    res = c.fetchone()
+    time_tuple = (float(res[1]),float(res[2]))
+    conn.close()
+    return time_tuple
 
+    
 def get_traffic_signal(time,direction,file_id='769'):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     if direction == 'ALL':
@@ -536,7 +548,7 @@ def get_actions(veh_state):
     rows = c.fetchall()
     actions = dict() 
     for res in rows:
-        if res[3] is not None and res[3] == veh_state.signal:
+        if res[3] is not None and (res[3] == veh_state.signal or res[3] == '*'):
             if res[1] not in  actions.items():
                 actions[res[1]] = ast.literal_eval(res[2])
     return actions
@@ -642,25 +654,7 @@ def find_index_in_list(s_sum, dist_from_origin):
             break
     return idx
     
-def generate_trajectory_from_vel_profile(time,ref_path,vel_profile):
-    dist_from_origin = [0] + [math.hypot(p2[0]-p1[0], p2[1]-p1[1]) for p1,p2 in list(zip(ref_path[:-1],ref_path[1:]))]
-    dist_from_origin = [sum(dist_from_origin[:i]) for i in np.arange(1,len(dist_from_origin))]
-    new_path = [(ref_path[0][0],ref_path[0][1])]
-    s_sum = 0
-    for i,t in enumerate(time):
-        s = vel_profile[i]*constants.LP_FREQ
-        s_sum += s
-        path_idx = find_index_in_list(s_sum, dist_from_origin)
-        if path_idx is None:
-            brk = 1
-        overflow = dist_from_origin[path_idx+1] - s_sum
-        point = ref_path[path_idx]
-        r = overflow/math.hypot(ref_path[path_idx+1][0]-ref_path[path_idx][0], ref_path[path_idx+1][1]-ref_path[path_idx][1])
-        point_x = ref_path[path_idx][0] + r*(ref_path[path_idx+1][0] - ref_path[path_idx][0])
-        point_y = ref_path[path_idx][1] + r*(ref_path[path_idx+1][1] - ref_path[path_idx][1])
-        point = (point_x,point_y)
-        new_path.append(point)
-    return new_path
+
         
     
     
@@ -727,46 +721,30 @@ def get_exit_boundary(segment):
     return[exit_pos_X,exit_pos_Y]
     
     
+    
+def generate_trajectory_from_vel_profile(time,ref_path,vel_profile):
+    dist_from_origin = [0] + [math.hypot(p2[0]-p1[0], p2[1]-p1[1]) for p1,p2 in list(zip(ref_path[:-1],ref_path[1:]))]
+    dist_from_origin = [sum(dist_from_origin[:i]) for i in np.arange(1,len(dist_from_origin))]
+    new_path = [(ref_path[0][0],ref_path[0][1])]
+    s_sum = 0
+    for i,t in enumerate(time):
+        s = vel_profile[i]*constants.LP_FREQ
+        s_sum += s
+        path_idx = find_index_in_list(s_sum, dist_from_origin)
+        if path_idx is None:
+            path_idx = len(dist_from_origin)-2
+        overflow = dist_from_origin[path_idx+1] - s_sum
+        point = ref_path[path_idx]
+        r = overflow/math.hypot(ref_path[path_idx+1][0]-ref_path[path_idx][0], ref_path[path_idx+1][1]-ref_path[path_idx][1])
+        point_x = ref_path[path_idx][0] + r*(ref_path[path_idx+1][0] - ref_path[path_idx][0])
+        point_y = ref_path[path_idx][1] + r*(ref_path[path_idx+1][1] - ref_path[path_idx][1])
+        point = (point_x,point_y)
+        new_path.append(point)
+    dist_from_origin_newpath = [0] + [math.hypot(p2[0]-p1[0], p2[1]-p1[1]) for p1,p2 in list(zip(new_path[:-1],new_path[1:]))]
+    dist_from_origin_newpath = [sum(dist_from_origin_newpath[:i]) for i in np.arange(1,len(dist_from_origin_newpath))]
+    
+    return new_path
                 
-def linear_planner(sx, vxs, axs, gx, vxg, axg, max_accel,max_jerk,dt):
-    goal_reached = False
-    t = 0
-    time_x, rx, rvx, rax, rjx = [], [], [], [], []
-    time_x.append(t)
-    rx.append(sx)
-    rvx.append(vxs)
-    rax.append(axs)
-    rjx.append(0)
-    a = axs
-    v = vxs
-    while not goal_reached:
-        t += dt
-        time_x.append(t)
-        if vxg > vxs:
-            a = a + (max_jerk*dt)
-            if a > max_accel:
-                a = max_accel
-            d = sx + (vxs * dt) + (0.5*a*dt**2)
-            v = v + a*dt
-            rx.append(rx[-1]+d)
-            rvx.append(v)
-            rax.append(a)
-            rjx.append((abs(rax[-2]-rax[-1]))/dt)
-            if rx[-1] > gx or v > vxg:
-                goal_reached = True
-        else:
-            a = a - (max_jerk*dt)
-            if abs(a) > max_accel:
-                a = -max_accel
-            d = sx + (vxs * dt) + (0.5*a*dt**2)
-            v = v + a*dt
-            rx.append(rx[-1]+d)
-            rvx.append(v)
-            rax.append(a)
-            rjx.append((abs(rax[-2]-rax[-1]))/dt)
-            if rx[-1] > gx or v < vxg:
-                goal_reached = True
-    return time_x, rx, rvx, rax, rjx
       
 
 def get_current_segment(r_a_state,r_a_track_region,r_a_track_segment_seq,curr_time):
@@ -805,12 +783,12 @@ def clip_trajectory_to_viewport(res):
 def get_agents_for_task(task_str):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    q_string = "SELECT TRACK_ID FROM TRAJECTORY_MOVEMENTS WHERE TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ = '[''ln_s_1'', ''prep-turn_s'', ''exec-turn_s'', ''ln_w_-1'']' OR TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ = '[''ln_s_1'', ''prep-turn_s'', ''exec-turn_s'', ''ln_w_-2'']'"
+    q_string = "SELECT TRACK_ID FROM TRAJECTORY_MOVEMENTS,SEGMENT_SEQ_MAP WHERE TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ=SEGMENT_SEQ_MAP.SEGMENT_SEQ AND SEGMENT_SEQ_MAP.DIRECTION='"+task_str+"'"
     c.execute(q_string)
     res = c.fetchall()       
     agents = [int(x[0]) for x in res]
-    #return agents
-    return [88]
+    return agents
+    #return [149]
 
 ''' this function interpolates track information only for real trajectories '''
 def interpolate_track_info(veh_state,forward,backward,partial_track=None):
@@ -1038,7 +1016,5 @@ def entry_exit_gate_cond(entry_gate,exit_gate):
 
   
     
-    
-    
-    
+
     

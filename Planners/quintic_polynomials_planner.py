@@ -2,7 +2,8 @@
 
 Quintic Polynomials Planner
 
-author: Atsushi Sakai (@Atsushi_twi)
+author: Atrisha Sarkar
+adopted from author: Atsushi Sakai (@Atsushi_twi)
 
 Ref:
 
@@ -20,13 +21,14 @@ from scipy.stats import halfnorm
 import constants
 from matplotlib import path
 import sys
+from Planners.linear_planner import *
 
 # parameter
 
 
 show_animation = False
 show_simple_plot = False
-show_log = False
+show_log = True
 
 class QuinticPolynomial:
 
@@ -333,7 +335,7 @@ def decelerate_to_stop_planner(sx, sy, syaw, sv, sax, say, max_decel_vals, max_j
     if not traj_x_found:
         #print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line)
         #print('lead vehicle present',lead_vehicle_present)
-        time_x, rx, rvx, rax, rjx = utils.linear_planner(0, vxs, axs, goal_x, vxg, axg, max_decel_long, max_jerk, dt)
+        time_x, rx, rvx, rax, rjx = linear_planner(0, vxs, axs, goal_x, vxg, axg, max_decel_long, max_jerk, dt)
         plan_type = 'LP'
         traj_x_found = True
         #sys.exit('car following planner trajectory not found')       
@@ -360,7 +362,7 @@ def decelerate_to_stop_planner(sx, sy, syaw, sv, sax, say, max_decel_vals, max_j
         #print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line)
         #print('lead vehicle present',lead_vehicle_present)
         #sys.exit('car following planner trajectory not found')
-        time_y, ry, rvy, ray, rjy = utils.linear_planner(dist_to_centerline, vys, ays, goal_y, vyg, ayg, max_decel_lat, max_jerk, dt)
+        time_y, ry, rvy, ray, rjy = linear_planner(dist_to_centerline, vys, ays, goal_y, vyg, ayg, max_decel_lat, max_jerk, dt)
         plan_type = 'LP'
         traj_y_found = True       
     T = 0
@@ -375,7 +377,7 @@ def decelerate_to_stop_planner(sx, sy, syaw, sv, sax, say, max_decel_vals, max_j
             rjy += [rjy[-1]]*(len(rjx)-len(rjy))
         elif len(rx) < len(ry):
             T = TY
-            for i in np.arange(0,len(ry)-len(rx)+1):
+            for i in np.arange(0,len(ry)-len(rx)):
                 rx.append(rx[-1] + rvx[-1]*(i+1)*dt)
             time_x += [time_x[-1]]*(len(time_y)-len(time_x))
             rvx += [rvx[-1]]*(len(rvy)-len(rvx))
@@ -418,7 +420,10 @@ def decelerate_to_stop_planner(sx, sy, syaw, sv, sax, say, max_decel_vals, max_j
         return None
 
         
-def track_speed_planner(sx, sy, syaw, sv, sax, say, accel_val, max_jerk, dt,center_line,target_vel):
+def track_speed_planner(veh_state, accel_val, max_jerk, dt, center_line, target_vel):
+    syaw = veh_state.yaw
+    init_a = float(veh_state.long_acc)
+    sx, sy, sv, sax, say = veh_state.x, veh_state.y, float(veh_state.speed), init_a * math.cos(syaw), init_a * math.sin(syaw)  
     #max_accel_long = constants.MAX_LONG_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LONG_ACC_AGGR
     #max_accel_lat = constants.MAX_LAT_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LAT_ACC_AGGR
     max_accel_long,max_accel_lat = accel_val[0],accel_val[1]
@@ -456,12 +461,12 @@ def track_speed_planner(sx, sy, syaw, sv, sax, say, accel_val, max_jerk, dt,cent
     ayg = 0
     vyg = target_vel*math.sin(sv_angle_with_cl)
     if target_vel*math.cos(sv_angle_with_cl) - vxs > 0:
-        time_to_target_vel = (target_vel*math.cos(sv_angle_with_cl) - vxs)/constants.MAX_LONG_ACC_NORMAL
-        acc = constants.MAX_LONG_ACC_NORMAL
+        time_to_target_vel = (target_vel*math.cos(sv_angle_with_cl) - vxs)/constants.MAX_LONG_ACC_AGGR
+        acc = constants.MAX_LONG_ACC_AGGR
     else:
-        time_to_target_vel = (target_vel*math.cos(sv_angle_with_cl) - vxs)/constants.MAX_LONG_DEC_NORMAL
-        acc = constants.MAX_LONG_DEC_NORMAL
-    dist_to_target_vel = vxs*time_to_target_vel + (0.5*acc*time_to_target_vel**2)
+        time_to_target_vel = (target_vel*math.cos(sv_angle_with_cl) - vxs)/constants.MAX_LONG_DEC_AGGR
+        acc = constants.MAX_LONG_DEC_AGGR
+    dist_to_target_vel = max(0, vxs*time_to_target_vel + (0.5*acc*time_to_target_vel**2))
     goal_x = dist_to_target_vel
     vxg = target_vel * math.cos(sv_angle_with_cl)
     if acc > 0:
@@ -475,7 +480,7 @@ def track_speed_planner(sx, sy, syaw, sv, sax, say, accel_val, max_jerk, dt,cent
     traj_found = False
     for axg in axg_list:
         for TX in np.arange(MIN_T, MAX_TX, T_STEP):
-            end_states = [goal_x + x for x in np.arange(.25,25,.25)]
+            end_states = [goal_x + x for x in np.arange(0,25,.25)]
             for gx in end_states:
                 xqp = QuinticPolynomial(0, vxs, axs, gx, vxg, axg, TX)
                 time_x, rx, rvx, rax, rjx = [], [], [], [], []
@@ -501,7 +506,7 @@ def track_speed_planner(sx, sy, syaw, sv, sax, say, accel_val, max_jerk, dt,cent
     if not traj_x_found:
         #print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line)
         #print('lead vehicle present',lead_vehicle_present)
-        time_x, rx, rvx, rax, rjx = utils.linear_planner(0, vxs, axs, goal_x, vxg, axg, max_accel_long, max_jerk, dt)
+        time_x, rx, rvx, rax, rjx = linear_planner(0, vxs, axs, goal_x, vxg, axg, max_accel_long, max_jerk, dt)
         plan_type = 'LP'
         traj_x_found = True
         #sys.exit('car following planner trajectory not found')       
@@ -528,7 +533,7 @@ def track_speed_planner(sx, sy, syaw, sv, sax, say, accel_val, max_jerk, dt,cent
         #print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line)
         #print('lead vehicle present',lead_vehicle_present)
         #sys.exit('car following planner trajectory not found')
-        time_y, ry, rvy, ray, rjy = utils.linear_planner(dist_to_centerline, vys, ays, goal_y, vyg, ayg, max_accel_lat, max_jerk, dt)
+        time_y, ry, rvy, ray, rjy = linear_planner(dist_to_centerline, vys, ays, goal_y, vyg, ayg, max_accel_lat, max_jerk, dt)
         plan_type = 'LP'
         traj_y_found = True       
     T = 0
@@ -730,7 +735,7 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
     if not traj_x_found:
         #print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line)
         #print('lead vehicle present',lead_vehicle_present)
-        time_x, rx, rvx, rax, rjx = utils.linear_planner(0, vxs, axs, goal_x, vxg, axg, max_accel_long, max_jerk, dt)
+        time_x, rx, rvx, rax, rjx = linear_planner(0, vxs, axs, goal_x, vxg, axg, max_accel_long, max_jerk, dt)
         plan_type = 'LP'
         traj_x_found = True
         #sys.exit('car following planner trajectory not found')       
@@ -757,7 +762,7 @@ def car_following_planner(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax
         #print(sx, sy, syaw, sv, sax, say, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_param, max_jerk, dt,lane_boundary,center_line)
         #print('lead vehicle present',lead_vehicle_present)
         #sys.exit('car following planner trajectory not found')
-        time_y, ry, rvy, ray, rjy = utils.linear_planner(dist_to_centerline, vys, ays, goal_y, vyg, ayg, max_accel_lat, max_jerk, dt)
+        time_y, ry, rvy, ray, rjy = linear_planner(dist_to_centerline, vys, ays, goal_y, vyg, ayg, max_accel_lat, max_jerk, dt)
         plan_type = 'LP'
         traj_y_found = True       
     T = 0

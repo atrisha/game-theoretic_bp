@@ -12,6 +12,7 @@ import constants
 from planning_objects import VehicleState
 import ast
 import matplotlib.pyplot as plt
+from game_tree_builder import get_leading_vehicles
 
 
 
@@ -92,7 +93,7 @@ def assign_traffic_segment_seq():
                 elif (o,d) == ('s','e') or (o,d) == ('w','s'):
                     traffic_segments = [path[0],'rt-stop_'+o,'rt_prep_turn_'+o,'rt-exec-turn_'+o,path[1]]
                 u_string = "UPDATE TRAJECTORY_MOVEMENTS SET TRAFFIC_SEGMENT_SEQ='"+str(traffic_segments)+"' WHERE TRACK_ID="+str(veh)
-                u_strings.append(["UPDATE TRAJECTORY_MOVEMENTS SET TRAFFIC_SEGMENT_SEQ=? WHERE TRACK_ID=?",str(traffic_segments),str(veh)])
+                u_strings.append(["UPDATE TRAJECTORY_MOVEMENTS SET TRAFFIC_SEGMENT_SEQ=? WHERE TRACK_ID=?",str(traffic_segments).replace(' ',''),str(veh)])
                 print(u_string)
         else:
             if gates[0] is not None and gates[1] is not None:
@@ -112,7 +113,7 @@ def assign_traffic_segment_seq():
                         else:
                             traffic_segments = t_s
                 u_string = "UPDATE TRAJECTORY_MOVEMENTS SET TRAFFIC_SEGMENT_SEQ='"+str(traffic_segments)+"' WHERE TRACK_ID="+str(veh)
-                u_strings.append(["UPDATE TRAJECTORY_MOVEMENTS SET TRAFFIC_SEGMENT_SEQ=? WHERE TRACK_ID=?",str(traffic_segments),str(veh)])
+                u_strings.append(["UPDATE TRAJECTORY_MOVEMENTS SET TRAFFIC_SEGMENT_SEQ=? WHERE TRACK_ID=?",str(traffic_segments).replace(' ',''),str(veh)])
                 print(u_string)
             else:
                 if len(gates) > 0:
@@ -328,6 +329,7 @@ def insert_traffic_lights():
     conn.commit()
     conn.close()
 
+
 def assign_curent_segment():
     '''
     traffic_region_list = str(traffic_region_list).replace(' ','')
@@ -349,7 +351,7 @@ def assign_curent_segment():
     '''
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    vehs = utils.get_agents_for_task('S_W')
+    vehs = utils.get_agents_for_task('N_S') + utils.get_agents_for_task('S_W')
     #vehs = [140]
     q_string = "select TRAJECTORIES_0769.*,TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ,v_TIMES.ENTRY_TIME,v_TIMES.EXIT_TIME from TRAJECTORIES_0769,TRAJECTORY_MOVEMENTS,v_TIMES where TRAJECTORIES_0769.TRACK_ID=TRAJECTORY_MOVEMENTS.TRACK_ID and v_TIMES.TRACK_ID = TRAJECTORIES_0769.TRACK_ID ORDER BY TRAJECTORIES_0769.TRACK_ID,TRAJECTORIES_0769.TIME"
     res = c.execute(q_string)
@@ -362,9 +364,11 @@ def assign_curent_segment():
                 traj_info[row[0]].append(row)
     N = sum([len(x) for x in traj_info.values()])
     ct = 1
-    color_map = {'ln_s_1':'g','prep-turn_s':'orange','exec-turn_s':'coral','ln_w_-1':'lime','ln_w_-2':'lime'}
+    color_map = {'ln_s_1':'g','prep-turn_s':'orange','exec-turn_s':'coral','ln_w_-1':'lime','ln_w_-2':'lime',
+                 'ln_n_2':'g','ln_n_3':'g','l_n_s_l':'orange','l_n_s_r':'orange','ln_s_-1':'lime','ln_s_-2':'lime'}
     
     for agent_id, track in traj_info.items():
+        u_strings = []
         colors = []
         assigned_segments = []
         veh_state = VehicleState()
@@ -376,12 +380,12 @@ def assign_curent_segment():
         veh_state.set_gate_crossing_times(gate_crossing_times)
         if gate_crossing_times[0] is None:
             ''' this vehicle track starts in the middle '''
-            q_string = "select * from TRAFFIC_REGIONS_DEF where NAME = '"+str(veh_state.segment_seq).replace("'","''")+"' AND REGION_PROPERTY = 'path_origin'"
+            q_string = "select * from TRAFFIC_REGIONS_DEF where NAME = '"+veh_state.segment_seq[0]+"' AND REGION_PROPERTY = 'center_line'"
             print(q_string)
             c.execute(q_string)
             res = c.fetchone()
             if res is None or len(res) < 1:
-                sys.exit('path origin not found for '+str(veh_state.segment_seq))
+                sys.exit('center line not found for '+veh_state.segment_seq[0])
             path_origin = (ast.literal_eval(res[4])[0],ast.literal_eval(res[5])[0])
             veh_state.set_path_origin(path_origin)
         veh_state.set_full_track(track)
@@ -421,7 +425,7 @@ def assign_curent_segment():
         c = conn.cursor()
         
         ''' for each segment loop and check if the vehicle has not yet crossed it'''
-        
+        '''
         q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF WHERE NAME IN ('ln_s_1','prep-turn_s','exec-turn_s','ln_w_-1') AND REGION_PROPERTY = 'exit_boundary'"
         c.execute(q_string)
         rows = c.fetchall()
@@ -432,10 +436,10 @@ def assign_curent_segment():
         plt.axis('equal')
         for b in boundaries:
             plt.plot(b[0],b[1],'-')
-        
+        '''
         plt.scatter([x[1] for x in track],[x[2] for x in track],c=colors)
         plt.show()
-        
+        '''
         l1_actions = []
         vel_color_map = {'decelerate':'orange','wait':'r','proceed':'g','track_speed':'b','NA':'black'}
         vel_colors = []
@@ -475,35 +479,63 @@ def assign_curent_segment():
             plt.axvspan(v_plots[idx][0], v_plots[idx+1][0], alpha=0.15, color=v_plots[idx+1][1])
         plt.axvspan(v_plots[-1][0], track[-1][6], alpha=0.15, color=color_map[assigned_segments[-1]])
         plt.show()
-        
+        '''
         for i in np.arange(len(track)):
-            u_string = "INSERT INTO TRAJECTORIES_0769_EXT VALUES (?,?,?,?)"
-            c.execute(u_string, (agent_id, track[i][6], assigned_segments[i], l1_actions[i]))
-            print(u_string,(agent_id, track[i][6], assigned_segments[i], l1_actions[i]))
+            #u_string = "UPDATE TRAJECTORIES_0769_EXT VALUES (?,?,?,?)"
+            u_string = "UPDATE TRAJECTORIES_0769_EXT SET L1_ACTION='"+" WHERE TRACK_ID="+" AND TIME="+"str(_traj_pts[1])"
+            u_strings.append(u_string)
+            u_string = "UPDATE TRAJECTORIES_0769_EXT SET L2_ACTION='"+" WHERE TRACK_ID="+" AND TIME="+"str(_traj_pts[1])"
+            u_strings.append(u_string)
+            print(u_string,(agent_id, track[i][6], assigned_segments[i], None))
         conn.commit()            
     conn.close()
     return None    
             
-def assign_l1_actions():
-    vehs = utils.get_agents_for_task('S_W')
+def assign_actions():
+    vehs_sw = utils.get_agents_for_task('S_W')
+    vehs_ns = utils.get_agents_for_task('N_S')
+    vehs = vehs_sw + vehs_ns
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    q_string = "select TRAJECTORIES_0769.*,TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ,v_TIMES.ENTRY_TIME,v_TIMES.EXIT_TIME from TRAJECTORIES_0769,TRAJECTORY_MOVEMENTS,v_TIMES where TRAJECTORIES_0769.TRACK_ID=TRAJECTORY_MOVEMENTS.TRACK_ID and v_TIMES.TRACK_ID = TRAJECTORIES_0769.TRACK_ID ORDER BY TRAJECTORIES_0769.TRACK_ID,TRAJECTORIES_0769.TIME"
+    q_string = "select TRAJECTORIES_0769.*,TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ,v_TIMES.ENTRY_TIME,v_TIMES.EXIT_TIME,TRAJECTORIES_0769_EXT.* from TRAJECTORIES_0769,TRAJECTORY_MOVEMENTS,v_TIMES,TRAJECTORIES_0769_EXT where TRAJECTORIES_0769.TRACK_ID=TRAJECTORY_MOVEMENTS.TRACK_ID and v_TIMES.TRACK_ID = TRAJECTORIES_0769.TRACK_ID and TRAJECTORIES_0769.TRACK_ID=TRAJECTORIES_0769_EXT.TRACK_ID and TRAJECTORIES_0769.TIME=TRAJECTORIES_0769_EXT.TIME ORDER BY TRAJECTORIES_0769.TRACK_ID,TRAJECTORIES_0769.TIME"
     res = c.execute(q_string)
     traj_info = dict()
     for row in res:
         if row[0] in vehs:
-            if row[0] not in traj_info:
-                traj_info[row[0]] = [row]
+            lane_type = constants.SEGMENT_MAP[row[-3]]
+            if lane_type not in traj_info:
+                traj_info[lane_type] = dict()
+                traj_info[lane_type][row[0]] = [row]
             else:
-                traj_info[row[0]].append(row)
-    for agent_id, track in traj_info.items():
-        X = [float(x[6]) for x in track]
-        Y = [float(x[3]) for x in track]
-        plt.plot(X,Y)
+                if row[0] not in traj_info[lane_type]:
+                    traj_info[lane_type][row[0]] = [np.array(row)]
+                else:
+                    traj_info[lane_type][row[0]].append(np.array(row))
+    ct = 0
+    for lane_type, track_dict in traj_info.items():
+        ct += 1
+        for agent_id in track_dict.keys():
+            for idx,track_pt in enumerate(track_dict[agent_id]):
+                track_pt = np.asarray(track_pt)
+                veh_state = VehicleState()
+                veh_state.set_track_info(track_pt)
+                veh_state.set_current_segment(track_pt[-3,])
+                segment_seq = ast.literal_eval(track_pt[9])
+                veh_state.set_segment_seq(segment_seq)
+                leading_vehicle = get_leading_vehicles(veh_state)
+                veh_state.set_leading_vehicle(leading_vehicle)
+                direction = 'L_'+segment_seq[0][3].upper()+'_'+segment_seq[-1][3].upper()
+                traffic_signal = utils.get_traffic_signal(veh_state.time, direction)
+                veh_state.set_traffic_light(traffic_signal)
+                possible_actions = utils.get_actions(veh_state)
+                X = [float(x[6]) for x in track_dict[agent_id]]
+                Y = [float(x[3]) for x in track_dict[agent_id]]
+                plt.plot(np.arange(len(Y)),Y,'g')
+        plt.title(lane_type)
         plt.show()
 
 
-#assign_curent_segment()
+assign_actions()
+
 
 

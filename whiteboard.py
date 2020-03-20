@@ -135,10 +135,21 @@ def ruptures_test():
     #rpt.display(v_signal, tru_brkpts, result)
     plt.axvspan(8, 14, alpha=0.5, color='red')
     plt.show()
-
+'''
 plt.axis('equal')
 plt.plot( [538798.3, 538796.58],  [4813995.35, 4813998.65], '-')
 plt.plot([538814.15,538816.08], [4814007.58,4814004.26], 'b-')
 plt.plot([538852.12],[4813985.8],'o')
 plt.plot([538814.87],[4814004.97],'x')
 plt.show()
+'''
+'''    
+from collections import OrderedDict    
+    hpx =  [538852.42, 538851.85, 538851.85, 538787.6]
+    hpy =  [4813985.97, 4813986.98, 4813986.99, 4813992.01]
+    #_l = list(sorted(set(zip(hpx,hpy)),key=lambda tup: tup[0]))
+    _d = OrderedDict(sorted(list(zip(hpx,hpy)),key=lambda tup: tup[0]))
+    hpx,hpy = list(_d.keys()),list(_d.values())
+    print(hpx,hpy)
+'''
+print(round(float(104.437667)*1000))

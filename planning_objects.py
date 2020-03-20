@@ -11,12 +11,14 @@ class VehicleState:
     def set_track_info(self,vehicle_track_info):
         self.track_info_set = True
         self.track_id = vehicle_track_info[0,]
+        self.id = int(self.track_id)
         self.x = float(vehicle_track_info[1,])
         self.y = float(vehicle_track_info[2,])
         self.speed = kph_to_mps(float(vehicle_track_info[3,]))
         self.tan_acc = float(vehicle_track_info[4,])
         self.long_acc = float(vehicle_track_info[5,])
         self.time = float(vehicle_track_info[6,])
+        self.current_time = self.time
         self.yaw = float(vehicle_track_info[7,])
         self.traffic_region = vehicle_track_info[8,]
         
@@ -70,6 +72,12 @@ class VehicleState:
         
     def set_current_l1_action(self,l1_action):
         self.l1_action = l1_action
+        
+    def set_current_l2_action(self,l2_action):
+        self.l2_action = l2_action
+        
+    def set_direction(self,direction):
+        self.direction = direction
 
 def kph_to_mps(kph):
     return kph/3.6

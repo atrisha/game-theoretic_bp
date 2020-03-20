@@ -4,9 +4,13 @@
 Values derived from https://www.mdpi.com/2079-9292/8/9/943
 '''
 import numpy as np
-MAX_LONG_ACC_NORMAL = 1.47
-MAX_LONG_ACC_AGGR = 3.5
+MAX_LONG_ACC_NORMAL = 1.5
+MAX_LONG_ACC_AGGR = 3.6
 MAX_LONG_ACC_EMG = 5
+
+MAX_TURN_ACC_AGGR = 5
+MAX_TURN_ACC_NORMAL = 3.6
+MAX_TURN_JERK = 3
 
 MAX_LAT_ACC_NORMAL = 4
 MAX_LAT_ACC_AGGR = 5.6
@@ -29,12 +33,17 @@ MAX_DEC_JERK_AGGR = -2
 STOP_LOC_STD_DEV = 1.5
 STOP_VEL_TOLERANCE = 0.5
 
-PROCEED_VEL_MEAN_EXEC_TURN = 7
+PROCEED_VEL_MEAN_EXEC_TURN = 8
 PROCEED_VEL_SD_EXEC_TURN = 1
-PROCEED_VEL_AGGRESSIVE_ADDITIVE = 1.5
+PROCEED_VEL_AGGRESSIVE_ADDITIVE = 1
+PROCEED_VEL_MEAN_PREP_TURN = 7
+PROCEED_VEL_SD_PREP_TURN = 1
+
 PROCEED_VEL_MEAN_EXIT = 11
 PROCEED_VEL_SD_EXIT = 2
-PROCEED_VEL_AGGRESSIVE_ADDITIVE = 1
+
+CURVATURE_LIMIT_FOR_CV = 0.06
+
 
 
 
@@ -43,13 +52,14 @@ MAX_SAMPLES_FOLLOW_LEAD = 20
 MAX_SAMPLES_DEC_TO_STOP = 20
 
 MAINTAIN_VEL_SD = 2
-TARGET_VEL = 14
+TARGET_VEL = 8.5
 LEFT_TURN_VEL_START_POS = 7
 LEFT_TURN_VEL_START_POS_AGGR_ADDITIVE = 1
 TARGET_VEL_SD = 1
 
 PROCEED_ACC_SD = 0.5
 PROCEED_ACC_MEAN = 1
+
 
 STOP_DEC_STD_DEV = 0.01
 
@@ -64,16 +74,18 @@ N_STOP_VEL_SAMPLES = {'prep-turn_s':5}
 
 CAR_FOLLOWING_SAFETY_DISTANCE = 2
 
-N_PROCEED_POS_SAMPLES = {'prep-turn_s':5,'int-entry_n':10,'exec-turn_s':5}
-N_PROCEED_VEL_SAMPLES = {'prep-turn_s':5,'int-entry_n':100,'exec-turn_s':5}
+N_PROCEED_POS_SAMPLES = {'ln_s_1':20,'prep-turn_s':20,'int-entry_n':10,'exec-turn_s':20}
+N_PROCEED_VEL_SAMPLES = {'ln_s_1':20,'prep-turn_s':20,'int-entry_n':100,'exec-turn_s':20}
 
 EXIT_SEGMENTS = {'prep-turn_s':'exec-turn_s','int-entry_n':'l_n_s_l','exec-turn_s':'ln_w_-1'}
 
 LATERAL_TOLERANCE_STOPLINE = np.arange(-.25,6.25,.25)
 LATERAL_TOLERANCE_EXITLINE = [1,0.5,-0.5,-1]
+LATERAL_TOLERANCE_WAITLINE = np.arange(1,-7,-0.5)
 LATERAL_TOLERANCE_DISTANCE_GAPS = np.arange(0,6.25,.25)
 
-LANE_BOUNDARY = {'prep-turn_s|proceed':'l_s_n|left_boundary'}
+LANE_BOUNDARY = {'prep-turn_s|proceed-turn':'l_s_n|left_boundary'}
+LANE_WIDTH = 4
 
 TASK_MAP = {'L_N_S':'STRAIGHT',
             'L_N_W':'DEDICATED_RIGHT_TURN',
@@ -103,7 +115,16 @@ SEGMENT_MAP = {'ln_s_1':'left-turn-lane',
                'prep-turn_s':'prep-left-turn',
                'exec-turn_s':'exec-left-turn',
                'ln_w_-1':'exit-lane',
-               'ln_w_-2':'exit-lane'}
+               'ln_w_-2':'exit-lane',
+               'ln_n_1':'left-turn-lane',
+               'ln_n_2':'through-lane-entry',
+               'ln_n_3':'through-lane-entry',
+               'ln_s_-1':'exit-lane',
+               'ln_s_-2':'exit-lane',
+               'l_n_s_l':'through-lane',
+               'l_n_s_r':'through-lane',
+               'l_s_n_l':'through-lane',
+               'l_s_n_r':'through-lane'}
 
 
 LP_FREQ = 0.1
@@ -113,15 +134,16 @@ DATASET_FPS = 30
 colors = ['k','g','r','c','m','b','w']
 
 L1_ACTION_CODES = {'wait-for-oncoming':1,
-                   'proceed':2,
+                   'proceed-turn':2,
                    'track_speed':3,
                    'follow_lead':4,
                    'decelerate-to-stop':5,
                    'wait_for_lead_to_cross':6,
-                   'follow_lead_into_intersection':7}
+                   'follow_lead_into_intersection':7,
+                   'wait-on-red':8}
 
 L1_ACTION_CODES_2_NAME = {1:'wait',
-                   2:'proceed',
+                   2:'proceed-turn',
                    3:'track_speed',
                    4:'follow_lead'}
 

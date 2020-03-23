@@ -792,7 +792,7 @@ def get_agents_for_task(task_str):
 
 ''' this function interpolates track information only for real trajectories '''
 def interpolate_track_info(veh_state,forward,backward,partial_track=None):
-    if partial_track is not None:
+    if partial_track is not None and len(partial_track)>0:
         track_info = partial_track
     else:
         track_info = [None]*9

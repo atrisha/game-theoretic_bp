@@ -604,4 +604,4 @@ def calc_eqs_for_hopping_trajectories():
                 plt.clf()
 
 
-calc_eqs_for_hopping_trajectories()
+#calc_eqs_for_hopping_trajectories()

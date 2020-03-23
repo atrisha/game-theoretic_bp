@@ -13,6 +13,9 @@ from planning_objects import VehicleState
 import ast
 import matplotlib.pyplot as plt
 from game_tree_builder import get_leading_vehicles
+import os
+from os import listdir
+from collections import OrderedDict
 
 
 
@@ -535,7 +538,90 @@ def assign_actions():
         plt.show()
 
 
-assign_actions()
+def insert_generated_traj_info():
+    if not os.path.isfile(constants.L3_ACTION_CACHE+'traj_metadata.dict'):
+        dir = constants.L3_ACTION_CACHE
+        N,ct = len(listdir(dir)),0
+        state_dict = OrderedDict()
+        for f in listdir(dir):
+            ct += 1
+            traj = utils.pickle_load(os.path.join(dir, f))
+            if f == '7690110000101_0':
+                brk=1
+            if len(traj) != 0:
+                agent_id = int(f[3:6])
+                time_ts = round(float(f.split('_')[-1])/1000,3)
+                relev_agent = None if f[6:9] == '000' else int(f[6:9])
+                l1_action = [k for k,v in constants.L1_ACTION_CODES.items() if v == int(f[9:11])][0]
+                l2_action = [(k,len(traj)) for k,v in constants.L2_ACTION_CODES.items() if v == int(f[11:13])][0]
+                lead_vehicle = None
+                v = VehicleState()
+                if relev_agent is None:
+                    v.set_id(agent_id)
+                else:
+                    v.set_id(relev_agent)
+                time_tuple = utils.get_entry_exit_time(v.id)
+                v.set_entry_exit_time(time_tuple)
+                agent_track = utils.get_track(v, None)
+                all_times = [float(agent_track[i][6,]) for i in np.arange(len(agent_track))]
+                real_ts = -1
+                for ts in all_times:
+                    if round(float(ts)*1000) == time_ts*1000:
+                        real_ts = ts
+                        break
+                if real_ts != -1:
+                    time_ts = real_ts
+                v.set_current_time(time_ts)
+                print(ct,'/',N,agent_id,time_ts,relev_agent,l1_action,l2_action)
+                if time_ts not in state_dict:
+                    state_dict[time_ts] = dict()
+                if agent_id not in state_dict[time_ts]:
+                    state_dict[time_ts][agent_id] = dict()
+                if relev_agent is None:
+                    if l1_action not in state_dict[time_ts][agent_id]:
+                        state_dict[time_ts][agent_id][l1_action] = [l2_action]
+                    else:
+                        state_dict[time_ts][agent_id][l1_action].append(l2_action)
+                else:
+                    if 'relev_agents' not in state_dict[time_ts]: 
+                        state_dict[time_ts]['relev_agents'] = dict()
+                    if relev_agent not in state_dict[time_ts]['relev_agents']:
+                        state_dict[time_ts]['relev_agents'][relev_agent] = dict()
+                    if l1_action not in state_dict[time_ts]['relev_agents'][relev_agent]:
+                        state_dict[time_ts]['relev_agents'][relev_agent][l1_action] = [l2_action]
+                    else:
+                        state_dict[time_ts]['relev_agents'][relev_agent][l1_action].append(l2_action)
+        state_dict = OrderedDict(sorted((float(key), value) for key, value in state_dict.items()))       
+        utils.pickle_dump(constants.L3_ACTION_CACHE+'traj_metadata.dict', state_dict)
+    else:
+        state_dict = utils.pickle_load(constants.L3_ACTION_CACHE+'traj_metadata.dict')
+    i_strings = []
+    for ts,traj_det in state_dict.items():
+        sub_agent = [k for k,v in traj_det.items() if k != 'relev_agents'][0]
+        for k,v in traj_det.items():
+            if k == 'relev_agents':
+                for ra,rv in traj_det[k].items():
+                    ac_l = []
+                    for l1,l2 in rv.items():
+                        for l2_a in l2:
+                            #act_str = unreadable(str(sub_agent)+'|'+str(ra)+'|'+l1+'|'+l2_a)
+                            i_string_data = (769,sub_agent,ra,l1,l2_a[0],ts,l2_a[1],None)
+                            i_strings.append(i_string_data)
+            else:
+                for l1,l2 in v.items():
+                    for l2_a in l2:
+                        #act_str = unreadable(str(k)+'|000|'+l1+'|'+l2_a)
+                        i_string_data = (769,sub_agent,0,l1,l2_a[0],ts,l2_a[1],None)
+                        i_strings.append(i_string_data)
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    
+    for i_s in i_strings:
+        print('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,?,?,?,?,?,NULL,?,?)',i_s)
+        c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,?,?,?,?,?,NULL,?,?)',i_s)
+    conn.commit()
+    conn.close()
+                
 
 
-
+insert_generated_traj_info()

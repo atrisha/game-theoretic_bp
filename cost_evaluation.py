@@ -25,6 +25,10 @@ import visualizer
 import equilibria
 from scipy.interpolate import CubicSpline
 from planning_objects import TrajectoryDef
+from collections import OrderedDict
+
+
+
 
 def dist_payoffs(dist_arr):
     return scipy.special.erf((dist_arr - constants.DIST_COST_MEAN) / (constants.DIST_COST_SD * math.sqrt(2)))
@@ -38,7 +42,7 @@ def eval_regulatory(traj_list,curr_time,dist_arr,traffic_signal,strat_str):
 def calc_total_payoffs(inhibitory,excitatory,traj_list,strategy_tuple,traffic_signal):
     num_agents = len(traj_list)
     all_traj_complexity = eval_trajectory_complexity(traj_list,strategy_tuple)
-    len_of_trajectories = [len(x) for x in traj_list]
+    len_of_trajectories = [len(x) for x in all_traj_complexity]
     #print('N=',len_of_trajectories)
     ''' complexity weighted '''
     all_trajectory_indices = list(itertools.product(*[np.random.choice(np.arange(x),size = min(5,x), replace=False, p=all_traj_complexity[_i]) for _i,x in enumerate(len_of_trajectories)]))
@@ -91,8 +95,9 @@ def calc_total_payoffs(inhibitory,excitatory,traj_list,strategy_tuple,traffic_si
 def eval_trajectory_complexity(traj_list,strategy_tuple):
     f = 1
     all_traj_compl = []
-    for strat,trajectories in zip(strategy_tuple, traj_list):
+    for strat,file_str in zip(strategy_tuple, [x[0][1] for x in traj_list]):
         traj_complexity = []
+        trajectories = load_traj_from_str(file_str)
         for traj in trajectories:
             rv = traj['v'].to_numpy()
             rx = traj['x'].to_numpy()
@@ -137,8 +142,8 @@ def eval_trajectory_complexity(traj_list,strategy_tuple):
 def eval_inhibitory(traj_list,a_c,all_trajectory_indices):
     disp_arr_x,disp_arr_y = [],[] 
     num_agents = len(traj_list)
-    len_of_trajectories = [len(x) for x in traj_list]
     all_possible_payoffs = dict()
+    traj_list = [load_traj_from_str(x) for x in [y[0][1] for y in traj_list]]
     for traj_idx_tuple in all_trajectory_indices:
         trajectory_dataframes = []
         for i in np.arange(num_agents):
@@ -174,6 +179,7 @@ def eval_excitatory(traj_list,a_c,all_trajectory_indices):
     num_agents = len(traj_list)
     payoff_stats_trajectories = np.full(shape=(4,num_agents),fill_value=np.inf)
     payoff_stats = np.full(shape=(4,num_agents),fill_value=np.inf)
+    traj_list = [load_traj_from_str(x) for x in [y[0][1] for y in traj_list]]
     len_of_trajectories = [len(x) for x in traj_list]
     all_possible_payoffs = dict()
     for traj_idx_tuple in all_trajectory_indices:
@@ -193,35 +199,55 @@ def print_readable(eq):
         readable_eq.append(s[3:6]+'_'+s[6:9]+'_'+constants.L1_ACTION_CODES_2_NAME[int(s[9:11])]+'_'+constants.L2_ACTION_CODES_2_NAME[int(s[11:13])])
     return readable_eq
 
+def load_traj_from_str(file_str):
+    traj = utils.pickle_load(file_str)
+    p_d_list = []
+    data_index = ['time', 'x', 'y', 'yaw', 'v', 'a', 'j']
+    for i in np.arange(traj.shape[0]):
+        _t_data,_t_type = traj[i][0],traj[i][1]
+        if isinstance(_t_data,np.ndarray):
+            s = pd.DataFrame(_t_data, index=data_index, dtype = np.float).T
+            p_d_list.append(s)
+    return p_d_list
+    
+
+def unreadable(act_str):
+    tokens = act_str.split('|')
+    assert(len(tokens)==4)
+    l1_action = str(constants.L1_ACTION_CODES[tokens[2]]).zfill(2)
+    l2_action = str(constants.L2_ACTION_CODES[tokens[3]]).zfill(2)
+    agent = str(tokens[0]).zfill(3)
+    relev_agent = str(tokens[1]).zfill(3)
+    unreadable_str = '769'+agent+relev_agent+l1_action+l2_action
+    return unreadable_str
+
 ''' calculate equilibria in a brute force method '''
-def calc_equilibria(cache_dir,pattern,payoff_type,curr_time):
-    print(pattern)
-    traffic_signal = utils.get_traffic_signal(curr_time, 'ALL',pattern[0:3])
+def calc_equilibria(cache_dir,curr_time,traj_det,payoff_type):
+    traffic_signal = utils.get_traffic_signal(curr_time, 'ALL','769')
     dir = cache_dir
     data_index = ['time', 'x', 'y', 'yaw', 'v', 'a', 'j']
     action_dict = dict()
     agent_ids = []
     ag_ct = 0
-    for f in listdir(dir):
-        if re.match(pattern, f):
-            agent_string,time_ts = f.split('_')
-            agent_id = agent_string[3:6]
-            relev_agent_id = agent_string[6:9]
-            full_agent_id = agent_id+relev_agent_id
-            if full_agent_id not in agent_ids:
-                agent_ids.append(full_agent_id)
-            action_string = agent_string[9:]
-            agent_key = agent_id+relev_agent_id
-            if agent_key not in action_dict:
-                action_dict[agent_key] = dict()
-                action_dict[agent_key]['actions'] = ['769'+agent_key+action_string+'_'+time_ts]
-                action_dict[agent_key]['id'] = ag_ct
-                ag_ct += 1
-            else:
-                action_dict[agent_key]['actions'].append('769'+agent_key+action_string+'_'+time_ts)
+    sub_agent = [k for k,v in traj_det.items() if k != 'relev_agents'][0]
+    all_actions = []
+    for k,v in traj_det.items():
+        if k == 'relev_agents':
+            for ra,rv in traj_det[k].items():
+                ac_l = []
+                for l1,l2 in rv.items():
+                    for l2_a in l2:
+                        act_str = unreadable(str(sub_agent)+'|'+str(ra)+'|'+l1+'|'+l2_a)
+                        ac_l.append(act_str)
+                all_actions.append(ac_l)
         else:
-            match = False
-    all_action_combinations = list(itertools.product(*[v['actions'] for v in action_dict.values()]))
+            ac_l = []
+            for l1,l2 in v.items():
+                for l2_a in l2:
+                    act_str = unreadable(str(k)+'|000|'+l1+'|'+l2_a)
+                    ac_l.append(act_str)
+            all_actions.append(ac_l)
+    all_action_combinations = list(itertools.product(*[v for v in all_actions]))        
     #fig, ax = plt.subplots()
     traj_ct = 0
     traj_dict = dict()
@@ -232,19 +258,28 @@ def calc_equilibria(cache_dir,pattern,payoff_type,curr_time):
         traj_list = []
         for a in a_c:
             if a not in traj_dict:
-                traj = utils.pickle_load(os.path.join(dir, a))
+                file_str = os.path.join(dir, a+'_'+str(round(float(curr_time)*1000)))
+                traj = utils.pickle_load(file_str)
+                num_trajs = traj.shape[0]
+                ''' avoid storing the entire list in memory'''
+                traj = None
+                '''
                 p_d_list = []
                 for i in np.arange(traj.shape[0]):
                     _t_data,_t_type = traj[i][0],traj[i][1]
                     if isinstance(_t_data,np.ndarray):
                         s = pd.DataFrame(_t_data, index=data_index, dtype = np.float).T
                         p_d_list.append(s)
-                
-                    
                 traj_dict[a] = p_d_list
                 traj_list.append(p_d_list)
+                '''
+                traj_list.append([(num_trajs,file_str)])
             else:
+                '''
                 traj_list.append(traj_dict[a])
+                '''
+                num_trajs = traj_dict[a].shape[0]
+                traj_list.append([(num_trajs,file_str)])
             #print(a_c,a,traj[1])
                 
         ''' these strategies are not valid since once of them has no trajectory'''

@@ -104,7 +104,7 @@ class TrajectoryPlan:
                     print('no path found left turn')
                 else:
                     l3_action_len = len(traj_list)
-        elif self.l1_action == 'track_speed':
+        elif self.l1_action == 'track_speed' or self.l1_action == 'follow_lead':
             center_line = utils.get_centerline(veh_state.current_segment)
             if center_line is None:
                 sys.exit('center line not found for '+str(veh_state.current_segment))

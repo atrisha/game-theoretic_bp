@@ -143,13 +143,11 @@ plt.plot([538852.12],[4813985.8],'o')
 plt.plot([538814.87],[4814004.97],'x')
 plt.show()
 '''
-'''    
+    
 from collections import OrderedDict    
-    hpx =  [538852.42, 538851.85, 538851.85, 538787.6]
-    hpy =  [4813985.97, 4813986.98, 4813986.99, 4813992.01]
-    #_l = list(sorted(set(zip(hpx,hpy)),key=lambda tup: tup[0]))
-    _d = OrderedDict(sorted(list(zip(hpx,hpy)),key=lambda tup: tup[0]))
-    hpx,hpy = list(_d.keys()),list(_d.values())
-    print(hpx,hpy)
-'''
-print(round(float(104.437667)*1000))
+hpx =  [538794.04715, 538794.04715, 538794.81398, 538796.05269]
+hpy =  [4813996.09035, 4813996.09035, 4813996.48035, 4813997.11033]
+#_l = list(sorted(set(zip(hpx,hpy)),key=lambda tup: tup[0]))
+_d = OrderedDict(sorted(list(zip(hpx,hpy)),key=lambda tup: tup[0]))
+hpx,hpy = list(_d.keys()),list(_d.values())
+print(hpx,hpy)

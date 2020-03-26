@@ -19,6 +19,10 @@ import os,shutil
 from matplotlib import path
 from decimal import Decimal
 from collections import OrderedDict
+import pandas as pd
+from builtins import isinstance
+
+
 
 
 # from: https://gist.github.com/nim65s/5e9902cd67f094ce65b0
@@ -219,6 +223,25 @@ def get_track_segment_seq(track_id):
     conn.close()
     return ast.literal_eval(seq) if seq is not None else None
 
+
+def load_traj_from_str(file_str):
+    traj = pickle_load(file_str)
+    p_d_list = []
+    data_index = ['time', 'x', 'y', 'yaw', 'v', 'a', 'j']
+    for i in np.arange(traj.shape[0]):
+        _t_data,_t_type = traj[i][0],traj[i][1]
+        if not isinstance(_t_data,np.ndarray):
+            _t_data = list(_t_data)[:len(data_index)]
+            for t_i,t in enumerate(_t_data):
+                if isinstance(t,int):
+                    _t_data[t_i] = [None]*len(_t_data[0])
+            min_len = min([len(x) for x in _t_data])
+            _t_data = [x[:min_len] for x in _t_data]
+            _t_data = np.vstack(_t_data)
+        s = pd.DataFrame(_t_data, index=data_index, dtype = np.float).T
+        s = s.round(5)
+        p_d_list.append(s)
+    return p_d_list
 
 def get_track(veh_state,curr_time,from_current=None):
     agent_id = veh_state.id
@@ -647,6 +670,8 @@ def assign_curent_segment(traffic_region_list,veh_state,simulation=False):
                     
 
 def find_index_in_list(s_sum, dist_from_origin):
+    if s_sum > dist_from_origin[-1]:
+        return len(dist_from_origin)-1
     idx = None
     for i,x in enumerate(list(zip(dist_from_origin[:-1],dist_from_origin[1:]))):
         if x[0] <= s_sum <= x[1]:
@@ -655,12 +680,60 @@ def find_index_in_list(s_sum, dist_from_origin):
     return idx
     
 
-        
+def insert_generated_trajectory(l3_actions,f):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "select MAX(GENERATED_TRAJECTORY.TRAJECTORY_ID) FROM GENERATED_TRAJECTORY"
+    c.execute(q_string)
+    res = c.fetchone()
+    max_traj_id = int(res[0])
+    file_id = f[0:3]
+    agent_id = int(f[3:6])
+    time_ts = float(f.split('_')[-1].replace(',','.'))
+    relev_agent = int(f[6:9])
+    l1_action = [k for k,v in constants.L1_ACTION_CODES.items() if v == int(f[9:11])][0]
+    l2_action = [k for k,v in constants.L2_ACTION_CODES.items() if v == int(f[11:13])][0]
+    traj_len = l3_actions.shape[0]
+    i_string_data = (769,agent_id,relev_agent,l1_action,l2_action,time_ts,traj_len,None)
+    #print('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?,?)',i_string_data)
+    c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?,?)',i_string_data)
+    traj_info_id = int(c.lastrowid)
+    traj_id = max_traj_id+1
+    for i in np.arange(traj_len):
+        traj_dets = l3_actions[i][0]
+        slice_len = min([len(x) for x in traj_dets[0:7]])
+        tx,rx,ry,ryaw,rv,ra,rj = traj_dets[0][:slice_len],traj_dets[1][:slice_len],traj_dets[2][:slice_len],traj_dets[3][:slice_len],traj_dets[4][:slice_len],traj_dets[5][:slice_len],traj_dets[6][:slice_len]
+        ins_list = list(zip([traj_id]*slice_len,[traj_info_id]*slice_len,[round(x,5) for x in tx],[round(x,5) for x in rx],[round(x,5) for x in ry],[round(x,5) for x in ryaw],[round(x,5) for x in rv],[round(x,5) for x in ra],[round(x,5) for x in rj]))
+        i_string = 'INSERT INTO GENERATED_TRAJECTORY VALUES (?,?,?,?,?,?,?,?,?)'
+        c.executemany(i_string,ins_list)
+        traj_id += 1
+    conn.commit()
+    conn.close()
+
+
+def solve_quadratic(a,b,c):
+    return (-b + math.sqrt(b**2 - 4*a*c)) / (2 * a),(-b - math.sqrt(b**2 - 4*a*c)) / (2 * a)        
     
+def generate_baseline_velocity(time_tx,v_s,a_s,target_vel,max_acc,max_jerk,acc):
+    vels = []
+    v,a = v_s,a_s
+    dt = constants.LP_FREQ
+    s_sum = 0
+    for i,t in enumerate(time_tx):
+        s = v*dt + (0.5*a*dt**2)
+        s_sum += s
+        v = max(v + a * dt, 0)
+        if (acc and a < max_acc) or (not acc and a > max_acc):
+            a = a + (max_jerk*dt)
+        else:
+            a = max_acc
+        if (acc and v > target_vel):
+            a = a - (max_jerk*dt)
+        vels.append(v)
+    return vels
     
-def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,l1_action):
+def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,acc):
     birds_eye_dist = math.hypot(path[-1][0]-path[0][0], path[-1][1]-path[0][1])
-    acc = False if l1_action == 'wait-for-oncoming' else True
     dist_from_origin = [0] + [math.hypot(p2[0]-p1[0], p2[1]-p1[1]) for p1,p2 in list(zip(path[:-1],path[1:]))]
     dist_from_origin = [sum(dist_from_origin[:i]) for i in np.arange(1,len(dist_from_origin))]
     dist,vels,accs = [],[],[]
@@ -679,11 +752,13 @@ def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,l1_ac
             a = max_acc
         if (acc and v > v_g):
             a = a - (max_jerk*dt)
+        if (not acc and v <= v_g):
+            a = a + (max_jerk)*dt if abs(a) > abs(max_jerk)*dt else 0
         path_idx = find_index_in_list(s_sum, dist_from_origin)
         if path_idx is None:
             ''' this has crossed the distance along the path'''
             break
-        overflow = dist_from_origin[path_idx+1] - s_sum
+        overflow = dist_from_origin[path_idx+1] - s_sum if path_idx+1 < len(dist_from_origin) else s_sum-dist_from_origin[-1]
         point = path[path_idx]
         r = overflow/math.hypot(path[path_idx+1][0]-path[path_idx][0], path[path_idx+1][1]-path[path_idx][1])
         point_x = path[path_idx][0] + r*(path[path_idx+1][0] - path[path_idx][0])
@@ -702,6 +777,7 @@ def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,l1_ac
     plt.plot([x[0] for x in new_path],[x[1] for x in new_path])
     plt.show()
     '''
+    
     if not acc and vels[-1] == 0 and len(vels) < len(time):
         ''' pad the trajectory'''
         vels = vels + [0]*(len(time)-len(vels))
@@ -720,6 +796,28 @@ def get_exit_boundary(segment):
     exit_pos_Y = ast.literal_eval(res[5])
     return[exit_pos_X,exit_pos_Y]
     
+
+def get_trajectories_in_db():
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO"
+    c.execute(q_string)
+    res = c.fetchall()
+    dir = constants.L3_ACTION_CACHE
+    traj_ct,ct = 0,0
+    N = len(res)
+    trajs_in_db = []
+    for row in res:
+        file_id = str(row[0])
+        traj_info_id = int(row[1])
+        agent_id = str(row[2]).zfill(3)
+        relev_agent_id = str(row[3]).zfill(3)
+        l1_action_code = str(constants.L1_ACTION_CODES[row[4]]).zfill(2)
+        l2_action_code = str(constants.L2_ACTION_CODES[row[5]]).zfill(2)
+        time_ts = str(float(row[6]))
+        file_str = file_id+agent_id+relev_agent_id+l1_action_code+l2_action_code+'_'+str(time_ts).replace('.',',')
+        trajs_in_db.append(file_str)
+    return trajs_in_db
     
     
 def generate_trajectory_from_vel_profile(time,ref_path,vel_profile):
@@ -733,11 +831,18 @@ def generate_trajectory_from_vel_profile(time,ref_path,vel_profile):
         path_idx = find_index_in_list(s_sum, dist_from_origin)
         if path_idx is None:
             path_idx = len(dist_from_origin)-2
-        overflow = dist_from_origin[path_idx+1] - s_sum
-        point = ref_path[path_idx]
-        r = overflow/math.hypot(ref_path[path_idx+1][0]-ref_path[path_idx][0], ref_path[path_idx+1][1]-ref_path[path_idx][1])
-        point_x = ref_path[path_idx][0] + r*(ref_path[path_idx+1][0] - ref_path[path_idx][0])
-        point_y = ref_path[path_idx][1] + r*(ref_path[path_idx+1][1] - ref_path[path_idx][1])
+        if (path_idx+1) < len(dist_from_origin):
+            overflow = dist_from_origin[path_idx+1] - s_sum
+            point = ref_path[path_idx]
+            r = overflow/math.hypot(ref_path[path_idx+1][0]-ref_path[path_idx][0], ref_path[path_idx+1][1]-ref_path[path_idx][1])
+            point_x = ref_path[path_idx][0] + r*(ref_path[path_idx+1][0] - ref_path[path_idx][0])
+            point_y = ref_path[path_idx][1] + r*(ref_path[path_idx+1][1] - ref_path[path_idx][1])
+        else:
+            overflow = s_sum - dist_from_origin[-1]
+            point = ref_path[path_idx]
+            r = overflow/math.hypot(ref_path[path_idx][0]-ref_path[path_idx-1][0], ref_path[path_idx][1]-ref_path[path_idx-1][1])
+            point_x = ref_path[path_idx][0] + r*(ref_path[path_idx][0] - ref_path[path_idx-1][0])
+            point_y = ref_path[path_idx][1] + r*(ref_path[path_idx][1] - ref_path[path_idx-1][1])
         point = (point_x,point_y)
         new_path.append(point)
     dist_from_origin_newpath = [0] + [math.hypot(p2[0]-p1[0], p2[1]-p1[1]) for p1,p2 in list(zip(new_path[:-1],new_path[1:]))]

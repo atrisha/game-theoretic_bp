@@ -89,15 +89,13 @@ class TrajectoryDef:
         self.agent_id = string_rep[3:6]
         self.relev_agent_id = string_rep[6:9]
         self.l1_action = string_rep[9:11]
-        self.l1_action_readable = constants.L1_ACTION_CODES_2_NAME[int(string_rep[9:11])]
         self.l2_action = string_rep[11:13]
-        self.l2_action_readable = constants.L2_ACTION_CODES_2_NAME[int(string_rep[11:13])]
-        acc = False if self.l1_action_readable == 'wait' else True
-        if acc:
-            self.max_acc_long = constants.MAX_LONG_ACC_NORMAL if self.l2_action_readable is 'NORMAL' else constants.MAX_LONG_ACC_AGGR
+        self.acc = False if int(self.l1_action) in [1,5,6,8] else True
+        if self.acc:
+            self.max_acc_long = constants.MAX_LONG_ACC_NORMAL if self.l2_action == 2 else constants.MAX_LONG_ACC_AGGR
             self.max_jerk = constants.MAX_ACC_JERK_AGGR
         else:
-            self.max_acc_long = constants.MAX_LONG_DEC_NORMAL if self.l2_action_readable is 'NORMAL' else constants.MAX_LONG_DEC_AGGR
+            self.max_acc_long = constants.MAX_LONG_DEC_NORMAL if self.l2_action == 2 else constants.MAX_LONG_DEC_AGGR
             self.max_jerk = constants.MAX_DEC_JERK_AGGR
         
 

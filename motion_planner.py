@@ -72,7 +72,7 @@ class TrajectoryPlan:
                         ''' add waiting at current location to the trajectory '''
                         f = 1
                     else:
-                        res = quintic_polynomials_planner(
+                        res = qp_planner(
                             init_pos_x, init_pos_y, init_yaw_rads, init_v, init_a, b_s[0], b_s[1], b_s[2], b_s[3], b_s[4], b_s[5], abs(constants.MAX_ACC_JERK_AGGR), dt, 
                             lane_boundary)
                         if res is not None:
@@ -117,30 +117,54 @@ class TrajectoryPlan:
             max_accel_long = constants.MAX_LONG_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LONG_ACC_AGGR
             max_accel_lat = constants.MAX_LAT_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LAT_ACC_AGGR
             target_vel = target_vel + constants.LEFT_TURN_VEL_START_POS_AGGR_ADDITIVE if self.l2_action == 'AGGRESSIVE' else target_vel
-            if self.lead_vehicle is None:
-                acc_long_vals = np.random.normal(loc=max_accel_long, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_TRACK_SPEED)
-                acc_lat_vals = np.random.normal(loc=max_accel_lat, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_TRACK_SPEED)
-                if accel_param == 'NORMAL':
-                    target_vel_vals = np.random.uniform(low=constants.TARGET_VEL,high=constants.TARGET_VEL+(10/3.6), size=constants.MAX_SAMPLES_TRACK_SPEED)
-                else:
-                    target_vel_vals = halfnorm.rvs(loc=constants.TARGET_VEL, scale=constants.TARGET_VEL_SD, size=constants.MAX_SAMPLES_TRACK_SPEED)
-                state_vals = list(zip(acc_long_vals,acc_lat_vals,target_vel_vals))
-                for i,state_val in enumerate(state_vals):
-                    res = track_speed_planner_cp(veh_state, center_line, state_val)
-                    if planner_type != 'CP':
-                        if res is not None:
-                            time, x, y, yaw, v, a, j, T, plan_type = res
-                            traj_generated[1] = True
-                            clipped_res = utils.clip_trajectory_to_viewport(res)
-                            if clipped_res is not None:
-                                traj_list.append((clipped_res, plan_type))
-                        else:
-                            sys.exit('no path found track speed')
-                            #print('no path found')
+            #if self.lead_vehicle is None:
+            acc_long_vals = np.random.normal(loc=max_accel_long, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_TRACK_SPEED)
+            acc_lat_vals = np.random.normal(loc=max_accel_lat, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_TRACK_SPEED)
+            if accel_param == 'NORMAL':
+                if self.lead_vehicle is None:
+                    if veh_state.speed <= constants.TARGET_VEL:
+                        target_vel_vals = np.random.uniform(low=constants.TARGET_VEL,high=constants.TARGET_VEL+(10/3.6), size=constants.MAX_SAMPLES_TRACK_SPEED)
                     else:
-                        if res is not None:
-                            traj_list = traj_list + res
-                        
+                        target_vel_vals = np.random.uniform(low=veh_state.speed,high=veh_state.speed+2, size=constants.MAX_SAMPLES_TRACK_SPEED)
+                else:
+                    target_vel_vals = np.random.uniform(low=min(self.lead_vehicle.speed,veh_state.speed),high=max(self.lead_vehicle.speed,veh_state.speed), size=constants.MAX_SAMPLES_TRACK_SPEED)
+            else:
+                if self.lead_vehicle is None:
+                    if veh_state.speed <= constants.TARGET_VEL:
+                        target_vel_vals = halfnorm.rvs(loc=constants.TARGET_VEL, scale=constants.TARGET_VEL_SD, size=constants.MAX_SAMPLES_TRACK_SPEED)
+                    else:
+                        target_vel_vals = halfnorm.rvs(loc=veh_state.speed, scale=veh_state.speed+2, size=constants.MAX_SAMPLES_TRACK_SPEED)
+                else:
+                    target_vel_vals = halfnorm.rvs(loc=self.lead_vehicle.speed, scale=self.lead_vehicle.speed+2, size=constants.MAX_SAMPLES_TRACK_SPEED)
+            target_vel_vals = [x if x<=constants.TRACK_SPEED_VEL_LIMIT else veh_state.speed + (constants.TRACK_SPEED_VEL_LIMIT-veh_state.speed)*np.random.random_sample() for x in target_vel_vals]
+            state_vals = list(zip(acc_long_vals,acc_lat_vals,target_vel_vals)) + [(0,0,veh_state.speed)]
+            for i,state_val in enumerate(state_vals):
+                res = track_speed_planner_cp(veh_state, center_line, state_val)
+                '''
+                if planner_type != 'CP':
+                    if res is not None:
+                        time, x, y, yaw, v, a, j, T, plan_type = res
+                        traj_generated[1] = True
+                        clipped_res = utils.clip_trajectory_to_viewport(res)
+                        if clipped_res is not None:
+                            traj_list.append((clipped_res, plan_type))
+                            
+                    else:
+                        sys.exit('no path found track speed')
+                        #print('no path found')
+                else:
+                    if res is not None:
+                        traj_list = traj_list + res
+                '''
+                if res is not None:
+                        traj_list = traj_list + res
+            '''
+            for t in traj_list:
+                sl = min(len(t[0][0]),len(t[0][4]))
+                plt.plot(t[0][0][:sl],t[0][4][:sl])
+            plt.show()
+            '''
+            '''
             else:
                 lead_vehicle = self.lead_vehicle
                 acc_long_vals = np.random.normal(loc=max_accel_long, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_FOLLOW_LEAD)
@@ -163,6 +187,7 @@ class TrajectoryPlan:
                     else:
                         sys.exit('no path found follow lead')
                         #print('no path found')
+            '''
         elif self.l1_action == 'decelerate-to-stop' or self.l1_action == 'wait_for_lead_to_cross':
             max_decel_long = constants.MAX_LONG_DEC_NORMAL if self.l2_action == 'NORMAL' else constants.MAX_LONG_DEC_AGGR
             max_decel_lat = constants.MAX_LAT_DEC_NORMAL if self.l2_action is 'NORMAL' else constants.MAX_LAT_DEC_AGGR
@@ -198,19 +223,11 @@ class TrajectoryPlan:
             state_vals = list(zip(dec_long_vals,dec_lat_vals,stop_poss))
             for i,state_val in enumerate(state_vals):
                 dist_to_stop = math.hypot(veh_state.x-state_val[2][0], veh_state.y-state_val[2][1])
-                res = decelerate_to_stop_planner(init_pos_x, init_pos_y, init_yaw_rads, init_v, init_a_x, init_a_y, (state_val[0], state_val[1]), abs(constants.MAX_ACC_JERK_AGGR), dt, proceed_line, dist_to_stop)
+                res = decelerate_to_stop_planner_cp(veh_state, proceed_line, dist_to_stop)
                 if res is not None:
-                    time, x, y, yaw, v, a, j, T, plan_type = res
-                    traj_generated = (traj_generated[0], True)
-                    if constants.SEGMENT_MAP[veh_state.current_segment] == 'exit-lane':
-                        clipped_res = utils.clip_trajectory_to_viewport(res)
-                        if clipped_res is not None:
-                            traj_list.append((clipped_res, plan_type))
-                    else:
-                        traj_list.append((res,plan_type))
+                    traj_list.append((res, 'CP'))
                     
-                else:
-                    sys.exit('no path found track speed')
+            
             if self.l1_action == 'wait_for_lead_to_cross':
                 res = construct_stationary_trajectory(veh_state)
                 traj_list.append((res, 'ST'))

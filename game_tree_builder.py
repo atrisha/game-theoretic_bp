@@ -148,20 +148,19 @@ def get_l3_action_file(file_id,agent_id,relev_agent_id, curr_time, l1_action,l2_
     _t = float(curr_time)
     _t1 = _t * 1000
     _t2 = round(_t1)
-    curr_time = round(float(curr_time)*1000)
+    #curr_time = round(float(curr_time)*1000)
     file_id = '769'
     agent_id = str(agent_id).zfill(3)
     relev_agent_id = str(relev_agent_id).zfill(3)
     l1_action = str(constants.L1_ACTION_CODES[l1_action]).zfill(2)
     l2_action = str(constants.L2_ACTION_CODES[l2_action]).zfill(2)
-    file_key = file_id+agent_id+relev_agent_id+l1_action+l2_action+'_'+str(curr_time)
+    file_key = file_id+agent_id+relev_agent_id+l1_action+l2_action+'_'+str(curr_time).replace('.',',')
     return file_key
 
 def save_get_l3_action_file(file_id,agent_id,relev_agent_id, curr_time, l1_action,l2_action):
     _t = float(curr_time)
     _t1 = _t * 1000
     _t2 = round(_t1)
-    str(curr_time).replace('.', ',')
     curr_time = str(curr_time).replace('.', ',')
     file_id = '769'
     agent_id = str(agent_id).zfill(3)
@@ -172,7 +171,7 @@ def save_get_l3_action_file(file_id,agent_id,relev_agent_id, curr_time, l1_actio
     return file_key
 
     
-def generate_action_plans(veh_state,track_info,selected_action=None):
+def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=None):
     agent_track = veh_state.track
     agent_id = veh_state.id
     curr_time = float(track_info[6,])
@@ -219,33 +218,26 @@ def generate_action_plans(veh_state,track_info,selected_action=None):
     for l1 in actions_l1:
         actions_l2 = actions[l1]
         for l2 in actions_l2:
+            print('time',curr_time,'agent',agent_id,l1,l2)
             if l1 not in veh_state.action_plans[curr_time]:
                 veh_state.action_plans[curr_time][l1] = dict()
             veh_state.action_plans[curr_time][l1][l2] = None
             trajectory_plan = motion_planner.TrajectoryPlan(l1,l2,task)
             trajectory_plan.set_lead_vehicle(sub_v_lead_vehicle)
             ''' l3_action_trajectory file id: file_id(3),agent_id(3),relev_agent_id(3),l1_action(2),l2_action(2)'''
-            file_key = constants.L3_ACTION_CACHE+get_l3_action_file(None, agent_id, 0, curr_time, l1, l2)
-            if not os.path.isfile(file_key):
+            file_key = get_l3_action_file(None, agent_id, 0, curr_time, l1, l2)
+            if file_key not in trajs_in_db and (l1=='decelerate-to-stop' or l1=='wait_for_lead_to_cross'):
+                print('loaded from cache: False')
                 l3_actions = trajectory_plan.generate_trajectory(veh_state)
                 if len(l3_actions) > 0:
-                    utils.pickle_dump(file_key, l3_actions)
+                    utils.insert_generated_trajectory(l3_actions, file_key)
                 else:
-                    utils.pickle_dump(file_key, dict())
-                print('loaded from cache: False')
+                    utils.pickle_dump(constants.L3_ACTION_CACHE+file_key, dict())
+                
             else:
-                print('loaded from cache: True')
-                l3_actions = utils.pickle_load(file_key)
-                if len(l3_actions) == 0:
-                    l3_actions = trajectory_plan.generate_trajectory(veh_state)
-                    if len(l3_actions) > 0:
-                        utils.pickle_dump(file_key, l3_actions)
-                    else:
-                        utils.pickle_dump(file_key, dict())
-                else:
-                    brk = 1   
+                print('loaded from cache: True')   
             #veh_state.action_plans[curr_time][l1][l2] = np.copy(l3_actions)
-            print('time',curr_time,'agent',agent_id,l1,l2)
+            
     #visualizer.plot_all_paths(veh_state)
     l3_acts_for_plot = []
     ''' find the relevant agents for the current subject agent. '''
@@ -320,32 +312,25 @@ def generate_action_plans(veh_state,track_info,selected_action=None):
             actions_l2 = r_a_actions[l1]
             for l2 in actions_l2:
                 ''' l3_action_trajectory file id: file_id(3),agent_id(3),relev_agent_id(3),l1_action(2),l2_action(2)'''
-                file_key = constants.L3_ACTION_CACHE+get_l3_action_file(None, agent_id, r_a_state.id, curr_time, l1, l2)
+                file_key = get_l3_action_file(None, agent_id, r_a_state.id, curr_time, l1, l2)
                 if l1 not in r_a_state.action_plans[curr_time]:
                     r_a_state.action_plans[curr_time][l1] = dict()
                     r_a_state.action_plans[curr_time][l1][l2] = None
                 trajectory_plan = motion_planner.TrajectoryPlan(l1,l2,r_a_task)
                 trajectory_plan.set_lead_vehicle(lead_vehicle)
                 print('time',curr_time,'agent',agent_id,'relev agent',r_a_state.id,l1,l2)
-                if not os.path.isfile(file_key):
+                if file_key not in trajs_in_db and (l1=='decelerate-to-stop' or l1=='wait_for_lead_to_cross'):
+                    print('loaded from cache: False')
                     l3_actions = trajectory_plan.generate_trajectory(r_a_state)
                     if len(l3_actions) > 0:
-                        utils.pickle_dump(file_key, l3_actions)
+                        utils.insert_generated_trajectory(l3_actions, file_key)
                     else:
-                        utils.pickle_dump(file_key, dict())
-                    print('loaded from cache: False')
+                        utils.pickle_dump(constants.L3_ACTION_CACHE+file_key, dict())
+                    
                 else:
                     #l3_actions = utils.pickle_load(file_key)
                     print('loaded from cache: True')
-                    l3_actions = utils.pickle_load(file_key)
-                    if len(l3_actions) == 0:
-                        l3_actions = trajectory_plan.generate_trajectory(r_a_state)
-                        if len(l3_actions) > 0:
-                            utils.pickle_dump(file_key, l3_actions)
-                        else:
-                            utils.pickle_dump(file_key, dict())
-                    else:
-                        brk=1
+                    
                     
                 #l3_action_size = l3_actions.shape[0] if l3_actions is not None else 0
                 #r_a_state.action_plans[curr_time][l1][l2] = np.copy(l3_actions)
@@ -363,6 +348,7 @@ def generate_action_plans(veh_state,track_info,selected_action=None):
 and stores trajectory plans in L3_ACTION_CACHE. It's called hopping because at every time interval the state hops back
 to the real state in the real trajectory, and does not go on a counterfactual path. '''
 def generate_hopping_plans(state_dicts=None):
+    trajs_in_db = utils.get_trajectories_in_db()
     if state_dicts is not None:
         agent_ids = state_dicts.keys()
     else:
@@ -393,14 +379,14 @@ def generate_hopping_plans(state_dicts=None):
                 curr_time = ts
                 timestamp_l.append(curr_time)
                 selected_action = (state_dicts[agent_id][ts]['action'],state_dicts[agent_id][ts]['relev_agents'])
-                generate_action_plans(veh_state,track_info,selected_action)
+                generate_action_plans(veh_state,track_info,selected_action,trajs_in_db)
         else:
             selected_time_ts = np.arange(0,len(agent_track),constants.DATASET_FPS*constants.PLAN_FREQ)
             for i in selected_time_ts:
                 track_info = agent_track[i]
                 curr_time = float(track_info[6,])
                 timestamp_l.append(curr_time)
-                generate_action_plans(veh_state,track_info)
+                generate_action_plans(veh_state,track_info,None,trajs_in_db)
 
 
 ''' this cleans up the hopping plan generation process'''
@@ -604,4 +590,4 @@ def calc_eqs_for_hopping_trajectories():
                 plt.clf()
 
 
-#calc_eqs_for_hopping_trajectories()
+#generate_hopping_plans()

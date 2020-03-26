@@ -76,7 +76,7 @@ class QuinticPolynomial:
     def print_coeff(self,str):
         print(str,self.a0,self.a1,self.a3,self.a4,self.a5)
 
-def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary):
+def qp_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt,lane_boundary):
     #print('called with')
     plan_type = 'QP'
     MAX_T = 15.0  # maximum time to the goal [s]

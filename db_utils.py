@@ -16,7 +16,8 @@ from game_tree_builder import get_leading_vehicles
 import os
 from os import listdir
 from collections import OrderedDict
-
+import pandas as pd
+from cost_evaluation import eval_complexity
 
 
 
@@ -562,66 +563,186 @@ def insert_generated_traj_info():
                     v.set_id(relev_agent)
                 time_tuple = utils.get_entry_exit_time(v.id)
                 v.set_entry_exit_time(time_tuple)
+                if agent_id==11:
+                    brk =1 
                 agent_track = utils.get_track(v, None)
                 all_times = [float(agent_track[i][6,]) for i in np.arange(len(agent_track))]
                 real_ts = -1
                 for ts in all_times:
-                    if round(float(ts)*1000) == time_ts*1000:
+                    if round(float(ts)*1000) == round(time_ts*1000):
                         real_ts = ts
                         break
                 if real_ts != -1:
                     time_ts = real_ts
+                else:
+                    print('ts',time_ts,v.id,real_ts,all_times[0],all_times[-1])
+                f_new = f[0:14]+str(time_ts).replace('.',',')
+                os.rename(os.path.join(dir,f),os.path.join(dir,f_new))
                 v.set_current_time(time_ts)
                 print(ct,'/',N,agent_id,time_ts,relev_agent,l1_action,l2_action)
                 if time_ts not in state_dict:
                     state_dict[time_ts] = dict()
                 if agent_id not in state_dict[time_ts]:
                     state_dict[time_ts][agent_id] = dict()
+                    state_dict[time_ts][agent_id]['actions'] = dict()
                 if relev_agent is None:
-                    if l1_action not in state_dict[time_ts][agent_id]:
-                        state_dict[time_ts][agent_id][l1_action] = [l2_action]
+                    if l1_action not in state_dict[time_ts][agent_id]['actions']:
+                        state_dict[time_ts][agent_id]['actions'][l1_action] = [l2_action]
                     else:
-                        state_dict[time_ts][agent_id][l1_action].append(l2_action)
+                        state_dict[time_ts][agent_id]['actions'][l1_action].append(l2_action)
                 else:
-                    if 'relev_agents' not in state_dict[time_ts]: 
-                        state_dict[time_ts]['relev_agents'] = dict()
-                    if relev_agent not in state_dict[time_ts]['relev_agents']:
-                        state_dict[time_ts]['relev_agents'][relev_agent] = dict()
-                    if l1_action not in state_dict[time_ts]['relev_agents'][relev_agent]:
-                        state_dict[time_ts]['relev_agents'][relev_agent][l1_action] = [l2_action]
+                    if 'relev_agents' not in state_dict[time_ts][agent_id]: 
+                        state_dict[time_ts][agent_id]['relev_agents'] = dict()
+                    if relev_agent not in state_dict[time_ts][agent_id]['relev_agents']:
+                        state_dict[time_ts][agent_id]['relev_agents'][relev_agent] = dict()
+                    if l1_action not in state_dict[time_ts][agent_id]['relev_agents'][relev_agent]:
+                        state_dict[time_ts][agent_id]['relev_agents'][relev_agent][l1_action] = [l2_action]
                     else:
-                        state_dict[time_ts]['relev_agents'][relev_agent][l1_action].append(l2_action)
+                        state_dict[time_ts][agent_id]['relev_agents'][relev_agent][l1_action].append(l2_action)
         state_dict = OrderedDict(sorted((float(key), value) for key, value in state_dict.items()))       
         utils.pickle_dump(constants.L3_ACTION_CACHE+'traj_metadata.dict', state_dict)
     else:
         state_dict = utils.pickle_load(constants.L3_ACTION_CACHE+'traj_metadata.dict')
     i_strings = []
     for ts,traj_det in state_dict.items():
-        sub_agent = [k for k,v in traj_det.items() if k != 'relev_agents'][0]
-        for k,v in traj_det.items():
-            if k == 'relev_agents':
-                for ra,rv in traj_det[k].items():
-                    ac_l = []
-                    for l1,l2 in rv.items():
+        for sub_agent,state_info in traj_det.items():
+            for k,v in state_info.items():
+                if k == 'relev_agents':
+                    for ra,rv in v.items():
+                        ac_l = []
+                        for l1,l2 in rv.items():
+                            for l2_a in l2:
+                                #act_str = unreadable(str(sub_agent)+'|'+str(ra)+'|'+l1+'|'+l2_a)
+                                i_string_data = (769,sub_agent,ra,l1,l2_a[0],ts,l2_a[1],None)
+                                i_strings.append(i_string_data)
+                else:
+                    for l1,l2 in v.items():
                         for l2_a in l2:
-                            #act_str = unreadable(str(sub_agent)+'|'+str(ra)+'|'+l1+'|'+l2_a)
-                            i_string_data = (769,sub_agent,ra,l1,l2_a[0],ts,l2_a[1],None)
+                            #act_str = unreadable(str(k)+'|000|'+l1+'|'+l2_a)
+                            i_string_data = (769,sub_agent,0,l1,l2_a[0],ts,l2_a[1],None)
                             i_strings.append(i_string_data)
-            else:
-                for l1,l2 in v.items():
-                    for l2_a in l2:
-                        #act_str = unreadable(str(k)+'|000|'+l1+'|'+l2_a)
-                        i_string_data = (769,sub_agent,0,l1,l2_a[0],ts,l2_a[1],None)
-                        i_strings.append(i_string_data)
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
     
     for i_s in i_strings:
-        print('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,?,?,?,?,?,NULL,?,?)',i_s)
-        c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,?,?,?,?,?,NULL,?,?)',i_s)
-    conn.commit()
-    conn.close()
+        print('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?,?)',i_s)
+        #c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?,?)',i_s)
+    #conn.commit()
+    #conn.close()
                 
 
 
-insert_generated_traj_info()
+def insert_generated_trajectories():
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    '''
+    engine = create_engine('sqlite:///D:\\intersections_dataset\\dataset\\uni_weber.db')
+    @event.listens_for(engine, 'before_cursor_execute')
+    def receive_before_cursor_execute(conn, cursor, statement, params, context, executemany):
+        if executemany:
+            cursor.fast_executemany = True
+            cursor.commit()
+    '''
+    c = conn.cursor()
+    c.execute('delete from GENERATED_TRAJECTORY')
+    conn.commit()
+    q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO"
+    c.execute(q_string)
+    res = c.fetchall()
+    dir = constants.L3_ACTION_CACHE
+    traj_ct,ct = 0,0
+    N = len(res)
+    for row in res:
+        file_id = str(row[0])
+        traj_id = int(row[1])
+        agent_id = str(row[2]).zfill(3)
+        relev_agent_id = str(row[3]).zfill(3)
+        l1_action_code = str(constants.L1_ACTION_CODES[row[4]]).zfill(2)
+        l2_action_code = str(constants.L2_ACTION_CODES[row[5]]).zfill(2)
+        time_ts = str(float(row[6]))
+        file_str = file_id+agent_id+relev_agent_id+l1_action_code+l2_action_code+'_'+str(time_ts).replace('.',',')
+        has_file = os.path.isfile(constants.L3_ACTION_CACHE+file_str)
+        assert(has_file)
+        if file_str == '7690110000101_2,002':
+            brk = 1
+        trajectories = utils.load_traj_from_str(constants.L3_ACTION_CACHE+file_str)
+        N_traj = len(trajectories)
+        lt_ct = 0
+        assert(abs(len(trajectories)-int(row[-2]))<=2)
+        print(str(traj_id)+' '+'('+str(ct)+'/'+str(N)+')',':')
+        for traj in trajectories:
+            traj_ct += 1
+            lt_ct += 1
+            traj['TRAJECTORY_ID'] = [traj_ct]*traj['time'].size
+            traj['TRAJECTORY_INFO_ID'] = [traj_id]*traj['time'].size
+            traj.rename(columns={'v':'speed','a':'long_accel','j':'long_jerk'})
+            cols = traj.columns.tolist()
+            cols = cols[-2:] + cols[:-2]
+            _traj = traj[cols]
+            #traj.to_sql('GENERATED_TRAJECTORY', engine, if_exists='append', index=False, method='multi', chunksize = 1000)
+            dat_l = _traj.values.tolist()
+            i_string = 'INSERT INTO GENERATED_TRAJECTORY VALUES (?,?,?,?,?,?,?,?,?)'
+            c.executemany(i_string,dat_l)
+        print('inserted',lt_ct)
+        print()
+        conn.commit()
+        ct += 1
+        
+    conn.close()
+    
+    
+def assign_trajectory_complexity():
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "SELECT TRAJECTORY_ID FROM GENERATED_TRAJECTORY_COMPLEXITY"
+    c.execute(q_string)
+    already_in = [x[0] for x in c.fetchall()]
+    q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO ORDER BY AGENT_ID"
+    c.execute(q_string)
+    res = c.fetchall()
+    dir = constants.L3_ACTION_CACHE
+    traj_ct,ct = 0,0
+    N = len(res)
+    for row in res:
+        file_id = str(row[0])
+        traj_info_id = int(row[1])
+        agent_id = str(row[2]).zfill(3)
+        relev_agent_id = str(row[3]).zfill(3)
+        l1_action_code = str(constants.L1_ACTION_CODES[row[4]]).zfill(2)
+        l2_action_code = str(constants.L2_ACTION_CODES[row[5]]).zfill(2)
+        file_str = file_id+agent_id+relev_agent_id+l1_action_code+l2_action_code
+        gen_trajs = dict()
+        q_string = "SELECT * FROM GENERATED_TRAJECTORY where TRAJECTORY_INFO_ID="+str(traj_info_id)
+        cursor = c.execute(q_string)
+        data_index = [description[0] for description in cursor.description]
+        gen_traj_res = c.fetchall()
+        for traj_pt in gen_traj_res:
+            if traj_pt[0] not in gen_trajs:
+                gen_trajs[traj_pt[0]] = [traj_pt]
+            else:
+                gen_trajs[traj_pt[0]].append(traj_pt)
+        ct += 1
+        gen_trajs = {k:np.asarray(v) for k,v in gen_trajs.items()}
+        i_string_l = []
+        for id,traj in gen_trajs.items():
+            print('('+str(ct)+'/'+str(N)+')'+str(id))
+            if id in already_in:
+                continue
+            try:
+                compl = eval_complexity(traj,file_str)
+            except:
+                compl = None
+            
+            i_string_l.append((id,compl))
+        i_string = "INSERT INTO GENERATED_TRAJECTORY_COMPLEXITY VALUES (?,?)"
+        if len(i_string_l) > 0:
+            c.executemany(i_string,i_string_l)
+            #plt.plot(np.arange(traj.shape[0]),traj[:,6])    
+        #plt.title(row[4])
+        #plt.show()
+        conn.commit()
+    conn.close()
+
+
+
+
+assign_trajectory_complexity()

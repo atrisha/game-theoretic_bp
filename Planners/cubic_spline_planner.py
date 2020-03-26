@@ -15,6 +15,116 @@ from tkinter.ttk import _val_or_dict
 from collections import OrderedDict
 
 
+def decelerate_to_stop_planner_cp(veh_state, center_line, dist_to_stop):
+    max_acc_lon, max_acc_lat, target_vel = constants.MAX_LONG_ACC_NORMAL if veh_state.l2_action=='NORMAL' else constants.MAX_LONG_ACC_AGGR, constants.MAX_LAT_ACC_NORMAL if veh_state.l2_action=='NORMAL' else constants.MAX_LAT_ACC_AGGR, 0.0
+    dt = constants.LP_FREQ
+    sx, sy, syaw, sv, sax, say = veh_state.x, veh_state.y, veh_state.yaw, veh_state.speed, veh_state.long_acc, veh_state.tan_acc
+    if veh_state.l2_action == 'NORMAL':
+        max_acc_lims,max_acc_jerk_lims = constants.MAX_LONG_ACC_NORMAL,constants.MAX_ACC_JERK_NORMAL
+    else:
+        max_acc_lims,max_acc_jerk_lims = constants.MAX_LONG_ACC_AGGR,constants.MAX_ACC_JERK_AGGR 
+    center_line_angle = math.atan2((center_line[1][1]-center_line[0][1]),(center_line[1][0]-center_line[0][0]))
+    dist_to_centerline = utils.distance_numpy([center_line[0][0],center_line[0][1]],[center_line[1][0],center_line[1][1]],[sx,sy])
+    sv_angle_with_cl = syaw - center_line_angle
+    sv_angle_in_map = math.atan2(sy,sx)
+    fresnet_origin = (sx - dist_to_centerline*math.cos(sv_angle_in_map), sy - dist_to_centerline*math.sin(sv_angle_in_map))
+    sv_x_fresnet,sv_y_fresnet = 0,dist_to_centerline
+    hpx,hpy = [sv_x_fresnet,sv_y_fresnet]
+    centerline_merge_dists = dist_to_stop/2
+    
+    HPX = [sv_x_fresnet,centerline_merge_dists,dist_to_stop]
+    HPY = [sv_y_fresnet,0,0]
+    if veh_state.l2_action == 'NORMAL':
+        mean_acc = max_acc_lon/np.random.randint(low=2,high=5)
+    else:
+        mean_acc = max_acc_lon/(2+np.random.random_sample())
+    time_to_target_speed = abs(target_vel-veh_state.speed)/abs(mean_acc)
+    if time_to_target_speed < constants.PLAN_FREQ*2:
+        tx_knots = [0,time_to_target_speed/5,time_to_target_speed,constants.PLAN_FREQ*2]
+        vxh_knots = [veh_state.speed,veh_state.speed+(target_vel-veh_state.speed)/5,target_vel,target_vel]
+    else:
+        tx_knots = [0,time_to_target_speed/5,time_to_target_speed]
+        vxh_knots = [veh_state.speed,veh_state.speed+(target_vel-veh_state.speed)/5,target_vel]
+    #print(vxh_knots)
+    try:
+        #cs_v = UnivariateSpline(tx_knots, np.sqrt(vxh_knots), k=2)
+        #cs_v.set_smoothing_factor(0.5)
+        _d = OrderedDict(sorted(list(zip(tx_knots,vxh_knots)),key=lambda tup: tup[0]))
+        tx_knots, vxh_knots = list(_d.keys()),list(_d.values())
+        cs_v = CubicSpline(tx_knots, vxh_knots,bc_type='clamped')
+    except ValueError:
+        print(tx_knots,vxh_knots)
+        raise
+    #cs_v = CubicSpline(tx_knots, np.sqrt(vxh_knots), bc_type='clamped')
+    tx = np.arange(0,tx_knots[-1]+dt,dt)
+    #vel_profile = [(x,cs_v(x)**2) for x in tx]
+    vel_profile = []
+    stop_reached = False
+    for t in tx:
+        if not stop_reached:
+            _vel_val = float(cs_v(t))
+            if _vel_val <=0.01 :
+                stop_reached = True
+            vel_profile.append((t,max(0,_vel_val)))
+        else:
+            vel_profile.append((t,0))
+    num_within_lane = 0
+    
+    #plt.plot([sv_x_fresnet],[sv_y_fresnet],'x')
+    #plt.plot([x[0] for x in center_line],[x[1] for x in center_line])
+    
+    cs_p = CubicSpline(HPX, HPY,bc_type='clamped')
+    ref_path = [(x,float(cs_p(x))) for x in np.arange(0,HPX[-1]+.5,.5)]
+    #plt.plot([x[0] for x in ref_path], [x[1] for x in ref_path])
+    MX,MY = utils.fresnet_to_map(fresnet_origin[0], fresnet_origin[1], [x[0] for x in ref_path], [x[1] for x in ref_path], center_line_angle)
+    ref_path_map = list(zip(MX,MY))
+    traj = utils.generate_trajectory_from_vel_profile(tx, ref_path_map, [v[1] for v in vel_profile])
+    traj_outside_lane = False
+    traj_dist_from_centerline = max([abs(utils.distance_numpy([center_line[0][0],center_line[0][1]],[center_line[1][0],center_line[1][1]],[t[0],t[1]])) for t in traj])
+    if traj_dist_from_centerline > constants.LANE_WIDTH:
+        traj_outside_lane = True
+    if traj_outside_lane:
+        return None
+        #else:
+        #    print('outside lane boundary',traj_dist_from_centerline)
+    #print('number of trajectories found within lane',num_within_lane)
+    
+    #plt.show()
+    num_acc,num_rej = 0,0
+    
+    tx = [veh_state.current_time+x for x in tx]
+    rv = [x[1] for x in vel_profile]
+    ra = [abs(x[1]-x[0])/dt for x in zip(rv[:-1],rv[1:])]
+    ra = ra + [ra[-1]]
+    rj = [abs(x[1]-x[0])/dt for x in zip(ra[:-1],ra[1:])]
+    rj = rj +[rj[-1]]
+    min_acc,max_acc,min_jerk,max_jerk = min(ra),max(ra),min(rj),max(rj)
+        
+    if (max_acc <= max_acc_lims and max_jerk <= max_acc_jerk_lims) and not (veh_state.l1_action[0:4]=='wait' and rv[-1] > 0.01):
+        yaw = [veh_state.yaw] + [math.atan2(e[1][1]-e[0][1], e[1][0]-e[0][0]) for e in zip(traj[:-1],traj[1:])]
+        res = np.asarray([tx, np.asarray([x[0] for x in traj]), np.asarray([x[1] for x in traj]), np.asarray(yaw), np.asarray(rv), np.asarray(ra), np.asarray(rj)])
+        if constants.SEGMENT_MAP[veh_state.current_segment] == 'exit-lane':
+            clipped_res = utils.clip_trajectory_to_viewport(res)
+            if clipped_res is not None:
+                return clipped_res
+        else:
+            return res
+        #print('accepted',veh_state.l2_action,'trajectory.max,min acc,jerk',(max_acc),(max_jerk))
+        
+    else:
+        ''' we are adding all trajectories since we would analyze the cost later'''
+        #print('rejected',veh_state.l2_action,'trajectory.max,min acc,jerk',(max_acc),(max_jerk))
+        
+        yaw = [veh_state.yaw] + [math.atan2(e[1][1]-e[0][1], e[1][0]-e[0][0]) for e in zip(traj[:-1],traj[1:])]
+        res = np.asarray([tx, np.asarray([x[0] for x in traj]), np.asarray([x[1] for x in traj]), np.asarray(yaw), np.asarray(rv), np.asarray(ra), np.asarray(rj)])
+        if constants.SEGMENT_MAP[veh_state.current_segment] == 'exit-lane':
+            clipped_res = utils.clip_trajectory_to_viewport(res)
+            if clipped_res is not None:
+                return clipped_res
+        else:
+            return res
+
+
 def track_speed_planner_cp(veh_state, center_line, state_vals):
     max_acc_lon, max_acc_lat, target_vel = state_vals[0], state_vals[1], state_vals[2]
     dt = constants.LP_FREQ
@@ -44,17 +154,27 @@ def track_speed_planner_cp(veh_state, center_line, state_vals):
         mean_acc = max_acc_lon/4
     else:
         mean_acc = max_acc_lon/2
-    time_to_target_speed = abs(target_vel-veh_state.speed)/mean_acc
-    tx_knots = [0,time_to_target_speed/2,time_to_target_speed]
-    vxh_knots = [veh_state.speed,abs(target_vel-veh_state.speed)/2,target_vel]
-    try:
-        cs_v = UnivariateSpline(tx_knots, np.sqrt(vxh_knots), k=2)
-    except ValueError:
-        print(tx_knots,vxh_knots)
-        raise
-    #cs_v = CubicSpline(tx_knots, np.sqrt(vxh_knots), bc_type='clamped')
-    tx = np.arange(0,time_to_target_speed+dt,dt)
-    vel_profile = [(x,cs_v(x)**2) for x in tx]
+    if mean_acc != 0:
+        time_to_target_speed = abs(target_vel-veh_state.speed)/abs(mean_acc)
+        if time_to_target_speed < constants.PLAN_FREQ*2:
+            tx_knots = [0,time_to_target_speed/5,time_to_target_speed,constants.PLAN_FREQ*2]
+            vxh_knots = [veh_state.speed,veh_state.speed+(target_vel-veh_state.speed)/5+np.random.random_sample(),target_vel,target_vel]
+        else:
+            tx_knots = [0,time_to_target_speed/5,time_to_target_speed]
+            vxh_knots = [veh_state.speed,veh_state.speed+(target_vel-veh_state.speed)/5+np.random.random_sample(),target_vel]
+        #print(vxh_knots)
+        try:
+            cs_v = UnivariateSpline(tx_knots, np.sqrt(vxh_knots), k=2)
+            cs_v.set_smoothing_factor(0.5)
+        except ValueError:
+            print(tx_knots,vxh_knots)
+            raise
+        #cs_v = CubicSpline(tx_knots, np.sqrt(vxh_knots), bc_type='clamped')
+        tx = np.arange(0,tx_knots[-1]+dt,dt)
+        vel_profile = [(x,cs_v(x)**2) for x in tx]
+    else:
+        tx = np.arange(0,(constants.PLAN_FREQ*2)+dt,dt)
+        vel_profile = [(x,veh_state.speed) for x in tx]
     num_within_lane = 0
     all_path_samples,all_vel_samples,all_time_samples = [],[],[]
     #plt.plot([sv_x_fresnet],[sv_y_fresnet],'x')
@@ -94,7 +214,7 @@ def track_speed_planner_cp(veh_state, center_line, state_vals):
             
         if (max_acc <= max_acc_lims and max_jerk <= max_acc_jerk_lims) and not (veh_state.l1_action[0:4]=='wait' and rv[-1] > 0.01):
             yaw = [veh_state.yaw] + [math.atan2(e[1][1]-e[0][1], e[1][0]-e[0][0]) for e in zip(traj[:-1],traj[1:])]
-            res = tx, np.asarray([x[0] for x in traj]), np.asarray([x[1] for x in traj]), np.asarray(yaw), np.asarray(rv), np.asarray(ra), np.asarray(rj), len(T), 'CP'
+            res = np.asarray([tx, np.asarray([x[0] for x in traj]), np.asarray([x[1] for x in traj]), np.asarray(yaw), np.asarray(rv), np.asarray(ra), np.asarray(rj), len(T), 'CP'])
             if constants.SEGMENT_MAP[veh_state.current_segment] == 'exit-lane':
                 clipped_res = utils.clip_trajectory_to_viewport(res)
                 if clipped_res is not None:
@@ -108,7 +228,7 @@ def track_speed_planner_cp(veh_state, center_line, state_vals):
             #print('rejected',veh_state.l2_action,'trajectory.max,min acc,jerk',(max_acc),(max_jerk))
             
             yaw = [veh_state.yaw] + [math.atan2(e[1][1]-e[0][1], e[1][0]-e[0][0]) for e in zip(traj[:-1],traj[1:])]
-            res = tx, np.asarray([x[0] for x in traj]), np.asarray([x[1] for x in traj]), np.asarray(yaw), np.asarray(rv), np.asarray(ra), np.asarray(rj), len(T), 'CP'
+            res = np.asarray([tx, np.asarray([x[0] for x in traj]), np.asarray([x[1] for x in traj]), np.asarray(yaw), np.asarray(rv), np.asarray(ra), np.asarray(rj), len(T), 'CP'])
             if constants.SEGMENT_MAP[veh_state.current_segment] == 'exit-lane':
                 clipped_res = utils.clip_trajectory_to_viewport(res)
                 if clipped_res is not None:
@@ -118,28 +238,28 @@ def track_speed_planner_cp(veh_state, center_line, state_vals):
             
             num_rej += 1
     #print(veh_state.id,veh_state.l1_action,veh_state.l2_action,target_vel,round(np.mean([x[-1] for x in all_time_samples]),2),'acc|rej',num_acc,num_rej)
+    
     '''
-    if veh_state.l2_action == 'NORMAL' and num_acc==0:
-        plt.figure()
-        plt.plot([veh_state.x],[veh_state.y],'x')
-        for t in traj_list:
-            plt.plot(t[0][1],t[0][2])
-        plt.axis('equal')
-        plt.title('path')
-        plt.figure()
-        for t in traj_list:
-            plt.plot(t[0][0],t[0][4])
-        plt.title('vel')
-        plt.figure()
-        for t in traj_list:
-            plt.plot(t[0][0],t[0][5])
-        plt.title('acc')
-        plt.figure()
-        for t in traj_list:
-            plt.plot(t[0][0],t[0][6])
-        plt.title('jerk')
-        plt.show()
-        f=1
+    plt.figure()
+    plt.plot([veh_state.x],[veh_state.y],'x')
+    for t in traj_list:
+        plt.plot(t[0][1],t[0][2])
+    plt.axis('equal')
+    plt.title('path')
+    plt.figure()
+    for t in traj_list:
+        plt.plot(t[0][0],t[0][4])
+    plt.title('vel')
+    plt.figure()
+    for t in traj_list:
+        plt.plot(t[0][0],t[0][5])
+    plt.title('acc')
+    plt.figure()
+    for t in traj_list:
+        plt.plot(t[0][0],t[0][6])
+    plt.title('jerk')
+    plt.show()
+    f=1
     '''
     return traj_list
     

@@ -90,45 +90,51 @@ def calc_total_payoffs(inhibitory,excitatory,traj_list,strategy_tuple,traffic_si
     eq = equilibria.calc_pure_strategy_nash_equilibrium_exhaustive(all_possible_payoffs)
     eq_traj_indices = eq
     
-    return payoff_stats,payoff_stats_trajectories        
+    return payoff_stats,payoff_stats_trajectories     
+
+def eval_complexity(traj,strat_str):
+    if isinstance(traj, pd.DataFrame):
+        rv = traj['v'].to_numpy()
+        rx = traj['x'].to_numpy()
+        ry = traj['y'].to_numpy()
+        ra = traj['a'].to_numpy()
+        time = traj['time'].to_numpy()
+    else:
+        assert(traj.shape[1]==9)
+        rv,rx,ry,ra,time = traj[:,6],traj[:,3],traj[:,4],traj[:,7],traj[:,2]
+    dt = constants.LP_FREQ
+    traj_def = TrajectoryDef(strat_str)
+    '''
+    plt.plot(time,rv,'g')
+    plt.plot(time,ra,'r')
+    plt.show()
+    #linear_plan_x = utils.linear_planner(sx, vxs, axs, gx, vxg, axg, max_accel, max_jerk, dt)
+    '''
+    hpx = [rx[0],rx[len(rx)//3],rx[2*len(rx)//3],rx[-1]]
+    hpy = [ry[0],ry[len(ry)//3],ry[2*len(ry)//3],ry[-1]]
+    _d = OrderedDict(sorted(list(zip(hpx,hpy)),key=lambda tup: tup[0]))
+    hpx,hpy = list(_d.keys()),list(_d.values())
+    try:
+        cs = CubicSpline(hpx, hpy)
+    except ValueError:
+        print(hpx,hpy)
+        raise
+    path_residuals = sum([abs(cs(x)-ry[_i]) for _i,x in enumerate(rx)])
+    new_vels = utils.generate_baseline_trajectory(time,[(x,cs(x)) for x in rx],rv[0],ra[0],traj_def.max_acc_long/2,traj_def.max_jerk/2,rv[-1],dt,traj_def.acc)
+    slice_len = min(len(new_vels),len(rv))
+    vel_residuals = sum([abs(x[0]-x[1]) for x in zip(rv[:slice_len],  new_vels[:slice_len])])
+    compl = math.hypot(path_residuals, vel_residuals)
+    return compl
     
-def eval_trajectory_complexity(traj_list,strategy_tuple):
+def eval_trajectory_complexity_unloaded(traj_list,strategy_tuple):
     f = 1
     all_traj_compl = []
     for strat,file_str in zip(strategy_tuple, [x[0][1] for x in traj_list]):
         traj_complexity = []
-        trajectories = load_traj_from_str(file_str)
+        trajectories = utils.load_traj_from_str(file_str)
         for traj in trajectories:
-            rv = traj['v'].to_numpy()
-            rx = traj['x'].to_numpy()
-            ry = traj['y'].to_numpy()
-            ra = traj['a'].to_numpy()
-            time = traj['time'].to_numpy()
-            dt = constants.LP_FREQ
-            traj_def = TrajectoryDef(strat)
-            l1_action = traj_def.l1_action_readable
-            '''
-            plt.plot(time,rv,'g')
-            plt.plot(time,ra,'r')
-            plt.show()
-            #linear_plan_x = utils.linear_planner(sx, vxs, axs, gx, vxg, axg, max_accel, max_jerk, dt)
-            '''
-            hpx = [rx[0],rx[len(rx)//3],rx[2*len(rx)//3],rx[-1]]
-            hpy = [ry[0],ry[len(ry)//3],ry[2*len(ry)//3],ry[-1]]
-            if hpx[-1] < hpx[0]:
-                hpx.reverse()
-                hpy.reverse()
-            cs = CubicSpline(hpx, hpy)
-            path_residuals = sum([abs(cs(x)-ry[_i]) for _i,x in enumerate(rx)])
-            new_vels = utils.generate_baseline_trajectory(time,[(x,cs(x)) for x in rx],rv[0],ra[0],traj_def.max_acc_long,traj_def.max_jerk,rv[-1],dt,l1_action)
-            slice_len = min(len(new_vels),len(rv))
-            vel_residuals = sum([abs(x[0]-x[1]) for x in zip(rv[:slice_len],  new_vels[:slice_len])])
-            compl = math.hypot(path_residuals, vel_residuals)
+            compl = eval_complexity(traj,strat)
             traj_complexity.append(compl)
-            '''
-            plt.plot(rx, ry, 'b', rx, cs(rx), 'r')
-            plt.show()
-            '''        
         _sum = sum(traj_complexity)
         traj_complexity = [x/_sum for x in traj_complexity]
         all_traj_compl.append(traj_complexity)
@@ -143,7 +149,7 @@ def eval_inhibitory(traj_list,a_c,all_trajectory_indices):
     disp_arr_x,disp_arr_y = [],[] 
     num_agents = len(traj_list)
     all_possible_payoffs = dict()
-    traj_list = [load_traj_from_str(x) for x in [y[0][1] for y in traj_list]]
+    traj_list = [utils.load_traj_from_str(x) for x in [y[0][1] for y in traj_list]]
     for traj_idx_tuple in all_trajectory_indices:
         trajectory_dataframes = []
         for i in np.arange(num_agents):
@@ -179,7 +185,7 @@ def eval_excitatory(traj_list,a_c,all_trajectory_indices):
     num_agents = len(traj_list)
     payoff_stats_trajectories = np.full(shape=(4,num_agents),fill_value=np.inf)
     payoff_stats = np.full(shape=(4,num_agents),fill_value=np.inf)
-    traj_list = [load_traj_from_str(x) for x in [y[0][1] for y in traj_list]]
+    traj_list = [utils.load_traj_from_str(x) for x in [y[0][1] for y in traj_list]]
     len_of_trajectories = [len(x) for x in traj_list]
     all_possible_payoffs = dict()
     for traj_idx_tuple in all_trajectory_indices:
@@ -199,16 +205,7 @@ def print_readable(eq):
         readable_eq.append(s[3:6]+'_'+s[6:9]+'_'+constants.L1_ACTION_CODES_2_NAME[int(s[9:11])]+'_'+constants.L2_ACTION_CODES_2_NAME[int(s[11:13])])
     return readable_eq
 
-def load_traj_from_str(file_str):
-    traj = utils.pickle_load(file_str)
-    p_d_list = []
-    data_index = ['time', 'x', 'y', 'yaw', 'v', 'a', 'j']
-    for i in np.arange(traj.shape[0]):
-        _t_data,_t_type = traj[i][0],traj[i][1]
-        if isinstance(_t_data,np.ndarray):
-            s = pd.DataFrame(_t_data, index=data_index, dtype = np.float).T
-            p_d_list.append(s)
-    return p_d_list
+
     
 
 def unreadable(act_str):

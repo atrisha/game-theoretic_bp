@@ -611,47 +611,48 @@ def insert_generated_traj_info():
                     for ra,rv in v.items():
                         ac_l = []
                         for l1,l2 in rv.items():
+                            if l1 in ['track_speed', 'follow_lead', 'decelerate-to-stop', 'wait_for_lead_to_cross']:
+                                print('---- skipped')
+                                continue
                             for l2_a in l2:
                                 #act_str = unreadable(str(sub_agent)+'|'+str(ra)+'|'+l1+'|'+l2_a)
-                                i_string_data = (769,sub_agent,ra,l1,l2_a[0],ts,l2_a[1],None)
+                                i_string_data = (769,sub_agent,ra,l1,l2_a[0],ts,l2_a[1])
                                 i_strings.append(i_string_data)
                 else:
                     for l1,l2 in v.items():
+                        if l1 in ['track_speed', 'follow_lead', 'decelerate-to-stop', 'wait_for_lead_to_cross']:
+                            print('---- skipped')
+                            continue
                         for l2_a in l2:
                             #act_str = unreadable(str(k)+'|000|'+l1+'|'+l2_a)
-                            i_string_data = (769,sub_agent,0,l1,l2_a[0],ts,l2_a[1],None)
+                            i_string_data = (769,sub_agent,0,l1,l2_a[0],ts,l2_a[1])
                             i_strings.append(i_string_data)
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
     c = conn.cursor()
     
     for i_s in i_strings:
-        print('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?,?)',i_s)
-        #c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?,?)',i_s)
-    #conn.commit()
-    #conn.close()
+        print('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?)',i_s)
+        c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?)',i_s)
+    conn.commit()
+    conn.close()
                 
 
 
 def insert_generated_trajectories():
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
-    '''
-    engine = create_engine('sqlite:///D:\\intersections_dataset\\dataset\\uni_weber.db')
-    @event.listens_for(engine, 'before_cursor_execute')
-    def receive_before_cursor_execute(conn, cursor, statement, params, context, executemany):
-        if executemany:
-            cursor.fast_executemany = True
-            cursor.commit()
-    '''
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
     c = conn.cursor()
     c.execute('delete from GENERATED_TRAJECTORY')
     conn.commit()
-    q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO"
+    q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO ORDER BY AGENT_ID"
     c.execute(q_string)
     res = c.fetchall()
     dir = constants.L3_ACTION_CACHE
     traj_ct,ct = 0,0
     N = len(res)
     for row in res:
+        if row[4] in ['track_speed', 'follow_lead', 'decelerate-to-stop', 'wait_for_lead_to_cross']:
+            print('---- skipped')
+            continue
         file_id = str(row[0])
         traj_id = int(row[1])
         agent_id = str(row[2]).zfill(3)
@@ -661,20 +662,25 @@ def insert_generated_trajectories():
         time_ts = str(float(row[6]))
         file_str = file_id+agent_id+relev_agent_id+l1_action_code+l2_action_code+'_'+str(time_ts).replace('.',',')
         has_file = os.path.isfile(constants.L3_ACTION_CACHE+file_str)
-        assert(has_file)
+        if not has_file:
+            u_string = "UPDATE GENERATED_TRAJECTORY_INFO SET TRAJ_LEN=0 WHERE GENERATED_TRAJECTORY_INFO.TRAJ_ID="+str(traj_id)
+            c.execute(u_string)
+            conn.commit()
+            print('---- updated')
+            continue
         if file_str == '7690110000101_2,002':
             brk = 1
         trajectories = utils.load_traj_from_str(constants.L3_ACTION_CACHE+file_str)
         N_traj = len(trajectories)
         lt_ct = 0
-        assert(abs(len(trajectories)-int(row[-2]))<=2)
-        print(str(traj_id)+' '+'('+str(ct)+'/'+str(N)+')',':')
+        assert(abs(len(trajectories)-int(row[-1]))<=2)
+        print(str(traj_id)+' '+'('+str(ct)+'/'+str(N)+')',':', row[4])
         for traj in trajectories:
             traj_ct += 1
             lt_ct += 1
             traj['TRAJECTORY_ID'] = [traj_ct]*traj['time'].size
             traj['TRAJECTORY_INFO_ID'] = [traj_id]*traj['time'].size
-            traj.rename(columns={'v':'speed','a':'long_accel','j':'long_jerk'})
+            #traj.rename(columns={'v':'speed','a':'long_accel','j':'long_jerk'})
             cols = traj.columns.tolist()
             cols = cols[-2:] + cols[:-2]
             _traj = traj[cols]
@@ -690,8 +696,11 @@ def insert_generated_trajectories():
     conn.close()
     
     
-def assign_trajectory_complexity():
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+        
+    
+    
+def insert_trajectory_complexity():
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
     c = conn.cursor()
     q_string = "SELECT TRAJECTORY_ID FROM GENERATED_TRAJECTORY_COMPLEXITY"
     c.execute(q_string)
@@ -744,5 +753,4 @@ def assign_trajectory_complexity():
 
 
 
-
-assign_trajectory_complexity()
+#insert_trajectory_complexity()

@@ -132,6 +132,35 @@ def plot_all_paths(veh_state):
             plt.show()
     conn.close()
     
+def plot_paths_for_traj_info_id(traj_info_id=79):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    c = conn.cursor()
+    q_string = "SELECT TRAJ_ID FROM GENERATED_TRAJECTORY_INFO WHERE TIME = 86.419667"
+    c.execute(q_string)
+    res = c.fetchall()
+    all_traj_info_ids = [row[0] for row in res]
+    q_string = "select * from GENERATED_TRAJECTORY where GENERATED_TRAJECTORY.TRAJECTORY_INFO_ID in "+str(tuple(all_traj_info_ids))
+    c.execute(q_string)
+    print(q_string)
+    traj_dict = dict()
+    res = c.fetchall()
+    ct = 0
+    for row in res:
+        print(ct)
+        ct += 1
+        if row[0] not in traj_dict:
+            traj_dict[row[0]] = [ [ row[3] ], [ row[4] ] ]
+        else:
+            traj_dict[row[0]][0].append(row[3])
+            traj_dict[row[0]][1].append(row[4])
+    for k,v in traj_dict.items():
+        plt.plot(v[0],v[1])
+    
+    ax = plt.gca()
+    ax.set_facecolor('black')
+    plt.axis('equaL')
+    plt.show()
+    
     
 
 def plot_all_trajectories(traj,ax1,ax2,ax3):
@@ -146,3 +175,6 @@ def plot_all_trajectories(traj,ax1,ax2,ax3):
         ax1.plot(X,Y)
         ax2.plot(np.arange(len(V)),V)
         ax3.plot(np.arange(len(A)),A)
+        
+        
+plot_paths_for_traj_info_id()

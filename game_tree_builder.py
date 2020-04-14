@@ -226,14 +226,16 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
             trajectory_plan.set_lead_vehicle(sub_v_lead_vehicle)
             ''' l3_action_trajectory file id: file_id(3),agent_id(3),relev_agent_id(3),l1_action(2),l2_action(2)'''
             file_key = get_l3_action_file(None, agent_id, 0, curr_time, l1, l2)
-            if file_key not in trajs_in_db and (l1=='decelerate-to-stop' or l1=='wait_for_lead_to_cross'):
+            if file_key not in trajs_in_db:# and (l1=='decelerate-to-stop' or l1=='wait_for_lead_to_cross'):
                 print('loaded from cache: False')
                 l3_actions = trajectory_plan.generate_trajectory(veh_state)
+                utils.insert_generated_trajectory(l3_actions, file_key)
+                '''
                 if len(l3_actions) > 0:
                     utils.insert_generated_trajectory(l3_actions, file_key)
                 else:
                     utils.pickle_dump(constants.L3_ACTION_CACHE+file_key, dict())
-                
+                '''
             else:
                 print('loaded from cache: True')   
             #veh_state.action_plans[curr_time][l1][l2] = np.copy(l3_actions)
@@ -319,14 +321,16 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
                 trajectory_plan = motion_planner.TrajectoryPlan(l1,l2,r_a_task)
                 trajectory_plan.set_lead_vehicle(lead_vehicle)
                 print('time',curr_time,'agent',agent_id,'relev agent',r_a_state.id,l1,l2)
-                if file_key not in trajs_in_db and (l1=='decelerate-to-stop' or l1=='wait_for_lead_to_cross'):
+                if file_key not in trajs_in_db:# and (l1=='decelerate-to-stop' or l1=='wait_for_lead_to_cross'):
                     print('loaded from cache: False')
                     l3_actions = trajectory_plan.generate_trajectory(r_a_state)
+                    utils.insert_generated_trajectory(l3_actions, file_key)
+                    '''
                     if len(l3_actions) > 0:
                         utils.insert_generated_trajectory(l3_actions, file_key)
                     else:
                         utils.pickle_dump(constants.L3_ACTION_CACHE+file_key, dict())
-                    
+                    '''
                 else:
                     #l3_actions = utils.pickle_load(file_key)
                     print('loaded from cache: True')
@@ -466,97 +470,45 @@ def finalize_hopping_plans():
         generate_hopping_plans(state_dict)
     
 
-
 def get_traj_metadata():
-    if not os.path.isfile(constants.L3_ACTION_CACHE+'traj_metadata.dict'):
-        dir = constants.L3_ACTION_CACHE
-        N,ct = len(listdir(dir)),0
-        state_dict = OrderedDict()
-        for f in listdir(dir):
-            ct += 1
-            traj = utils.pickle_load(os.path.join(dir, f))
-            if f == '7690110000101_0':
-                brk=1
-            if len(traj) != 0:
-                agent_id = int(f[3:6])
-                time_ts = round(float(f.split('_')[-1])/1000,3)
-                relev_agent = None if f[6:9] == '000' else int(f[6:9])
-                l1_action = [k for k,v in constants.L1_ACTION_CODES.items() if v == int(f[9:11])][0]
-                l2_action = [k for k,v in constants.L2_ACTION_CODES.items() if v == int(f[11:13])][0]
-                lead_vehicle = None
-                v = VehicleState()
-                if relev_agent is None:
-                    v.set_id(agent_id)
-                else:
-                    v.set_id(relev_agent)
-                time_tuple = utils.get_entry_exit_time(v.id)
-                v.set_entry_exit_time(time_tuple)
-                agent_track = utils.get_track(v, None)
-                all_times = [float(agent_track[i][6,]) for i in np.arange(len(agent_track))]
-                real_ts = -1
-                for ts in all_times:
-                    if round(float(ts)*1000) == time_ts*1000:
-                        real_ts = ts
-                        break
-                if real_ts != -1:
-                    time_ts = real_ts
-                v.set_current_time(time_ts)
-                '''
-                if l1_action == 'track_speed':
-                    track_region_seq = utils.get_track_segment_seq(v.id)
-                    v.set_segment_seq(track_region_seq)
-                    if real_ts == -1:
-                        track = utils.get_track(v, time_ts)
-                    else:
-                        track = utils.get_track(v, real_ts)
-                    if len(track) > 0:
-                        v.set_track_info(track[0,])
-                        current_segment = track[0,][11,]
-                    else:
-                        r_a_track_info = utils.guess_track_info(v,None)
-                        v.set_track_info(r_a_track_info)
-                        r_a_track_region = r_a_track_info[8,]
-                        if r_a_track_region is None:
-                            sys.exit('need to guess traffic region for relev agent')
-                        current_segment = utils.get_current_segment(v,r_a_track_region,track_region_seq,time_ts)
-                    
-                    v.set_current_segment(current_segment)
-                    v.set_current_time(time_ts)
-                    try:
-                        lead_vehicle = get_leading_vehicles(v)
-                    except ValueError:
-                        brk=1
-                        raise
-                    if lead_vehicle is not None:
-                        l1_action = 'follow_lead'
-                        f_new = str(f[0:9]+str(constants.L1_ACTION_CODES[l1_action]).zfill(2)+f[11:])
-                        os.rename(os.path.join(dir,f),os.path.join(dir,f_new))
-                '''
-                print(ct,'/',N,agent_id,time_ts,relev_agent,l1_action,l2_action)
-                if time_ts not in state_dict:
-                    state_dict[time_ts] = dict()
-                if agent_id not in state_dict[time_ts]:
-                    state_dict[time_ts][agent_id] = dict()
-                if relev_agent is None:
-                    if l1_action not in state_dict[time_ts][agent_id]:
-                        state_dict[time_ts][agent_id][l1_action] = [l2_action]
-                    else:
-                        state_dict[time_ts][agent_id][l1_action].append(l2_action)
-                else:
-                    if 'relev_agents' not in state_dict[time_ts]: 
-                        state_dict[time_ts]['relev_agents'] = dict()
-                    if relev_agent not in state_dict[time_ts]['relev_agents']:
-                        state_dict[time_ts]['relev_agents'][relev_agent] = dict()
-                    if l1_action not in state_dict[time_ts]['relev_agents'][relev_agent]:
-                        state_dict[time_ts]['relev_agents'][relev_agent][l1_action] = [l2_action]
-                    else:
-                        state_dict[time_ts]['relev_agents'][relev_agent][l1_action].append(l2_action)
-        state_dict = OrderedDict(sorted((float(key), value) for key, value in state_dict.items()))       
-        utils.pickle_dump(constants.L3_ACTION_CACHE+'traj_metadata.dict', state_dict)
-    else:
-        state_dict = utils.pickle_load(constants.L3_ACTION_CACHE+'traj_metadata.dict')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    c = conn.cursor()
+    q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO ORDER BY AGENT_ID"
+    c.execute(q_string)
+    res = c.fetchall()
+    state_dict = OrderedDict()
+    for row in res:
+        time_ts = row[6]
+        agent_id = int(row[2])
+        relev_agent = None if int(row[3])==0 else int(row[3])
+        l1_action = row[4]
+        l2_action = row[5]
+        if time_ts not in state_dict:
+            state_dict[time_ts] = dict()
+        if 'raw_data' not in state_dict[time_ts]:
+            state_dict[time_ts]['raw_data'] = dict()
+        if str(agent_id)+'-'+str(row[3]) not in state_dict[time_ts]['raw_data']:
+            state_dict[time_ts]['raw_data'][str(agent_id)+'-'+str(row[3])] = [list(row)]
+        else:
+            state_dict[time_ts]['raw_data'][str(agent_id)+'-'+str(row[3])].append(list(row))
+        if agent_id not in state_dict[time_ts]:
+            state_dict[time_ts][agent_id] = dict()
+        if relev_agent is None:
+            if l1_action not in state_dict[time_ts][agent_id]:
+                state_dict[time_ts][agent_id][l1_action] = [l2_action]
+            else:
+                state_dict[time_ts][agent_id][l1_action].append(l2_action)
+        else:
+            if 'relev_agents' not in state_dict[time_ts]: 
+                state_dict[time_ts]['relev_agents'] = dict()
+            if relev_agent not in state_dict[time_ts]['relev_agents']:
+                state_dict[time_ts]['relev_agents'][relev_agent] = dict()
+            if l1_action not in state_dict[time_ts]['relev_agents'][relev_agent]:
+                state_dict[time_ts]['relev_agents'][relev_agent][l1_action] = [l2_action]
+            else:
+                state_dict[time_ts]['relev_agents'][relev_agent][l1_action].append(l2_action)
+        
     return state_dict
-
     
     
 ''' this method calculates the equilibria based on the trajectories that were generated in the hopping plans.
@@ -590,4 +542,4 @@ def calc_eqs_for_hopping_trajectories():
                 plt.clf()
 
 
-#generate_hopping_plans()
+#calc_eqs_for_hopping_trajectories()

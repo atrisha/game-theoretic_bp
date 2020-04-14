@@ -224,6 +224,36 @@ def get_track_segment_seq(track_id):
     return ast.literal_eval(seq) if seq is not None else None
 
 
+def load_traj_ids_for_traj_info_id(traj_info_id):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    c = conn.cursor()
+    q_string = "SELECT DISTINCT TRAJECTORY_ID FROM GENERATED_TRAJECTORY WHERE TRAJECTORY_INFO_ID = "+str(traj_info_id)
+    c.execute(q_string)
+    res = c.fetchall()
+    traj_ids = [row[0] for row in res]
+    return traj_ids
+    
+def load_traj_from_db(all_traj_id_list):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    c = conn.cursor()
+    traj_dict_list = []
+    for traj_id_list in all_traj_id_list:
+        q_string = "SELECT * FROM GENERATED_TRAJECTORY WHERE trajectory_id in "+str(tuple(traj_id_list))+" order by trajectory_id,time"
+        c.execute(q_string)
+        res = c.fetchall()
+        trajs = dict()
+        for row in res:
+            if row[0] not in trajs:
+                trajs[row[0]] = [list(row[2:])]
+            else:
+                trajs[row[0]].append(list(row[2:]))
+        data_index = ['time', 'x', 'y', 'yaw', 'v', 'a', 'j']
+        trajs = {k:np.vstack(v) for k,v in trajs.items()}
+        #trajs = {k:pd.DataFrame(v, columns=data_index, dtype = np.float).T for k,v in trajs.items()}
+        traj_dict_list.append(trajs)
+    return traj_dict_list 
+    
+
 def load_traj_from_str(file_str):
     traj = pickle_load(file_str)
     p_d_list = []
@@ -681,7 +711,8 @@ def find_index_in_list(s_sum, dist_from_origin):
     
 
 def insert_generated_trajectory(l3_actions,f):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    print("inserting trajectory: START")
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
     c = conn.cursor()
     q_string = "select MAX(GENERATED_TRAJECTORY.TRAJECTORY_ID) FROM GENERATED_TRAJECTORY"
     c.execute(q_string)
@@ -693,22 +724,25 @@ def insert_generated_trajectory(l3_actions,f):
     relev_agent = int(f[6:9])
     l1_action = [k for k,v in constants.L1_ACTION_CODES.items() if v == int(f[9:11])][0]
     l2_action = [k for k,v in constants.L2_ACTION_CODES.items() if v == int(f[11:13])][0]
-    traj_len = l3_actions.shape[0]
-    i_string_data = (769,agent_id,relev_agent,l1_action,l2_action,time_ts,traj_len,None)
+    traj_len = l3_actions.shape[0] if len(l3_actions) > 0 else 0
+    i_string_data = (769,agent_id,relev_agent,l1_action,l2_action,time_ts,traj_len)
     #print('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?,?)',i_string_data)
-    c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?,?)',i_string_data)
-    traj_info_id = int(c.lastrowid)
-    traj_id = max_traj_id+1
-    for i in np.arange(traj_len):
-        traj_dets = l3_actions[i][0]
-        slice_len = min([len(x) for x in traj_dets[0:7]])
-        tx,rx,ry,ryaw,rv,ra,rj = traj_dets[0][:slice_len],traj_dets[1][:slice_len],traj_dets[2][:slice_len],traj_dets[3][:slice_len],traj_dets[4][:slice_len],traj_dets[5][:slice_len],traj_dets[6][:slice_len]
-        ins_list = list(zip([traj_id]*slice_len,[traj_info_id]*slice_len,[round(x,5) for x in tx],[round(x,5) for x in rx],[round(x,5) for x in ry],[round(x,5) for x in ryaw],[round(x,5) for x in rv],[round(x,5) for x in ra],[round(x,5) for x in rj]))
-        i_string = 'INSERT INTO GENERATED_TRAJECTORY VALUES (?,?,?,?,?,?,?,?,?)'
-        c.executemany(i_string,ins_list)
-        traj_id += 1
+    c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?)',i_string_data)
+    conn.commit()
+    if traj_len != 0:
+        traj_info_id = int(c.lastrowid)
+        traj_id = max_traj_id+1
+        for i in np.arange(traj_len):
+            traj_dets = l3_actions[i][0]
+            slice_len = min([len(x) for x in traj_dets[0:7]])
+            tx,rx,ry,ryaw,rv,ra,rj = traj_dets[0][:slice_len],traj_dets[1][:slice_len],traj_dets[2][:slice_len],traj_dets[3][:slice_len],traj_dets[4][:slice_len],traj_dets[5][:slice_len],traj_dets[6][:slice_len]
+            ins_list = list(zip([traj_id]*slice_len,[traj_info_id]*slice_len,[round(x,5) for x in tx],[round(x,5) for x in rx],[round(x,5) for x in ry],[round(x,5) for x in ryaw],[round(x,5) for x in rv],[round(x,5) for x in ra],[round(x,5) for x in rj]))
+            i_string = 'INSERT INTO GENERATED_TRAJECTORY VALUES (?,?,?,?,?,?,?,?,?)'
+            c.executemany(i_string,ins_list)
+            traj_id += 1
     conn.commit()
     conn.close()
+    print("inserting trajectory: DONE")
 
 
 def solve_quadratic(a,b,c):
@@ -798,7 +832,7 @@ def get_exit_boundary(segment):
     
 
 def get_trajectories_in_db():
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
     c = conn.cursor()
     q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO"
     c.execute(q_string)
@@ -815,6 +849,7 @@ def get_trajectories_in_db():
         l1_action_code = str(constants.L1_ACTION_CODES[row[4]]).zfill(2)
         l2_action_code = str(constants.L2_ACTION_CODES[row[5]]).zfill(2)
         time_ts = str(float(row[6]))
+        traj_len = int(row[7])
         file_str = file_id+agent_id+relev_agent_id+l1_action_code+l2_action_code+'_'+str(time_ts).replace('.',',')
         trajs_in_db.append(file_str)
     return trajs_in_db

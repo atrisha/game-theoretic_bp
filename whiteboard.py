@@ -142,8 +142,8 @@ plt.plot([538814.15,538816.08], [4814007.58,4814004.26], 'b-')
 plt.plot([538852.12],[4813985.8],'o')
 plt.plot([538814.87],[4814004.97],'x')
 plt.show()
-'''
-    
+
+
 from collections import OrderedDict    
 hpx =  [538794.04715, 538794.04715, 538794.81398, 538796.05269]
 hpy =  [4813996.09035, 4813996.09035, 4813996.48035, 4813997.11033]
@@ -151,3 +151,53 @@ hpy =  [4813996.09035, 4813996.09035, 4813996.48035, 4813997.11033]
 _d = OrderedDict(sorted(list(zip(hpx,hpy)),key=lambda tup: tup[0]))
 hpx,hpy = list(_d.keys()),list(_d.values())
 print(hpx,hpy)
+'''
+def db_test():
+    import sqlite3
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    c = conn.cursor()
+    c.execute("INSERT INTO AA VALUES(NULL,?)",(4,))
+    conn.commit()
+    id = int(c.lastrowid)
+    print(id)
+    
+import itertools
+'''    
+print(np.divide([.4,.3,.2,.1],[.1,.2,.3,.4]))
+plt.plot([1,2,3,4],[.04,.05,.7,.8],c='black')
+plt.plot([1,2,3,4],[.1,.2,.3,.4],'b')  
+plt.plot([1,2,3,4],np.divide([.04,.05,.7,.8],[.1,.2,.3,.4]),'r')
+plt.show()
+'''
+'''
+tm_keys = list(itertools.product([('wait','cancel'),('wait','cont.'),('merge','cancel'),('merge','cont.')],\
+                             [('slow','cont. speed'),('speed','cont. speed'),('slow','slow'),('speed','slow')]))
+
+toy_merge_dict = {k:[None,None] for k in tm_keys}
+print(toy_merge_dict) 
+'''
+'''
+bel = np.arange(0,1.1,1)
+payoffs = [-5,10]
+
+plt.plot([0,1],[0,1]) 
+plt.plot([0,1],[0,0]) 
+plt.show()
+'''
+def sym_sol():
+    import sympy
+    from sympy.solvers import solve
+    from sympy import Symbol
+    a_0 = Symbol('a_0')
+    a_1 = Symbol('a_1')
+    a_2 = Symbol('a_2')
+    a_3 = Symbol('a_3')
+    p_0 = Symbol('p_0')
+    p_1 = Symbol('p_1')
+    p_2 = Symbol('p_2')
+    p_3 = Symbol('p_3')
+    s_f = Symbol('p_4')
+    e = [a_0-p_0, (a_3*s_f**3)+(a_2*s_f**2)+(a_1*s_f)+a_0-p_3, ((a_3*s_f**3)/27)+((a_2*s_f**2)/9)+((a_1*s_f)/3)+a_0-p_1, ((8*a_3*s_f**3)/27)+((4*a_2*s_f**2)/9)+((2*a_1*s_f)/3)+a_0-p_2]  
+    s = solve(e,[a_0,a_1,a_2,a_3])
+    print(s)
+sym_sol()

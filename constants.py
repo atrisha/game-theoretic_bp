@@ -130,6 +130,7 @@ SEGMENT_MAP = {'ln_s_1':'left-turn-lane',
 LP_FREQ = 0.1
 PLAN_FREQ = 2
 DATASET_FPS = 30
+OTH_AGENT_L3_ACT_HORIZON = 5
 
 colors = ['k','g','r','c','m','b','w']
 

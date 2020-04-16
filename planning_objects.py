@@ -55,8 +55,8 @@ class VehicleState:
     def set_gate_crossing_times(self,times):
         self.gate_crossing_times = times
         
-    def set_dist_to_segment_exit(self,dist):
-        self.dist_to_segment_exit= dist
+    def set_vect_to_segment_exit(self,dist):
+        self.vect_to_segment_exit= dist
         
     def set_out_of_view(self,oov):
         self.out_of_view = oov

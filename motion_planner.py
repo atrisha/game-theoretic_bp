@@ -21,10 +21,120 @@ from scipy.interpolate import CubicSpline
 from scipy.stats import halfnorm
 from pip._vendor.distlib.util import proceed
 from collections import OrderedDict
+from constants import L2_ACTION_CODES
 
     
     
 class TrajectoryPlan:
+    
+    def construct_baseline_path(self,veh_state):
+        l1_action = veh_state.l1_action
+        yaw = veh_state.yaw
+        hpx,hpy = [veh_state.x,veh_state.x+((constants.CAR_LENGTH/2)*np.cos(yaw))],[veh_state.y,veh_state.y+((constants.CAR_LENGTH/2)*np.sin(yaw))]
+        path = None
+        if l1_action == 'proceed-turn' or l1_action == 'wait-for-oncoming':
+            proceed_pos_ends = get_exitline_from_direction(veh_state.direction,veh_state)
+            if math.hypot(proceed_pos_ends[0][0]-veh_state.x, proceed_pos_ends[0][1]-veh_state.y) < constants.CAR_LENGTH/2:
+                proceed_pos_ends = get_exitline(veh_state.segment_seq[-1])
+            proceed_pos_yaw = math.atan2(proceed_pos_ends[1][0]-proceed_pos_ends[0][0], proceed_pos_ends[1][1]-proceed_pos_ends[1][1]) + (math.pi/2)
+            end_pos = ((proceed_pos_ends[1][0]+proceed_pos_ends[0][0])/2, (proceed_pos_ends[1][1]+proceed_pos_ends[1][1])/2)
+            end_pos_but_last = (end_pos[0]-((constants.CAR_LENGTH/2)*np.cos(proceed_pos_yaw)) , end_pos[1]-((constants.CAR_LENGTH/2)*np.sin(proceed_pos_yaw)))
+        elif l1_action == 'track_speed' or l1_action == 'follow_lead':
+            proceed_pos_ends = get_exitline(veh_state.segment_seq[-1])
+            center_line = utils.get_centerline(veh_state.segment_seq[-1])
+            proceed_pos_yaw = math.atan2(center_line[1][1]-center_line[0][1], center_line[1][0]-center_line[0][0])
+            end_pos = ((proceed_pos_ends[1][0]+proceed_pos_ends[0][0])/2, (proceed_pos_ends[1][1]+proceed_pos_ends[1][1])/2)
+            end_pos_but_last = (end_pos[0]-((constants.CAR_LENGTH/2)*np.cos(proceed_pos_yaw)) , end_pos[1]-((constants.CAR_LENGTH/2)*np.sin(proceed_pos_yaw)))
+        elif l1_action == 'follow_lead_into_intersection' or l1_action == 'wait_for_lead_to_cross':
+            end_pos_but_last = (veh_state.leading_vehicle.x, veh_state.leading_vehicle.y)
+            end_pos = (end_pos_but_last[0] + (constants.CAR_LENGTH/2) * np.cos(veh_state.leading_vehicle.yaw), end_pos_but_last[1] + (constants.CAR_LENGTH/2) * np.sin(veh_state.leading_vehicle.yaw))
+        elif l1_action == 'decelerate-to-stop' or l1_action == 'wait-on-red':
+            stop_line = utils.get_exit_boundary(veh_state.current_segment)
+            stop_point = (np.mean(stop_line[0]), np.mean(stop_line[1]))
+            dist_to_stopline = math.hypot(stop_point[0]-veh_state.x, stop_point[1]-veh_state.y)
+            stop_yaw = math.atan2(stop_line[1][1]-stop_line[1][0], stop_line[0][1]-stop_line[0][0]) + math.pi/2
+            if dist_to_stopline > constants.CAR_LENGTH/2:
+                hpx.append(stop_point[0])
+                hpy.append(stop_point[1])
+                end_pos = (stop_point[0] + (constants.CAR_LENGTH/2) * np.cos(stop_yaw), stop_point[1] + (constants.CAR_LENGTH/2) * np.sin(stop_yaw))
+                hpx.append(end_pos[0])
+                hpy.append(end_pos[1])
+            path = list(zip(hpx,hpy))
+        else:
+            raise ValueError(l1_action+" l1_action not implemented")
+        if path is None:
+            hpx.append(end_pos_but_last[0])
+            hpx.append(end_pos[0])
+            hpy.append(end_pos_but_last[1])
+            hpy.append(end_pos[1])
+            _d = OrderedDict(sorted(list(zip(hpx,hpy)),key=lambda tup: tup[0]))
+            hpx,hpy = list(_d.keys()),list(_d.values())
+            cs = CubicSpline(hpx, hpy)
+            if veh_state.x > end_pos[0]:
+                path = [(x,float(cs(x))) for x in np.arange(veh_state.x,end_pos[0]-0.1,-0.1)]
+            else:
+                path = [(x,float(cs(x))) for x in np.arange(veh_state.x,end_pos[0]+0.1,0.1)]
+        plt.plot(hpx,hpy,'x')  
+        return path
+        
+    
+    def generate_baseline(self,veh_state):
+        if utils.is_out_of_view((veh_state.x,veh_state.y)) and constants.SEGMENT_MAP[veh_state.current_segment] == 'exit-lane':
+            ''' vehicle has exited the scene so there is no need to generate the trajectory'''
+            return None
+        l1_action = self.l1_action
+        l2_action = self.l2_action
+        veh_state.set_current_l1_action(l1_action)
+        veh_state.set_current_l2_action(l2_action)
+        baseline_path = self.construct_baseline_path(veh_state)
+        dt = constants.LP_FREQ
+        if l2_action == 'AGGRESSIVE':
+            max_acc = (constants.MAX_LONG_ACC_AGGR - constants.MAX_LONG_ACC_NORMAL)/2
+            max_dec = (constants.MAX_LONG_DEC_AGGR + constants.MAX_LONG_DEC_NORMAL)/2
+            max_acc_jerk = constants.MAX_ACC_JERK_AGGR
+            max_dec_jerk = constants.MAX_DEC_JERK_AGGR
+        else:
+            max_acc, max_dec, max_acc_jerk, max_dec_jerk = constants.MAX_LONG_ACC_NORMAL, constants.MAX_LONG_DEC_NORMAL/2, constants.MAX_ACC_JERK_NORMAL, constants.MAX_DEC_JERK_NORMAL
+        time_tx = np.arange(veh_state.current_time,veh_state.current_time+constants.OTH_AGENT_L3_ACT_HORIZON,constants.LP_FREQ)
+        if l1_action == 'decelerate-to-stop' or l1_action == 'wait-on-red' or l1_action == 'wait_for_lead_to_cross' or l1_action == 'wait-for-oncoming':
+            V, path = utils.generate_baseline_trajectory(time_tx,baseline_path,veh_state.speed,veh_state.long_acc,max_dec,max_dec_jerk,0.0,constants.LP_FREQ,False)
+        elif l1_action == 'proceed-turn' or l1_action == 'track_speed' or l1_action == 'follow_lead' or l1_action == 'follow_lead_into_intersection':
+            if l1_action == 'proceed-turn':
+                v_g = 8.8
+            elif l1_action == 'follow_lead' or l1_action == 'follow_lead_into_intersection':
+                v_g = veh_state.leading_vehicle.speed
+            else:
+                v_g = max(16,veh_state.speed)
+            V, path = utils.generate_baseline_trajectory(time_tx,baseline_path,veh_state.speed,veh_state.long_acc,max_acc,max_acc_jerk,v_g,constants.LP_FREQ,True)
+        else:
+            raise ValueError(l1_action+" l1 action not implemented")
+        yaw = [veh_state.yaw] + [math.atan2(e[1][1]-e[0][1], e[1][0]-e[0][0]) for e in zip(path[:-1],path[1:])]
+        rv = V
+        ra = [abs(x[1]-x[0])/dt for x in zip(rv[:-1],rv[1:])]
+        ra = ra + [ra[-1]]
+        rj = [abs(x[1]-x[0])/dt for x in zip(ra[:-1],ra[1:])]
+        rj = rj +[rj[-1]]
+        res = np.asarray([time_tx, np.asarray([x[0] for x in path]), np.asarray([x[1] for x in path]), np.asarray(yaw), np.asarray(rv), np.asarray(ra), np.asarray(rj)])
+        #if constants.SEGMENT_MAP[veh_state.current_segment] == 'exit-lane':
+        clipped_res = utils.clip_trajectory_to_viewport(res)
+        if clipped_res is not None:
+            res =  clipped_res
+        '''
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+        c = conn.cursor()
+        q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point'"
+        c.execute(q_string)
+        q_res = c.fetchall()
+        plt.axis("equal")
+        for row in q_res:
+            plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
+        plt.plot(res[1], res[2])
+        plt.show()
+        _sl = min(len(time_tx),len(rv))
+        plt.plot(time_tx[:_sl],rv[:_sl])
+        plt.show()
+        '''
+        return res
     
     def generate_trajectory(self,veh_state):
         init_pos_x = float(veh_state.x)
@@ -37,6 +147,7 @@ class TrajectoryPlan:
         init_segment = veh_state.current_segment
         '''this tuple is to flag whether trajectories were found or not (in_view_trajectories,clipped_trajectories) '''
         traj_generated = (False,False)
+        
         traj_list = []
         l1_action = self.l1_action
         l2_action = self.l2_action
@@ -49,207 +160,214 @@ class TrajectoryPlan:
         boundary_lane_spec = constants.LANE_BOUNDARY[init_segment+'|'+l1_action] if init_segment+'|'+l1_action in constants.LANE_BOUNDARY else None
         if boundary_lane_spec is not None:
             lane_boundary = get_lane_boundary(boundary_lane_spec)
-        planner_type = 'CP'
-        if self.l1_action == 'proceed-turn' or self.l1_action == 'wait-for-oncoming':
-            boundary_state_list = []
-            if self.l1_action == 'wait-for-oncoming':
-                res = construct_stationary_trajectory(veh_state)
-                traj_list.append((res, 'ST'))
-            if self.l1_action == 'proceed-turn' and planner_type == 'CP':
-                boundary_states = get_proceed_states_cp(veh_state, l2_action)
-                traj_list = cubic_spline_planner(veh_state, boundary_states)
-            elif self.l1_action == 'wait-for-oncoming' and planner_type == 'CP':
-                boundary_states = get_wait_states_cp(veh_state, l2_action)
-                traj_list = traj_list + cubic_spline_planner(veh_state, boundary_states)
-            else:
-                l3_action_found = False
-                boundary_state_list = get_boundary_states(veh_state,l1_action,l2_action)
-                if boundary_state_list is None or len(boundary_state_list) == 0:
-                    sys.exit('no boundary state list found for '+str(l1_action))
-                N = len(boundary_state_list)
-                for i,b_s in enumerate(boundary_state_list):
-                    if math.hypot(init_pos_x-b_s[0], init_pos_y-b_s[1]) < constants.CAR_LENGTH/2:
-                        ''' add waiting at current location to the trajectory '''
-                        f = 1
-                    else:
-                        res = qp_planner(
-                            init_pos_x, init_pos_y, init_yaw_rads, init_v, init_a, b_s[0], b_s[1], b_s[2], b_s[3], b_s[4], b_s[5], abs(constants.MAX_ACC_JERK_AGGR), dt, 
-                            lane_boundary)
-                        if res is not None:
-                            l3_action_found = True
-                            traj_generated[1] = True
-                            time, x, y, yaw, v, a, j, T, plan_type = res
-                            clipped_res = utils.clip_trajectory_to_viewport(res)
-                            #if len(traj_list) == constants.MAX_L3_ACTIONS:
-                            #    break
-                            if clipped_res is not None:
-                                traj_list.append((clipped_res, plan_type))
-                            #print(i,'/',N,T)
-                            '''
-                            goal_sign = np.sign(utils.distance_numpy([lb_xs[0],lb_ys[0]], [lb_xs[1],lb_ys[1]], [b_s[0], b_s[1]]))
-                            dist_to_lane_b = np.sign([utils.distance_numpy([lb_xs[0],lb_ys[0]], [lb_xs[1],lb_ys[1]], [t[0],t[1]]) for t in list(zip(x,y))])
-                            within_lane = np.all(dist_to_lane_b == goal_sign)
-                            print(within_lane)
-                            plt.axis('equal')
-                            plt.plot([proceed_pos_ends[0][0]],[proceed_pos_ends[0][1]],'rx')
-                            plt.plot([proceed_pos_ends[1][0]],[proceed_pos_ends[1][1]],'bx')
-                            plt.plot(lb_xs,lb_ys,'r-')
-                            plt.plot(x,y,'-')
-                            plt.show()
-                            '''
-                        else:
-                            #print(i,'/',N,'no path',init_v,b_s[0],b_s[1],b_s[3])
-                            continue
-                if not l3_action_found:
-                    print('no path found left turn')
-                else:
-                    l3_action_len = len(traj_list)
-        elif self.l1_action == 'track_speed' or self.l1_action == 'follow_lead':
-            center_line = utils.get_centerline(veh_state.current_segment)
-            if center_line is None:
-                sys.exit('center line not found for '+str(veh_state.current_segment))
-            accel_param = self.l2_action
-            if constants.SEGMENT_MAP[veh_state.current_segment] == 'left-turn-lane':
-                target_vel = constants.LEFT_TURN_VEL_START_POS
-            else:
-                target_vel = constants.TARGET_VEL
-            
-            max_accel_long = constants.MAX_LONG_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LONG_ACC_AGGR
-            max_accel_lat = constants.MAX_LAT_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LAT_ACC_AGGR
-            target_vel = target_vel + constants.LEFT_TURN_VEL_START_POS_AGGR_ADDITIVE if self.l2_action == 'AGGRESSIVE' else target_vel
-            #if self.lead_vehicle is None:
-            acc_long_vals = np.random.normal(loc=max_accel_long, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_TRACK_SPEED)
-            acc_lat_vals = np.random.normal(loc=max_accel_lat, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_TRACK_SPEED)
-            if accel_param == 'NORMAL':
-                if self.lead_vehicle is None:
-                    if veh_state.speed <= constants.TARGET_VEL:
-                        target_vel_vals = np.random.uniform(low=constants.TARGET_VEL,high=constants.TARGET_VEL+(10/3.6), size=constants.MAX_SAMPLES_TRACK_SPEED)
-                    else:
-                        target_vel_vals = np.random.uniform(low=veh_state.speed,high=veh_state.speed+2, size=constants.MAX_SAMPLES_TRACK_SPEED)
-                else:
-                    target_vel_vals = np.random.uniform(low=min(self.lead_vehicle.speed,veh_state.speed),high=max(self.lead_vehicle.speed,veh_state.speed), size=constants.MAX_SAMPLES_TRACK_SPEED)
-            else:
-                if self.lead_vehicle is None:
-                    if veh_state.speed <= constants.TARGET_VEL:
-                        target_vel_vals = halfnorm.rvs(loc=constants.TARGET_VEL, scale=constants.TARGET_VEL_SD, size=constants.MAX_SAMPLES_TRACK_SPEED)
-                    else:
-                        target_vel_vals = halfnorm.rvs(loc=veh_state.speed, scale=veh_state.speed+2, size=constants.MAX_SAMPLES_TRACK_SPEED)
-                else:
-                    target_vel_vals = halfnorm.rvs(loc=self.lead_vehicle.speed, scale=self.lead_vehicle.speed+2, size=constants.MAX_SAMPLES_TRACK_SPEED)
-            target_vel_vals = [x if x<=constants.TRACK_SPEED_VEL_LIMIT else veh_state.speed + (constants.TRACK_SPEED_VEL_LIMIT-veh_state.speed)*np.random.random_sample() for x in target_vel_vals]
-            state_vals = list(zip(acc_long_vals,acc_lat_vals,target_vel_vals)) + [(0,0,veh_state.speed)]
-            for i,state_val in enumerate(state_vals):
-                res = track_speed_planner_cp(veh_state, center_line, state_val)
-                '''
-                if planner_type != 'CP':
-                    if res is not None:
-                        time, x, y, yaw, v, a, j, T, plan_type = res
-                        traj_generated[1] = True
-                        clipped_res = utils.clip_trajectory_to_viewport(res)
-                        if clipped_res is not None:
-                            traj_list.append((clipped_res, plan_type))
-                            
-                    else:
-                        sys.exit('no path found track speed')
-                        #print('no path found')
-                else:
-                    if res is not None:
-                        traj_list = traj_list + res
-                '''
-                if res is not None:
-                        traj_list = traj_list + res
-            '''
-            for t in traj_list:
-                sl = min(len(t[0][0]),len(t[0][4]))
-                plt.plot(t[0][0][:sl],t[0][4][:sl])
-            plt.show()
-            '''
-            '''
-            else:
-                lead_vehicle = self.lead_vehicle
-                acc_long_vals = np.random.normal(loc=max_accel_long, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_FOLLOW_LEAD)
-                acc_lat_vals = np.random.normal(loc=max_accel_lat, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_FOLLOW_LEAD)
-                acc_vals = list(zip(acc_long_vals,acc_lat_vals))
-                lvx, lvy, lvyaw, lvv, lvax, lvay = lead_vehicle.x, lead_vehicle.y, lead_vehicle.yaw, lead_vehicle.speed, lead_vehicle.tan_acc, lead_vehicle.long_acc
-                for i,accel_val in enumerate(acc_vals):
-                    #print('try',tries)
-                    res = car_following_planner(init_pos_x, init_pos_y, init_yaw_rads, init_v, init_a_x, init_a_y, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_val, abs(constants.MAX_ACC_JERK_AGGR), dt, None, center_line)
-                    if res is not None:
-                        time, x, y, yaw, v, a, j, T, plan_type = res
-                        traj_generated = (traj_generated[0],True)
-                        if constants.SEGMENT_MAP[veh_state.current_segment] == 'exit-lane':
-                            clipped_res = utils.clip_trajectory_to_viewport(res)
-                            if clipped_res is not None:
-                                traj_list.append((clipped_res, plan_type))
-                        else:
-                            traj_list.append((res,plan_type))
-                        
-                    else:
-                        sys.exit('no path found follow lead')
-                        #print('no path found')
-            '''
-        elif self.l1_action == 'decelerate-to-stop' or self.l1_action == 'wait_for_lead_to_cross':
-            max_decel_long = constants.MAX_LONG_DEC_NORMAL if self.l2_action == 'NORMAL' else constants.MAX_LONG_DEC_AGGR
-            max_decel_lat = constants.MAX_LAT_DEC_NORMAL if self.l2_action is 'NORMAL' else constants.MAX_LAT_DEC_AGGR
-            center_line = utils.get_centerline(veh_state.current_lane)
-            if self.l1_action != 'wait_for_lead_to_cross' and center_line is None:
-                sys.exit('center line not found for '+str(veh_state.current_lane))
-            if center_line is not None:
-                proceed_line = center_line
-            else:
-                length = constants.CAR_LENGTH*2
-                proceed_line = [(veh_state.x,veh_state.y),(veh_state.x+length*np.cos(veh_state.yaw),veh_state.y+length*np.sin(veh_state.yaw))]
-            dec_long_vals = np.random.normal(loc=max_decel_long, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_DEC_TO_STOP)
-            dec_lat_vals = np.random.normal(loc=max_decel_lat, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_DEC_TO_STOP)
-            stop_line = utils.get_exit_boundary(veh_state.current_segment)
-            central_stop_point = (stop_line[0][0]+(stop_line[0][1] - stop_line[0][0])/2, stop_line[1][0] + (stop_line[1][1] - stop_line[1][0])/2)
-            vect_to_vehicle = [veh_state.x - central_stop_point[0], veh_state.y - central_stop_point[1]]
-            norm_vect_to_vehicle = math.hypot(vect_to_vehicle[0], vect_to_vehicle[1])
-            unit_v = [x/norm_vect_to_vehicle for x in vect_to_vehicle]
-            stop_poss = []
-            stop_point_constructed = False
-            if self.lead_vehicle is not None:
-                vect_from_lead_to_sv = [veh_state.x-self.lead_vehicle.x, veh_state.y-self.lead_vehicle.y]
-                if math.hypot(vect_from_lead_to_sv[0], vect_from_lead_to_sv[1]) - norm_vect_to_vehicle <= constants.CAR_LENGTH:
-                    ''' construct stop point based on the lead vehicle position '''
-                    central_stop_point = (self.lead_vehicle.x, self.lead_vehicle.y)
-                    for d in constants.LATERAL_TOLERANCE_DISTANCE_GAPS:
-                        stop_poss.append((central_stop_point[0] + d*unit_v[0], central_stop_point[1]+d*unit_v[1]))
-                    stop_point_constructed = True
-            if not stop_point_constructed:
-                for d in constants.LATERAL_TOLERANCE_STOPLINE:
-                    stop_poss.append((central_stop_point[0] + d*unit_v[0], central_stop_point[1]+d*unit_v[1]))
-            target_vel_vals = [0]*len(dec_long_vals)
-            state_vals = list(zip(dec_long_vals,dec_lat_vals,stop_poss))
-            for i,state_val in enumerate(state_vals):
-                dist_to_stop = math.hypot(veh_state.x-state_val[2][0], veh_state.y-state_val[2][1])
-                res = decelerate_to_stop_planner_cp(veh_state, proceed_line, dist_to_stop)
-                if res is not None:
-                    traj_list.append((res, 'CP'))
-                    
-            
-            if self.l1_action == 'wait_for_lead_to_cross':
-                res = construct_stationary_trajectory(veh_state)
-                traj_list.append((res, 'ST'))
-                
-                
-        elif self.l1_action == 'follow_lead_into_intersection':
-            traj_list = generate_follow_lead_in_intersection_trajectory(veh_state)
-            
-        elif self.l1_action == 'wait-on-red':
-            res = construct_stationary_trajectory(veh_state)
-            traj_list.append((res, 'ST'))
+        traj_list = []
+        if self.baseline_only:
+            res = self.generate_baseline(veh_state)
+            if res is not None:
+                traj_list.append((res, 'BASELINE'))
         else:
-            sys.exit('task '+self.task+' is not implemented')
-            
-        if len(traj_list) > 0:
-            traj_generated = (True, traj_generated[1])
+            planner_type = 'CP'
+            if self.l1_action == 'proceed-turn' or self.l1_action == 'wait-for-oncoming':
+                boundary_state_list = []
+                if self.l1_action == 'wait-for-oncoming':
+                    res = construct_stationary_trajectory(veh_state)
+                    traj_list.append((res, 'ST'))
+                if self.l1_action == 'proceed-turn' and planner_type == 'CP':
+                    boundary_states = get_proceed_states_cp(veh_state, l2_action)
+                    traj_list = cubic_spline_planner(veh_state, boundary_states)
+                elif self.l1_action == 'wait-for-oncoming' and planner_type == 'CP':
+                    boundary_states = get_wait_states_cp(veh_state, l2_action)
+                    traj_list = traj_list + cubic_spline_planner(veh_state, boundary_states)
+                else:
+                    l3_action_found = False
+                    boundary_state_list = get_boundary_states(veh_state,l1_action,l2_action)
+                    if boundary_state_list is None or len(boundary_state_list) == 0:
+                        sys.exit('no boundary state list found for '+str(l1_action))
+                    N = len(boundary_state_list)
+                    for i,b_s in enumerate(boundary_state_list):
+                        if math.hypot(init_pos_x-b_s[0], init_pos_y-b_s[1]) < constants.CAR_LENGTH/2:
+                            ''' add waiting at current location to the trajectory '''
+                            f = 1
+                        else:
+                            res = qp_planner(
+                                init_pos_x, init_pos_y, init_yaw_rads, init_v, init_a, b_s[0], b_s[1], b_s[2], b_s[3], b_s[4], b_s[5], abs(constants.MAX_ACC_JERK_AGGR), dt, 
+                                lane_boundary)
+                            if res is not None:
+                                l3_action_found = True
+                                traj_generated[1] = True
+                                time, x, y, yaw, v, a, j, T, plan_type = res
+                                clipped_res = utils.clip_trajectory_to_viewport(res)
+                                #if len(traj_list) == constants.MAX_L3_ACTIONS:
+                                #    break
+                                if clipped_res is not None:
+                                    traj_list.append((clipped_res, plan_type))
+                                #print(i,'/',N,T)
+                                '''
+                                goal_sign = np.sign(utils.distance_numpy([lb_xs[0],lb_ys[0]], [lb_xs[1],lb_ys[1]], [b_s[0], b_s[1]]))
+                                dist_to_lane_b = np.sign([utils.distance_numpy([lb_xs[0],lb_ys[0]], [lb_xs[1],lb_ys[1]], [t[0],t[1]]) for t in list(zip(x,y))])
+                                within_lane = np.all(dist_to_lane_b == goal_sign)
+                                print(within_lane)
+                                plt.axis('equal')
+                                plt.plot([proceed_pos_ends[0][0]],[proceed_pos_ends[0][1]],'rx')
+                                plt.plot([proceed_pos_ends[1][0]],[proceed_pos_ends[1][1]],'bx')
+                                plt.plot(lb_xs,lb_ys,'r-')
+                                plt.plot(x,y,'-')
+                                plt.show()
+                                '''
+                            else:
+                                #print(i,'/',N,'no path',init_v,b_s[0],b_s[1],b_s[3])
+                                continue
+                    if not l3_action_found:
+                        print('no path found left turn')
+                    else:
+                        l3_action_len = len(traj_list)
+            elif self.l1_action == 'track_speed' or self.l1_action == 'follow_lead':
+                center_line = utils.get_centerline(veh_state.current_segment)
+                if center_line is None:
+                    sys.exit('center line not found for '+str(veh_state.current_segment))
+                accel_param = self.l2_action
+                if constants.SEGMENT_MAP[veh_state.current_segment] == 'left-turn-lane':
+                    target_vel = constants.LEFT_TURN_VEL_START_POS
+                else:
+                    target_vel = constants.TARGET_VEL
+                
+                max_accel_long = constants.MAX_LONG_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LONG_ACC_AGGR
+                max_accel_lat = constants.MAX_LAT_ACC_NORMAL if accel_param is 'NORMAL' else constants.MAX_LAT_ACC_AGGR
+                target_vel = target_vel + constants.LEFT_TURN_VEL_START_POS_AGGR_ADDITIVE if self.l2_action == 'AGGRESSIVE' else target_vel
+                #if self.lead_vehicle is None:
+                acc_long_vals = np.random.normal(loc=max_accel_long, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_TRACK_SPEED)
+                acc_lat_vals = np.random.normal(loc=max_accel_lat, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_TRACK_SPEED)
+                if accel_param == 'NORMAL':
+                    if self.lead_vehicle is None:
+                        if veh_state.speed <= constants.TARGET_VEL:
+                            target_vel_vals = np.random.uniform(low=constants.TARGET_VEL,high=constants.TARGET_VEL+(10/3.6), size=constants.MAX_SAMPLES_TRACK_SPEED)
+                        else:
+                            target_vel_vals = np.random.uniform(low=veh_state.speed,high=veh_state.speed+2, size=constants.MAX_SAMPLES_TRACK_SPEED)
+                    else:
+                        target_vel_vals = np.random.uniform(low=min(self.lead_vehicle.speed,veh_state.speed),high=max(self.lead_vehicle.speed,veh_state.speed), size=constants.MAX_SAMPLES_TRACK_SPEED)
+                else:
+                    if self.lead_vehicle is None:
+                        if veh_state.speed <= constants.TARGET_VEL:
+                            target_vel_vals = halfnorm.rvs(loc=constants.TARGET_VEL, scale=constants.TARGET_VEL_SD, size=constants.MAX_SAMPLES_TRACK_SPEED)
+                        else:
+                            target_vel_vals = halfnorm.rvs(loc=veh_state.speed, scale=veh_state.speed+2, size=constants.MAX_SAMPLES_TRACK_SPEED)
+                    else:
+                        target_vel_vals = halfnorm.rvs(loc=self.lead_vehicle.speed, scale=self.lead_vehicle.speed+2, size=constants.MAX_SAMPLES_TRACK_SPEED)
+                target_vel_vals = [x if x<=constants.TRACK_SPEED_VEL_LIMIT else veh_state.speed + (constants.TRACK_SPEED_VEL_LIMIT-veh_state.speed)*np.random.random_sample() for x in target_vel_vals]
+                state_vals = list(zip(acc_long_vals,acc_lat_vals,target_vel_vals)) + [(0,0,veh_state.speed)]
+                for i,state_val in enumerate(state_vals):
+                    res = track_speed_planner_cp(veh_state, center_line, state_val)
+                    '''
+                    if planner_type != 'CP':
+                        if res is not None:
+                            time, x, y, yaw, v, a, j, T, plan_type = res
+                            traj_generated[1] = True
+                            clipped_res = utils.clip_trajectory_to_viewport(res)
+                            if clipped_res is not None:
+                                traj_list.append((clipped_res, plan_type))
+                                
+                        else:
+                            sys.exit('no path found track speed')
+                            #print('no path found')
+                    else:
+                        if res is not None:
+                            traj_list = traj_list + res
+                    '''
+                    if res is not None:
+                            traj_list = traj_list + res
+                '''
+                for t in traj_list:
+                    sl = min(len(t[0][0]),len(t[0][4]))
+                    plt.plot(t[0][0][:sl],t[0][4][:sl])
+                plt.show()
+                '''
+                '''
+                else:
+                    lead_vehicle = self.lead_vehicle
+                    acc_long_vals = np.random.normal(loc=max_accel_long, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_FOLLOW_LEAD)
+                    acc_lat_vals = np.random.normal(loc=max_accel_lat, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_FOLLOW_LEAD)
+                    acc_vals = list(zip(acc_long_vals,acc_lat_vals))
+                    lvx, lvy, lvyaw, lvv, lvax, lvay = lead_vehicle.x, lead_vehicle.y, lead_vehicle.yaw, lead_vehicle.speed, lead_vehicle.tan_acc, lead_vehicle.long_acc
+                    for i,accel_val in enumerate(acc_vals):
+                        #print('try',tries)
+                        res = car_following_planner(init_pos_x, init_pos_y, init_yaw_rads, init_v, init_a_x, init_a_y, lvx, lvy, lvyaw, lvv, lvax, lvay, accel_val, abs(constants.MAX_ACC_JERK_AGGR), dt, None, center_line)
+                        if res is not None:
+                            time, x, y, yaw, v, a, j, T, plan_type = res
+                            traj_generated = (traj_generated[0],True)
+                            if constants.SEGMENT_MAP[veh_state.current_segment] == 'exit-lane':
+                                clipped_res = utils.clip_trajectory_to_viewport(res)
+                                if clipped_res is not None:
+                                    traj_list.append((clipped_res, plan_type))
+                            else:
+                                traj_list.append((res,plan_type))
+                            
+                        else:
+                            sys.exit('no path found follow lead')
+                            #print('no path found')
+                '''
+            elif self.l1_action == 'decelerate-to-stop' or self.l1_action == 'wait_for_lead_to_cross':
+                max_decel_long = constants.MAX_LONG_DEC_NORMAL if self.l2_action == 'NORMAL' else constants.MAX_LONG_DEC_AGGR
+                max_decel_lat = constants.MAX_LAT_DEC_NORMAL if self.l2_action is 'NORMAL' else constants.MAX_LAT_DEC_AGGR
+                center_line = utils.get_centerline(veh_state.current_lane)
+                if self.l1_action != 'wait_for_lead_to_cross' and center_line is None:
+                    sys.exit('center line not found for '+str(veh_state.current_lane))
+                if center_line is not None:
+                    proceed_line = center_line
+                else:
+                    length = constants.CAR_LENGTH*2
+                    proceed_line = [(veh_state.x,veh_state.y),(veh_state.x+length*np.cos(veh_state.yaw),veh_state.y+length*np.sin(veh_state.yaw))]
+                dec_long_vals = np.random.normal(loc=max_decel_long, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_DEC_TO_STOP)
+                dec_lat_vals = np.random.normal(loc=max_decel_lat, scale=constants.PROCEED_ACC_SD, size=constants.MAX_SAMPLES_DEC_TO_STOP)
+                stop_line = utils.get_exit_boundary(veh_state.current_segment)
+                central_stop_point = (stop_line[0][0]+(stop_line[0][1] - stop_line[0][0])/2, stop_line[1][0] + (stop_line[1][1] - stop_line[1][0])/2)
+                vect_to_vehicle = [veh_state.x - central_stop_point[0], veh_state.y - central_stop_point[1]]
+                norm_vect_to_vehicle = math.hypot(vect_to_vehicle[0], vect_to_vehicle[1])
+                unit_v = [x/norm_vect_to_vehicle for x in vect_to_vehicle]
+                stop_poss = []
+                stop_point_constructed = False
+                if self.lead_vehicle is not None:
+                    vect_from_lead_to_sv = [veh_state.x-self.lead_vehicle.x, veh_state.y-self.lead_vehicle.y]
+                    if math.hypot(vect_from_lead_to_sv[0], vect_from_lead_to_sv[1]) - norm_vect_to_vehicle <= constants.CAR_LENGTH:
+                        ''' construct stop point based on the lead vehicle position '''
+                        central_stop_point = (self.lead_vehicle.x, self.lead_vehicle.y)
+                        for d in constants.LATERAL_TOLERANCE_DISTANCE_GAPS:
+                            stop_poss.append((central_stop_point[0] + d*unit_v[0], central_stop_point[1]+d*unit_v[1]))
+                        stop_point_constructed = True
+                if not stop_point_constructed:
+                    for d in constants.LATERAL_TOLERANCE_STOPLINE:
+                        stop_poss.append((central_stop_point[0] + d*unit_v[0], central_stop_point[1]+d*unit_v[1]))
+                target_vel_vals = [0]*len(dec_long_vals)
+                state_vals = list(zip(dec_long_vals,dec_lat_vals,stop_poss))
+                for i,state_val in enumerate(state_vals):
+                    dist_to_stop = math.hypot(veh_state.x-state_val[2][0], veh_state.y-state_val[2][1])
+                    res = decelerate_to_stop_planner_cp(veh_state, proceed_line, dist_to_stop)
+                    if res is not None:
+                        traj_list.append((res, 'CP'))
+                        
+                
+                if self.l1_action == 'wait_for_lead_to_cross':
+                    res = construct_stationary_trajectory(veh_state)
+                    traj_list.append((res, 'ST'))
+                    
+                    
+            elif self.l1_action == 'follow_lead_into_intersection':
+                traj_list = generate_follow_lead_in_intersection_trajectory(veh_state)
+                
+            elif self.l1_action == 'wait-on-red':
+                res = construct_stationary_trajectory(veh_state)
+                traj_list.append((res, 'ST'))
+            else:
+                sys.exit('task '+self.task+' is not implemented')
+                
+            if len(traj_list) > 0:
+                traj_generated = (True, traj_generated[1])
         return np.asarray(traj_list)
 
-    def __init__(self,l1_action,l2_action,task):
+    def __init__(self,l1_action,l2_action,task,baseline_only):
         self.l1_action = l1_action
         self.l2_action = l2_action
         self.task = task
+        self.baseline_only = baseline_only
     
     def set_l1_action(self,l1_action):
         self.l1_action = l1_action
@@ -262,6 +380,7 @@ class TrajectoryPlan:
         
     def set_lead_vehicle(self,lead_vehicle):
         self.lead_vehicle = lead_vehicle
+        
 
 def construct_stationary_trajectory(veh_state):
     time, x, y, yaw, v, a, j, T = [], [], [], [], [], [], [], 0 

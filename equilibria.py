@@ -235,7 +235,7 @@ toy_merge = {(('wait', 'cancel'), ('slow', 'cont. speed')): [10, 20],
                        (('merge', 'cont. merge'), ('slow', 'slow')): [19,19],
                         (('merge', 'cont. merge'), ('speed', 'slow')): [10,14]}
 
-
+'''
 br = calc_best_response(toy_merge)
 ne_all = calc_pure_strategy_nash_equilibrium_exhaustive(toy_merge,True)
 #ne = calc_pure_strategy_nash_equilibrium_exhaustive(game_of_chicken)
@@ -245,7 +245,7 @@ print('all')
 for k,v in ne_all.items():
     print(k,v)
 #print(ne)
-
+'''
 '''
 from timeit import default_timer as timer
 

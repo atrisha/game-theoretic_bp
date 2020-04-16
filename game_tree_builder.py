@@ -21,6 +21,8 @@ import visualizer
 from os import listdir
 from collections import OrderedDict
 
+BASELINE_TRAJECTORIES_ONLY = True
+
 
 def setup_lead_vehicle(v_state,from_ra):
     if not from_ra:
@@ -65,9 +67,6 @@ def get_leading_vehicles(veh_state):
     path = veh_state.segment_seq
     curr_time = veh_state.current_time
     current_segment = veh_state.current_segment
-    if current_segment[0:-1] == 'ln_s_-':
-        return None
-    
     next_segment_idx = veh_state.segment_seq.index(current_segment)+1
     next_segment = veh_state.segment_seq[next_segment_idx] if next_segment_idx < len(veh_state.segment_seq) else veh_state.segment_seq[-1]
     veh_id = veh_state.id
@@ -83,9 +82,10 @@ def get_leading_vehicles(veh_state):
     for ex_b in res_exit_b:
         ex_b_positions[ex_b[0]] = (ast.literal_eval(ex_b[4]),ast.literal_eval(ex_b[5]))
     #print(list(ex_b_positions.keys()))
-    veh_dist_to_segment_exit = (math.hypot(ex_b_positions[current_segment][0][0] - veh_pos_x, ex_b_positions[current_segment][1][0] - veh_pos_y) + \
-                                math.hypot(ex_b_positions[current_segment][0][1] - veh_pos_x, ex_b_positions[current_segment][1][1] - veh_pos_y))/2
-    
+    #veh_dist_to_segment_exit = (math.hypot(ex_b_positions[current_segment][0][0] - veh_pos_x, ex_b_positions[current_segment][1][0] - veh_pos_y) + \
+    #                            math.hypot(ex_b_positions[current_segment][0][1] - veh_pos_x, ex_b_positions[current_segment][1][1] - veh_pos_y))/2
+    veh_vect_to_segment_exit = [((ex_b_positions[current_segment][0][0] - veh_pos_x) + (ex_b_positions[current_segment][0][1] - veh_pos_x))/2,\
+                                ((ex_b_positions[current_segment][1][0] - veh_pos_y) + (ex_b_positions[current_segment][1][1] - veh_pos_y))/2]
     ''' find the vehicles that are in the current segment or the next and appears within the window of the subject vehicle '''
     if next_segment[-2] == '-':
         q_string = "SELECT T.TRACK_ID FROM TRAJECTORY_MOVEMENTS T, v_TIMES V WHERE (T.TRAFFIC_SEGMENT_SEQ LIKE '%''"+current_segment+"''%' OR T.TRAFFIC_SEGMENT_SEQ LIKE '%''"+next_segment[:-1]+"%') AND T.TRACK_ID = V.TRACK_ID AND (V.ENTRY_TIME <= "+str(curr_time)+" AND V.EXIT_TIME >= "+str(curr_time)+") AND T.TRACK_ID <> "+str(veh_id)
@@ -120,10 +120,13 @@ def get_leading_vehicles(veh_state):
             else:
                 lead_vehicle_pos = (float(pt_res[1]),float(pt_res[2]))
                 l_v_segment_ex_b = ex_b_positions[l_v_current_segment]
-                l_v_dist_to_segment_exit = (math.hypot(ex_b_positions[l_v_current_segment][0][0] - lead_vehicle_pos[0], ex_b_positions[l_v_current_segment][1][0] - lead_vehicle_pos[1]) + \
-                                    math.hypot(ex_b_positions[l_v_current_segment][0][1] - lead_vehicle_pos[0], ex_b_positions[l_v_current_segment][1][1] - lead_vehicle_pos[1]))/2
-                l_v_state.set_dist_to_segment_exit(l_v_dist_to_segment_exit)
-                if l_v_current_segment == current_segment and l_v_dist_to_segment_exit > veh_dist_to_segment_exit:
+                #l_v_vect_to_segment_exit = (math.hypot(ex_b_positions[l_v_current_segment][0][0] - lead_vehicle_pos[0], ex_b_positions[l_v_current_segment][1][0] - lead_vehicle_pos[1]) + \
+                #                    math.hypot(ex_b_positions[l_v_current_segment][0][1] - lead_vehicle_pos[0], ex_b_positions[l_v_current_segment][1][1] - lead_vehicle_pos[1]))/2
+                                    
+                l_v_vect_to_segment_exit = [((ex_b_positions[l_v_current_segment][0][0] - lead_vehicle_pos[0]) + (ex_b_positions[l_v_current_segment][0][1] - lead_vehicle_pos[0]))/2,\
+                                ((ex_b_positions[l_v_current_segment][1][0] - lead_vehicle_pos[1]) + (ex_b_positions[l_v_current_segment][1][1] - lead_vehicle_pos[1]))/2]
+                l_v_state.set_vect_to_segment_exit(l_v_vect_to_segment_exit)
+                if l_v_current_segment == current_segment and np.linalg.norm(l_v_vect_to_segment_exit) > np.linalg.norm(veh_vect_to_segment_exit):
                     ''' this vehicle is behind the subject vehicle '''
                     continue
                 else:
@@ -222,14 +225,20 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
             if l1 not in veh_state.action_plans[curr_time]:
                 veh_state.action_plans[curr_time][l1] = dict()
             veh_state.action_plans[curr_time][l1][l2] = None
-            trajectory_plan = motion_planner.TrajectoryPlan(l1,l2,task)
+            trajectory_plan = motion_planner.TrajectoryPlan(l1,l2,task,BASELINE_TRAJECTORIES_ONLY)
             trajectory_plan.set_lead_vehicle(sub_v_lead_vehicle)
             ''' l3_action_trajectory file id: file_id(3),agent_id(3),relev_agent_id(3),l1_action(2),l2_action(2)'''
             file_key = get_l3_action_file(None, agent_id, 0, curr_time, l1, l2)
             if file_key not in trajs_in_db:# and (l1=='decelerate-to-stop' or l1=='wait_for_lead_to_cross'):
                 print('loaded from cache: False')
-                l3_actions = trajectory_plan.generate_trajectory(veh_state)
-                utils.insert_generated_trajectory(l3_actions, file_key)
+                
+                if not BASELINE_TRAJECTORIES_ONLY:
+                    l3_actions = trajectory_plan.generate_trajectory(veh_state)
+                    utils.insert_generated_trajectory(l3_actions, file_key)
+                else:
+                    l3_actions = trajectory_plan.generate_baseline(veh_state)
+                    if l3_actions is not None and len(l3_actions) > 0:
+                        utils.insert_baseline_trajectory(l3_actions, file_key)
                 '''
                 if len(l3_actions) > 0:
                     utils.insert_generated_trajectory(l3_actions, file_key)
@@ -318,13 +327,19 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
                 if l1 not in r_a_state.action_plans[curr_time]:
                     r_a_state.action_plans[curr_time][l1] = dict()
                     r_a_state.action_plans[curr_time][l1][l2] = None
-                trajectory_plan = motion_planner.TrajectoryPlan(l1,l2,r_a_task)
+                trajectory_plan = motion_planner.TrajectoryPlan(l1,l2,r_a_task,BASELINE_TRAJECTORIES_ONLY)
                 trajectory_plan.set_lead_vehicle(lead_vehicle)
                 print('time',curr_time,'agent',agent_id,'relev agent',r_a_state.id,l1,l2)
                 if file_key not in trajs_in_db:# and (l1=='decelerate-to-stop' or l1=='wait_for_lead_to_cross'):
                     print('loaded from cache: False')
-                    l3_actions = trajectory_plan.generate_trajectory(r_a_state)
-                    utils.insert_generated_trajectory(l3_actions, file_key)
+                    
+                    if not BASELINE_TRAJECTORIES_ONLY:
+                        l3_actions = trajectory_plan.generate_trajectory(r_a_state)
+                        utils.insert_generated_trajectory(l3_actions, file_key)
+                    else:
+                        l3_actions = trajectory_plan.generate_baseline(r_a_state)
+                        if l3_actions is not None and len(l3_actions) > 0:
+                            utils.insert_baseline_trajectory(l3_actions, file_key)
                     '''
                     if len(l3_actions) > 0:
                         utils.insert_generated_trajectory(l3_actions, file_key)
@@ -343,6 +358,7 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
             veh_state.action_plans[curr_time]['relev_agents'] = [r_a_state]
         else:
             veh_state.action_plans[curr_time]['relev_agents'].append(r_a_state)
+    
     #print(relev_agents)
     return veh_state
     
@@ -352,7 +368,7 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
 and stores trajectory plans in L3_ACTION_CACHE. It's called hopping because at every time interval the state hops back
 to the real state in the real trajectory, and does not go on a counterfactual path. '''
 def generate_hopping_plans(state_dicts=None):
-    trajs_in_db = utils.get_trajectories_in_db()
+    trajs_in_db = utils.get_trajectories_in_db() if not BASELINE_TRAJECTORIES_ONLY else utils.get_baseline_trajectories_in_db()
     if state_dicts is not None:
         agent_ids = state_dicts.keys()
     else:
@@ -542,4 +558,4 @@ def calc_eqs_for_hopping_trajectories():
                 plt.clf()
 
 
-#calc_eqs_for_hopping_trajectories()
+generate_hopping_plans()

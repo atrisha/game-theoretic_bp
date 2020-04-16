@@ -479,7 +479,21 @@ def query_agent(conflict,subject_path,veh_state):
     conn.close()
     return vehicles
         
-
+def is_out_of_view(pos):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "select * from traffic_regions_def where name='view_area'"
+    c.execute(q_string)
+    res = c.fetchone()
+    X = ast.literal_eval(res[4])
+    Y = ast.literal_eval(res[5])
+    viewport = list(zip(X,Y))
+    p = path.Path(viewport)
+    in_view = p.contains_points([(pos[0], pos[1])])
+    return False if in_view[0] else True
+        
+    
+        
 
 
 def get_relevant_agents(veh_state):
@@ -709,6 +723,41 @@ def find_index_in_list(s_sum, dist_from_origin):
             break
     return idx
     
+def insert_baseline_trajectory(l3_actions,f):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    c = conn.cursor()
+    q_string = "select MAX(GENERATED_BASELINE_TRAJECTORY.TRAJECTORY_ID) FROM GENERATED_BASELINE_TRAJECTORY"
+    c.execute(q_string)
+    res = c.fetchone()
+    max_traj_id = int(res[0]) if res[0] is not None else 0
+    agent_id = int(f[3:6])
+    time_ts = float(f.split('_')[-1].replace(',','.'))
+    relev_agent = int(f[6:9])
+    l1_action = [k for k,v in constants.L1_ACTION_CODES.items() if v == int(f[9:11])][0]
+    l2_action = [k for k,v in constants.L2_ACTION_CODES.items() if v == int(f[11:13])][0]
+    i_string_data = (769,agent_id,relev_agent,l1_action,l2_action,time_ts,1)
+    #print('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?,?)',i_string_data)
+    c.execute("SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE AGENT_ID="+str(i_string_data[1])+" AND RELEV_AGENT_ID="+str(i_string_data[2])+" AND L1_ACTION='"+str(i_string_data[3])+"' AND \
+                    L2_ACTION='"+str(i_string_data[4])+"' AND TIME="+str(i_string_data[5]))
+    res = c.fetchone()
+    if len(res) > 0:
+        traj_info_id = res[1]
+    else:
+        c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?)',i_string_data)
+        conn.commit()
+        traj_info_id = int(c.lastrowid)
+    
+    traj_id = max_traj_id+1
+    
+    traj_dets = l3_actions
+    slice_len = min([len(x) for x in traj_dets[0:7]])
+    tx,rx,ry,ryaw,rv,ra,rj = traj_dets[0][:slice_len],traj_dets[1][:slice_len],traj_dets[2][:slice_len],traj_dets[3][:slice_len],traj_dets[4][:slice_len],traj_dets[5][:slice_len],traj_dets[6][:slice_len]
+    ins_list = list(zip([traj_id]*slice_len,[traj_info_id]*slice_len,[round(x,5) for x in tx],[round(x,5) for x in rx],[round(x,5) for x in ry],[round(x,5) for x in ryaw],[round(x,5) for x in rv],[round(x,5) for x in ra],[round(x,5) for x in rj]))
+    i_string = 'INSERT INTO GENERATED_BASELINE_TRAJECTORY VALUES (?,?,?,?,?,?,?,?,?)'
+    c.executemany(i_string,ins_list)
+    traj_id += 1
+    conn.commit()
+    conn.close()
 
 def insert_generated_trajectory(l3_actions,f):
     print("inserting trajectory: START")
@@ -767,7 +816,6 @@ def generate_baseline_velocity(time_tx,v_s,a_s,target_vel,max_acc,max_jerk,acc):
     return vels
     
 def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,acc):
-    birds_eye_dist = math.hypot(path[-1][0]-path[0][0], path[-1][1]-path[0][1])
     dist_from_origin = [0] + [math.hypot(p2[0]-p1[0], p2[1]-p1[1]) for p1,p2 in list(zip(path[:-1],path[1:]))]
     dist_from_origin = [sum(dist_from_origin[:i]) for i in np.arange(1,len(dist_from_origin))]
     dist,vels,accs = [],[],[]
@@ -777,7 +825,7 @@ def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,acc):
     s_sum = 0
     new_time = []
     for i in time:
-        s = v*dt + (0.5*a*dt**2)
+        s = max(v*dt + (0.5*a*dt**2), 0)
         s_sum += s
         v = max(v + a * dt, 0)
         if (acc and a < max_acc) or (not acc and a > max_acc):
@@ -790,8 +838,7 @@ def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,acc):
             a = a + (max_jerk)*dt if abs(a) > abs(max_jerk)*dt else 0
         path_idx = find_index_in_list(s_sum, dist_from_origin)
         if path_idx is None:
-            ''' this has crossed the distance along the path'''
-            break
+            raise IndexError("path_idx is None")
         overflow = dist_from_origin[path_idx+1] - s_sum if path_idx+1 < len(dist_from_origin) else s_sum-dist_from_origin[-1]
         point = path[path_idx]
         r = overflow/math.hypot(path[path_idx+1][0]-path[path_idx][0], path[path_idx+1][1]-path[path_idx][1])
@@ -799,7 +846,6 @@ def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,acc):
         point_y = path[path_idx][1] + r*(path[path_idx+1][1] - path[path_idx][1])
         point = (point_x,point_y)
         new_path.append(point)
-        f=1
         dist.append(s)
         vels.append(v)
         accs.append(a)
@@ -815,7 +861,7 @@ def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,acc):
     if not acc and vels[-1] == 0 and len(vels) < len(time):
         ''' pad the trajectory'''
         vels = vels + [0]*(len(time)-len(vels))
-    return np.asarray(vels)
+    return np.asarray(vels),new_path
      
         
 def get_exit_boundary(segment):
@@ -825,7 +871,7 @@ def get_exit_boundary(segment):
     c.execute(q_string)
     res = c.fetchone()
     if res is None:
-        sys.exit("cannot find centerline for"+segment)
+        sys.exit("cannot find exit_boundary for"+segment)
     exit_pos_X = ast.literal_eval(res[4])
     exit_pos_Y = ast.literal_eval(res[5])
     return[exit_pos_X,exit_pos_Y]
@@ -850,6 +896,24 @@ def get_trajectories_in_db():
         l2_action_code = str(constants.L2_ACTION_CODES[row[5]]).zfill(2)
         time_ts = str(float(row[6]))
         traj_len = int(row[7])
+        file_str = file_id+agent_id+relev_agent_id+l1_action_code+l2_action_code+'_'+str(time_ts).replace('.',',')
+        trajs_in_db.append(file_str)
+    return trajs_in_db
+
+def get_baseline_trajectories_in_db():
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    c = conn.cursor()
+    q_string = "select * from GENERATED_TRAJECTORY_INFO WHERE GENERATED_TRAJECTORY_INFO.TRAJ_ID IN (SELECT DISTINCT GENERATED_BASELINE_TRAJECTORY.TRAJECTORY_INFO_ID FROM GENERATED_BASELINE_TRAJECTORY)"
+    c.execute(q_string)
+    res = c.fetchall()
+    trajs_in_db = []
+    for row in res:
+        file_id = str(row[0])
+        agent_id = str(row[2]).zfill(3)
+        relev_agent_id = str(row[3]).zfill(3)
+        l1_action_code = str(constants.L1_ACTION_CODES[row[4]]).zfill(2)
+        l2_action_code = str(constants.L2_ACTION_CODES[row[5]]).zfill(2)
+        time_ts = str(float(row[6]))
         file_str = file_id+agent_id+relev_agent_id+l1_action_code+l2_action_code+'_'+str(time_ts).replace('.',',')
         trajs_in_db.append(file_str)
     return trajs_in_db
@@ -901,9 +965,30 @@ def get_current_segment(r_a_state,r_a_track_region,r_a_track_segment_seq,curr_ti
     return r_a_current_segment
 
 
+def get_viewport():
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "select * from traffic_regions_def where name='view_area'"
+    c.execute(q_string)
+    res = c.fetchone()
+    X = ast.literal_eval(res[4])
+    Y = ast.literal_eval(res[5])
+    return [X,Y]
+
 def clip_trajectory_to_viewport(res):
-    time, x, y, yaw, v, a, j, T, plan_type = res
-    viewport = list(zip(constants.VIEWPORT[0],constants.VIEWPORT[1]))
+    if len(res) == 9:
+        time, x, y, yaw, v, a, j, T, plan_type = res
+    else:
+        time, x, y, yaw, v, a, j = res
+    
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "select * from traffic_regions_def where name='view_area'"
+    c.execute(q_string)
+    res = c.fetchone()
+    X = ast.literal_eval(res[4])
+    Y = ast.literal_eval(res[5])
+    viewport = list(zip(X,Y))
     p = path.Path(viewport)
     clip_idx = None
     for i in np.arange(len(time)-1,-1,-1):
@@ -990,14 +1075,9 @@ def interpolate_track_info(veh_state,forward,backward,partial_track=None):
         exit_pos_X = ast.literal_eval(res[4])
         exit_pos_Y = ast.literal_eval(res[5])
         angle_of_centerline = math.atan2(exit_pos_Y[1]-exit_pos_Y[0],exit_pos_X[1]-exit_pos_X[0])
-        proj_pos_X = exit_pos_X[1] + veh_entry_speed * math.cos(angle_of_centerline)
-        proj_pos_Y = exit_pos_Y[1] + veh_entry_speed * math.cos(angle_of_centerline)
-        idx = len(traffic_regions)-1
-        for i in np.arange(idx,0,-1):
-            if traffic_regions[i][1] is not None and len(traffic_regions[i][1]) > 1:
-                for_idx = i
-                break
-        track_info[8] = traffic_regions[for_idx][1]
+        proj_pos_X = exit_pos_X[1] + veh_entry_speed * math.cos(angle_of_centerline) * abs(veh_state.entry_exit_time[1] - veh_state.current_time)
+        proj_pos_Y = exit_pos_Y[1] + veh_entry_speed * math.sin(angle_of_centerline) * abs(veh_state.entry_exit_time[1] - veh_state.current_time)
+        track_info[8] = veh_state.segment_seq[-1]
         track_info[1] = proj_pos_X
         track_info[2] = proj_pos_Y
         track_info[3] = veh_entry_speed
@@ -1016,13 +1096,9 @@ def interpolate_track_info(veh_state,forward,backward,partial_track=None):
         entry_pos_X = ast.literal_eval(res[4])
         entry_pos_Y = ast.literal_eval(res[5])
         angle_of_centerline = math.atan2(entry_pos_Y[0]-entry_pos_Y[1],entry_pos_X[0]-entry_pos_X[1])
-        proj_pos_X = entry_pos_X[0] + veh_entry_speed * math.cos(angle_of_centerline)
-        proj_pos_Y = entry_pos_Y[0] + veh_entry_speed * math.sin(angle_of_centerline)
-        for i in np.arange(idx,len(traffic_regions)):
-            if traffic_regions[i][1] is not None and len(traffic_regions[i][1]) > 1:
-                back_idx = i
-                break
-        track_info[8] = traffic_regions[back_idx][1]
+        proj_pos_X = entry_pos_X[0] + veh_entry_speed * math.cos(angle_of_centerline) * abs(veh_state.entry_exit_time[0] - veh_state.current_time)
+        proj_pos_Y = entry_pos_Y[0] + veh_entry_speed * math.sin(angle_of_centerline) * abs(veh_state.entry_exit_time[0] - veh_state.current_time)
+        track_info[8] = veh_state.segment_seq[0]
         track_info[1] = proj_pos_X
         track_info[2] = proj_pos_Y
         track_info[3] = veh_entry_speed

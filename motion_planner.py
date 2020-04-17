@@ -357,7 +357,7 @@ class TrajectoryPlan:
                 res = construct_stationary_trajectory(veh_state)
                 traj_list.append((res, 'ST'))
             else:
-                sys.exit('task '+self.task+' is not implemented')
+                sys.exit('action '+self.l1_action+' is not implemented')
                 
             if len(traj_list) > 0:
                 traj_generated = (True, traj_generated[1])

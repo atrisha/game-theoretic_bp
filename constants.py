@@ -112,19 +112,33 @@ LANE_MAP = {'n_2-s_-1':'l_n_s_l',
             }
 
 SEGMENT_MAP = {'ln_s_1':'left-turn-lane',
+               'ln_w_1':'left-turn-lane',
                'prep-turn_s':'prep-left-turn',
                'exec-turn_s':'exec-left-turn',
+               'prep-turn_w':'prep-left-turn',
+               'exec-turn_w':'exec-left-turn',
                'ln_w_-1':'exit-lane',
                'ln_w_-2':'exit-lane',
+               'ln_n_-1':'exit-lane',
+               'ln_n_-2':'exit-lane',
                'ln_n_1':'left-turn-lane',
                'ln_n_2':'through-lane-entry',
+               'ln_s_2':'through-lane-entry',
                'ln_n_3':'through-lane-entry',
+               'ln_e_1':'left-turn-lane',
+               'ln_e_2':'through-lane-entry',
+               'ln_e_3':'through-lane-entry',
                'ln_s_-1':'exit-lane',
                'ln_s_-2':'exit-lane',
                'l_n_s_l':'through-lane',
                'l_n_s_r':'through-lane',
                'l_s_n_l':'through-lane',
-               'l_s_n_r':'through-lane'}
+               'l_s_n_r':'through-lane',
+               'l_e_w_l':'through-lane',
+               'l_e_w_r':'through-lane',
+               'l_w_e_l':'through-lane',
+               'l_w_e_r':'through-lane',
+               }
 
 
 LP_FREQ = 0.1

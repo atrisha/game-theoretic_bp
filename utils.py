@@ -287,6 +287,18 @@ def get_track(veh_state,curr_time,from_current=None):
     c.execute(q_string)
     res = c.fetchall()
     l = []
+    '''
+    if len(res) == 0:
+        if curr_time is not None:
+            if from_current is None:
+                q_string = "select * from trajectories_0769 where trajectories_0769.track_id="+str(agent_id)+" and trajectories_0769.time="+str(curr_time)+" order by trajectories_0769.time"
+            else:
+                q_string = "select * from trajectories_0769 where trajectories_0769.track_id="+str(agent_id)+" and trajectories_0769.time >="+str(curr_time)+" order by trajectories_0769.time"
+        else:
+            q_string = "select * from trajectories_0769 where trajectories_0769.track_id="+str(agent_id)+" order by trajectories_0769.time"
+        c.execute(q_string)
+        res = c.fetchall()
+    '''    
     for row in res:
         l.append(row)
     conn.close()
@@ -608,9 +620,13 @@ def get_actions(veh_state):
     c = conn.cursor()
     segment = constants.SEGMENT_MAP[veh_state.current_segment]
     if veh_state.leading_vehicle is not None:
-        q_string = "SELECT * FROM ACTIONS WHERE SEGMENT = '"+segment+"' AND LEAD_VEHICLE_PRESENT IN ('Y','*')"
+        q_string = "SELECT * FROM ACTIONS WHERE SEGMENT = '"+segment+"' AND LEAD_VEHICLE_PRESENT IN ('Y','*') AND TASK IN ('"+veh_state.task+"','*')"
     else:
-        q_string = "SELECT * FROM ACTIONS WHERE SEGMENT = '"+segment+"' AND LEAD_VEHICLE_PRESENT IN ('N','*')"
+        q_string = "SELECT * FROM ACTIONS WHERE SEGMENT = '"+segment+"' AND LEAD_VEHICLE_PRESENT IN ('N','*') AND TASK IN ('"+veh_state.task+"','*')"
+    if veh_state.merging_vehicle is not None:
+        q_string = q_string + " AND MERGING_VEHICLE_PRESENT IN ('Y','*')"
+    else:
+        q_string = q_string + " AND MERGING_VEHICLE_PRESENT IN ('N','*')"
     c.execute(q_string)
     rows = c.fetchall()
     actions = dict() 
@@ -740,7 +756,7 @@ def insert_baseline_trajectory(l3_actions,f):
     c.execute("SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE AGENT_ID="+str(i_string_data[1])+" AND RELEV_AGENT_ID="+str(i_string_data[2])+" AND L1_ACTION='"+str(i_string_data[3])+"' AND \
                     L2_ACTION='"+str(i_string_data[4])+"' AND TIME="+str(i_string_data[5]))
     res = c.fetchone()
-    if len(res) > 0:
+    if res is not None and len(res) > 0:
         traj_info_id = res[1]
     else:
         c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?)',i_string_data)

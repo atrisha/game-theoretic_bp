@@ -217,7 +217,7 @@ def plot_regions():
     import ast
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point'"
+    q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point' and region_property <> 'left_boundary'"
     c.execute(q_string)
     q_res = c.fetchall()
     plt.axis("equal")

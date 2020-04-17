@@ -67,6 +67,9 @@ class VehicleState:
     def set_leading_vehicle(self,leading_vehicle):
         self.leading_vehicle = leading_vehicle
     
+    def set_merging_vehicle(self,merging_vehicle):
+        self.merging_vehicle = merging_vehicle
+    
     def set_path_origin(self,point):
         self.path_origin = point
         

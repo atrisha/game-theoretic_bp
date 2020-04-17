@@ -355,7 +355,7 @@ def assign_curent_segment():
     '''
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    vehs = utils.get_agents_for_task('N_S') + utils.get_agents_for_task('S_W')
+    vehs = utils.get_agents_for_task('S_W')
     #vehs = [140]
     q_string = "select TRAJECTORIES_0769.*,TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ,v_TIMES.ENTRY_TIME,v_TIMES.EXIT_TIME from TRAJECTORIES_0769,TRAJECTORY_MOVEMENTS,v_TIMES where TRAJECTORIES_0769.TRACK_ID=TRAJECTORY_MOVEMENTS.TRACK_ID and v_TIMES.TRACK_ID = TRAJECTORIES_0769.TRACK_ID ORDER BY TRAJECTORIES_0769.TRACK_ID,TRAJECTORIES_0769.TIME"
     res = c.execute(q_string)
@@ -414,16 +414,19 @@ def assign_curent_segment():
                 brk = 1
     
             current_segment = utils.assign_curent_segment(veh_track_region,veh_state)
+            '''
             if len(assigned_segments) > 0 and current_segment != assigned_segments[-1]:
                 v_plots.append((track[t_idx][6],color_map[assigned_segments[-1]]))
-                
+            ''' 
             #print(track_pt[0],track_pt[6],veh_track_region,track_pt[9],current_segment,str(ct)+'/'+str(N))
             
             assigned_segments.append(current_segment)
+            '''
             if current_segment is None:
                 colors.append('black')
             else:
                 colors.append(color_map[current_segment])
+            '''
         boundaries = []
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
         c = conn.cursor()
@@ -441,8 +444,8 @@ def assign_curent_segment():
         for b in boundaries:
             plt.plot(b[0],b[1],'-')
         '''
-        plt.scatter([x[1] for x in track],[x[2] for x in track],c=colors)
-        plt.show()
+        #plt.scatter([x[1] for x in track],[x[2] for x in track],c=colors)
+        #plt.show()
         '''
         l1_actions = []
         vel_color_map = {'decelerate':'orange','wait':'r','proceed':'g','track_speed':'b','NA':'black'}
@@ -484,13 +487,17 @@ def assign_curent_segment():
         plt.axvspan(v_plots[-1][0], track[-1][6], alpha=0.15, color=color_map[assigned_segments[-1]])
         plt.show()
         '''
+        i_string = 'REPLACE INTO TRAJECTORIES_0769_EXT VALUES (?,?,?,?,?)'
+        dat_l = []
         for i in np.arange(len(track)):
             #u_string = "UPDATE TRAJECTORIES_0769_EXT VALUES (?,?,?,?)"
-            u_string = "UPDATE TRAJECTORIES_0769_EXT SET L1_ACTION='"+" WHERE TRACK_ID="+" AND TIME="+"str(_traj_pts[1])"
-            u_strings.append(u_string)
-            u_string = "UPDATE TRAJECTORIES_0769_EXT SET L2_ACTION='"+" WHERE TRACK_ID="+" AND TIME="+"str(_traj_pts[1])"
-            u_strings.append(u_string)
-            print(u_string,(agent_id, track[i][6], assigned_segments[i], None))
+            #u_string = "UPDATE TRAJECTORIES_0769_EXT SET L1_ACTION='"+" WHERE TRACK_ID="+" AND TIME="+"str(_traj_pts[1])"
+            #u_strings.append(u_string)
+            #u_string = "UPDATE TRAJECTORIES_0769_EXT SET L2_ACTION='"+" WHERE TRACK_ID="+" AND TIME="+"str(_traj_pts[1])"
+            #u_strings.append(u_string)
+            dat_l.append((agent_id, track[i][6], assigned_segments[i], None, None))
+            print((agent_id, track[i][6], assigned_segments[i], None,None))
+        c.executemany(i_string,dat_l)
         conn.commit()            
     conn.close()
     return None    
@@ -753,4 +760,4 @@ def insert_trajectory_complexity():
 
 
 
-#insert_trajectory_complexity()
+#assign_curent_segment()

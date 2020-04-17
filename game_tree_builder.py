@@ -60,7 +60,8 @@ def setup_lead_vehicle(v_state,from_ra):
         
 
 
-
+def get_merging_vehicle(veh_state):
+    return None
 
 
 def get_leading_vehicles(veh_state):
@@ -184,9 +185,11 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
     current_segment = track_info[11,]
     veh_state.set_current_segment(current_segment)
     path,gates,direction = utils.get_path_gates_direction(agent_track[:,8],agent_id)
-    veh_state.set_direction(direction)
-    traffic_light = utils.get_traffic_signal(curr_time, direction)
-    task = constants.TASK_MAP[direction]
+    veh_direction = 'L_'+track_region_seq[0][3].upper()+'_'+track_region_seq[-1][3].upper()
+    veh_state.set_direction(veh_direction)
+    traffic_light = utils.get_traffic_signal(curr_time, veh_direction)
+    task = constants.TASK_MAP[veh_direction]
+    veh_state.set_task(task)
     veh_state.set_traffic_light(traffic_light)
     veh_state.set_gates(gates)
     gate_crossing_times = utils.gate_crossing_times(veh_state)
@@ -197,7 +200,7 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
     agent_loc = (track_info[1,],track_info[2,])
     veh_state.set_current_time(curr_time)
     veh_state.set_current_segment(current_segment)
-    veh_direction = 'L_'+track_region_seq[0][3].upper()+'_'+track_region_seq[-1][3].upper()
+    
     if current_segment[0:2] == 'ln':
         veh_current_lane = current_segment
     elif 'int-entry' in current_segment:
@@ -211,6 +214,8 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
         veh_state.action_plans[curr_time] = dict()
     sub_v_lead_vehicle = get_leading_vehicles(veh_state)
     veh_state.set_leading_vehicle(sub_v_lead_vehicle)
+    merging_vehicle = get_merging_vehicle(veh_state)
+    veh_state.set_merging_vehicle(merging_vehicle)
     if selected_action is None:
         actions = utils.get_actions(veh_state)
     else:
@@ -262,6 +267,8 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
     for r_a in relev_agents:
         if r_a == agent_id:
             continue
+        if r_a == 4 and curr_time==50.5505:
+            brk = 1
         r_a_state = motion_planner.VehicleState()
         r_a_state.set_id(r_a)
         r_a_state.set_current_time(curr_time)
@@ -286,6 +293,8 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
         
         if r_a_state.out_of_view or r_a_track[11] is None:
             r_a_track_info = utils.guess_track_info(r_a_state,r_a_track)
+            if r_a_track_info[1,] is None:
+                brk = 1
             r_a_state.set_track_info(r_a_track_info)
             r_a_track_region = r_a_track_info[8,]
             if r_a_track_region is None:
@@ -300,6 +309,8 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
         #for now we will only take into account the leading vehicles of the subject agent's relevant vehicles when constructing the possible actions.'''
         lead_vehicle = get_leading_vehicles(r_a_state)
         r_a_state.set_leading_vehicle(lead_vehicle)
+        merging_vehicle = get_merging_vehicle(r_a_state)
+        r_a_state.set_merging_vehicle(merging_vehicle)
         r_a_direction = 'L_'+r_a_track_segment_seq[0][3].upper()+'_'+r_a_track_segment_seq[-1][3].upper()
         r_a_traffic_light = utils.get_traffic_signal(curr_time, r_a_direction)
         r_a_state.set_traffic_light(r_a_traffic_light)
@@ -314,6 +325,7 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
             r_a_current_lane = r_a_direction
         r_a_state.set_current_lane(r_a_current_lane)
         r_a_task = constants.TASK_MAP[r_a_direction]
+        r_a_state.set_task(r_a_task)
         if selected_action is None:
             r_a_actions = utils.get_actions(r_a_state)
         else:

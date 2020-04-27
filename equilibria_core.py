@@ -36,8 +36,41 @@ def calc_best_response(pay_off_dict):
     num_players = len(list(pay_off_dict.values())[0]) 
     br_strats = tuple([max(pay_off_dict.keys(), key=(lambda k: pay_off_dict[k][i]))[i] for i in np.arange(num_players)])
     br_payoffs = pay_off_dict[br_strats]
-    eq_dict = {br_strats:br_payoffs}
+    eq_dict = dict()
+    for i in np.arange(num_players):
+        for k,v in pay_off_dict.items():
+            if v[i]==br_payoffs[i]:
+                eq_dict[k] = v
     return eq_dict
+
+def calc_best_response_with_beliefs(pay_off_dict,belief_dict):
+    num_players = len(list(pay_off_dict.values())[0])
+    player_actions = dict()
+    for i in np.arange(num_players):
+        pl_acts = set([x[i] for x in list(pay_off_dict.keys())])
+        player_actions[i] = dict()
+        for act in pl_acts:
+            player_actions[i][act] = {k:v for k,v in pay_off_dict.items() if k[i]==act } 
+    all_acts,act_payoffs = [],[]
+    for i in np.arange(num_players):
+        for pl_act,act_dict in player_actions[i].items():
+            exp_payoffs = 0
+            for k,v in act_dict.items():
+                bel_vect = belief_dict[k]
+                strat_prob = np.prod([x for idx,x in enumerate(bel_vect) if idx!=i])
+                _p = strat_prob*v[i]
+                exp_payoffs += _p
+            player_actions[i][pl_act] = exp_payoffs
+    eq_acts = []
+    for i in np.arange(num_players):
+        all_acts.append(list(player_actions[i].keys()))
+        act_payoffs.append(list(player_actions[i].values()))
+        max_payoffs = max(list(player_actions[i].values()))
+        eq_acts.append([x for idx,x in enumerate(list(player_actions[i].keys())) if list(player_actions[i].values())[idx]==max_payoffs])
+    eq_strats = list(itertools.product(*[v for v in eq_acts]))
+    return eq_strats,all_acts,act_payoffs
+    
+            
 
 def calc_pure_strategy_nash_equilibrium_exhaustive(pay_off_dict,all_eqs=False):
     num_players = len(list(pay_off_dict.values())[0])
@@ -236,6 +269,7 @@ toy_merge = {(('wait', 'cancel'), ('slow', 'cont. speed')): [10, 20],
                         (('merge', 'cont. merge'), ('speed', 'slow')): [10,14]}
 
 '''
+br_b = calc_best_response_with_beliefs(toy_merge,dict())
 br = calc_best_response(toy_merge)
 ne_all = calc_pure_strategy_nash_equilibrium_exhaustive(toy_merge,True)
 #ne = calc_pure_strategy_nash_equilibrium_exhaustive(game_of_chicken)
@@ -246,6 +280,7 @@ for k,v in ne_all.items():
     print(k,v)
 #print(ne)
 '''
+
 '''
 from timeit import default_timer as timer
 

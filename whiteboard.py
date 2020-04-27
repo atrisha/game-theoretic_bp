@@ -224,8 +224,15 @@ def plot_regions():
     for row in q_res:
         plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
     plt.show()
-    
-plot_regions()    
+
+import scipy.special
+import constants
+def dist_payoffs(dist_arr):
+    return scipy.special.erf((dist_arr - constants.DIST_COST_MEAN) / (constants.DIST_COST_SD * math.sqrt(2)))
+
+plt.plot(np.arange(0,50,.1),dist_payoffs(np.arange(0,50,.1)))
+plt.show()
+
     
     
     

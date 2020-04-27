@@ -21,6 +21,7 @@ from decimal import Decimal
 from collections import OrderedDict
 import pandas as pd
 from builtins import isinstance
+import planning_objects
 
 
 
@@ -60,6 +61,93 @@ def get_centerline(lane_segment):
         center_coordinates = list(zip(x_coords,y_coords))
     conn.close()
     return center_coordinates
+
+def get_leading_vehicles(veh_state):
+    path = veh_state.segment_seq
+    time_ts = veh_state.current_time
+    current_segment = veh_state.current_segment
+    next_segment_idx = veh_state.segment_seq.index(current_segment)+1
+    next_segment = veh_state.segment_seq[next_segment_idx] if next_segment_idx < len(veh_state.segment_seq) else veh_state.segment_seq[-1]
+    veh_id = veh_state.id
+    veh_pos_x = float(veh_state.x)
+    veh_pos_y = float(veh_state.y)
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    ''' find the exit boundaries of the current and next segment. This will help calculate which vehicles are ahead.'''
+    q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF WHERE (NAME like '"+current_segment+"%' OR NAME like '"+next_segment+"') and REGION_PROPERTY = 'exit_boundary'"
+    ex_b_positions = dict()
+    c.execute(q_string)
+    res_exit_b = c.fetchall()
+    for ex_b in res_exit_b:
+        ex_b_positions[ex_b[0]] = (ast.literal_eval(ex_b[4]),ast.literal_eval(ex_b[5]))
+    #print(list(ex_b_positions.keys()))
+    #veh_dist_to_segment_exit = (math.hypot(ex_b_positions[current_segment][0][0] - veh_pos_x, ex_b_positions[current_segment][1][0] - veh_pos_y) + \
+    #                            math.hypot(ex_b_positions[current_segment][0][1] - veh_pos_x, ex_b_positions[current_segment][1][1] - veh_pos_y))/2
+    veh_vect_to_segment_exit = [((ex_b_positions[current_segment][0][0] - veh_pos_x) + (ex_b_positions[current_segment][0][1] - veh_pos_x))/2,\
+                                ((ex_b_positions[current_segment][1][0] - veh_pos_y) + (ex_b_positions[current_segment][1][1] - veh_pos_y))/2]
+    ''' find the vehicles that are in the current segment or the next and appears within the window of the subject vehicle '''
+    if next_segment[-2] == '-':
+        q_string = "SELECT T.TRACK_ID FROM TRAJECTORY_MOVEMENTS T, v_TIMES V WHERE (T.TRAFFIC_SEGMENT_SEQ LIKE '%''"+current_segment+"''%' OR T.TRAFFIC_SEGMENT_SEQ LIKE '%''"+next_segment[:-1]+"%') AND T.TRACK_ID = V.TRACK_ID AND (V.ENTRY_TIME <= "+str(time_ts)+" AND V.EXIT_TIME >= "+str(time_ts)+") AND T.TRACK_ID <> "+str(veh_id)
+    else:
+        q_string = "SELECT T.TRACK_ID FROM TRAJECTORY_MOVEMENTS T, v_TIMES V WHERE (T.TRAFFIC_SEGMENT_SEQ LIKE '%''"+current_segment+"''%' OR T.TRAFFIC_SEGMENT_SEQ LIKE '%''"+next_segment+"''%') AND T.TRACK_ID = V.TRACK_ID AND (V.ENTRY_TIME <= "+str(time_ts)+" AND V.EXIT_TIME >= "+str(time_ts)+") AND T.TRACK_ID <> "+str(veh_id)
+    c.execute(q_string)
+    res = c.fetchall()
+    potential_lead_vehicles = []
+    if len(res) > 0:
+        for row in res:
+            leading_vehicle_id = row[0]
+            ''' find the position of the potential lead vehicle in the current time '''
+            q_string = "select * from trajectories_0769,trajectories_0769_ext where trajectories_0769.track_id=trajectories_0769_ext.track_id and trajectories_0769.time=trajectories_0769_ext.time and trajectories_0769.track_id="+str(leading_vehicle_id)+" and trajectories_0769.time = "+str(time_ts)
+            c.execute(q_string)
+            pt_res = c.fetchone()
+            l_v_state = VehicleState()
+            if pt_res is None:
+                ''' this means that there is no entry for this vehicle in trajectories_0769_ext yet'''
+                continue
+            l_v_state.set_id(pt_res[0])
+            l_v_state.set_current_time(time_ts)
+            l_v_track = get_track(l_v_state,time_ts)
+            l_v_state.set_track_info(l_v_track[0,])
+            l_v_track_segment_seq = get_track_segment_seq(l_v_state.id)
+            l_v_state.set_segment_seq(l_v_track_segment_seq)
+            l_v_current_segment = pt_res[11]
+            l_v_state.set_current_segment(l_v_current_segment)
+            l_v_state.set_current_l1_action(pt_res[12])
+            if l_v_current_segment not in ex_b_positions.keys():
+                ''' potential lead vehicle is not in the path (current or the next segment), so ignore '''
+                continue
+            else:
+                lead_vehicle_pos = (float(pt_res[1]),float(pt_res[2]))
+                l_v_segment_ex_b = ex_b_positions[l_v_current_segment]
+                #l_v_vect_to_segment_exit = (math.hypot(ex_b_positions[l_v_current_segment][0][0] - lead_vehicle_pos[0], ex_b_positions[l_v_current_segment][1][0] - lead_vehicle_pos[1]) + \
+                #                    math.hypot(ex_b_positions[l_v_current_segment][0][1] - lead_vehicle_pos[0], ex_b_positions[l_v_current_segment][1][1] - lead_vehicle_pos[1]))/2
+                                    
+                l_v_vect_to_segment_exit = [((ex_b_positions[l_v_current_segment][0][0] - lead_vehicle_pos[0]) + (ex_b_positions[l_v_current_segment][0][1] - lead_vehicle_pos[0]))/2,\
+                                ((ex_b_positions[l_v_current_segment][1][0] - lead_vehicle_pos[1]) + (ex_b_positions[l_v_current_segment][1][1] - lead_vehicle_pos[1]))/2]
+                l_v_state.set_vect_to_segment_exit(l_v_vect_to_segment_exit)
+                if l_v_current_segment == current_segment and np.linalg.norm(l_v_vect_to_segment_exit) > np.linalg.norm(veh_vect_to_segment_exit):
+                    ''' this vehicle is behind the subject vehicle '''
+                    continue
+                elif math.hypot(lead_vehicle_pos[0]-veh_pos_x,lead_vehicle_pos[1]-veh_pos_y) > constants.LEAD_VEH_DIST_THRESH:
+                    ''' this vehicle is too far '''
+                    continue
+                else:
+                    potential_lead_vehicles.append(l_v_state)
+            
+        if len(potential_lead_vehicles) > 1:
+            #sys.exit('need to resolve multiple potential lead vehicles ')
+            lv_idx,min_dist = 0,np.inf
+            for idx, lv in enumerate(potential_lead_vehicles):
+                dist_from_subject = math.hypot(float(lv.x)-veh_pos_x, float(lv.y)-veh_pos_y)
+                if dist_from_subject < min_dist:
+                    lv_idx = idx
+            return potential_lead_vehicles[lv_idx]
+                    
+                
+        else:
+            return potential_lead_vehicles[0] if len(potential_lead_vehicles) ==1 else None
+    else:
+        return None    
 
 def pickle_load(file_key):
     l3_actions = pickle.load( open( file_key, "rb" ) )
@@ -224,21 +312,102 @@ def get_track_segment_seq(track_id):
     return ast.literal_eval(seq) if seq is not None else None
 
 
-def load_traj_ids_for_traj_info_id(traj_info_id):
+def load_traj_ids_for_traj_info_id(traj_info_id,baseline_only):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
     c = conn.cursor()
-    q_string = "SELECT DISTINCT TRAJECTORY_ID FROM GENERATED_TRAJECTORY WHERE TRAJECTORY_INFO_ID = "+str(traj_info_id)
+    if not baseline_only:
+        q_string = "SELECT DISTINCT TRAJECTORY_ID FROM GENERATED_TRAJECTORY WHERE TRAJECTORY_INFO_ID = "+str(traj_info_id)
+    else:
+        q_string = "SELECT DISTINCT TRAJECTORY_ID FROM GENERATED_BASELINE_TRAJECTORY WHERE TRAJECTORY_INFO_ID = "+str(traj_info_id)
     c.execute(q_string)
     res = c.fetchall()
     traj_ids = [row[0] for row in res]
     return traj_ids
+
+def load_trajs_for_traj_info_id(traj_info_id,baseline_only):
+    import struct
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    c = conn.cursor()
+    traj_dict = dict()
+    if not baseline_only:
+        q_string = "SELECT * FROM GENERATED_TRAJECTORY WHERE TRAJECTORY_INFO_ID IN "+str(tuple(traj_info_id))
+    else:
+        q_string = "SELECT * FROM GENERATED_BASELINE_TRAJECTORY WHERE TRAJECTORY_INFO_ID IN "+str(tuple(traj_info_id))
+    c.execute(q_string)
+    res = c.fetchall()
+    for row in res:
+        if row[0] not in traj_dict:
+            traj_dict[row[0]] = [[struct.unpack('f', x)[0] if isinstance(x,bytes) else x for x in list(row[1:])]]
+        else:
+            traj_dict[row[0]].append([struct.unpack('f', x)[0] if isinstance(x,bytes) else x for x in list(row[1:])])
+    return traj_dict
+
+
+def get_merging_vehicle(veh_state):
+    return None
+
+def setup_vehicle_state(veh_id,time_ts):
+    r_a_state = planning_objects.VehicleState()
+    r_a_state.set_id(veh_id)
+    r_a_state.set_current_time(time_ts)
+    r_a_track = get_track(r_a_state,time_ts)
+    r_a_track_segment_seq = get_track_segment_seq(veh_id)
+    r_a_state.set_segment_seq(r_a_track_segment_seq)
+    r_a_state.action_plans = dict()
+    r_a_state.set_current_time(time_ts)
+    entry_exit_time = get_entry_exit_time(r_a_state.id)
+    r_a_state.set_entry_exit_time(entry_exit_time)
+    if len(r_a_track) == 0:
+        ''' this agent is out of the view currently'''
+        r_a_state.set_out_of_view(True)
+        r_a_track = None
+    else:
+        r_a_state.set_out_of_view(False)
+        r_a_state.set_track_info(r_a_track[0,])
+        r_a_track = r_a_track[0,]
     
-def load_traj_from_db(all_traj_id_list):
+    if r_a_state.out_of_view or r_a_track[11] is None:
+        r_a_track_info = guess_track_info(r_a_state,r_a_track)
+        if r_a_track_info[1,] is None:
+            brk = 1
+        r_a_state.set_track_info(r_a_track_info)
+        r_a_track_region = r_a_track_info[8,]
+        if r_a_track_region is None:
+            sys.exit('need to guess traffic region for relev agent')
+        r_a_current_segment = get_current_segment(r_a_state,r_a_track_region,r_a_track_segment_seq,time_ts)
+    else:
+        r_a_current_segment = r_a_track[11]
+    
+        
+    r_a_state.set_current_segment(r_a_current_segment)
+    ''' 
+    r_a_current_segment = r_a_track[0,11]
+    r_a_state.set_current_segment(r_a_current_segment)
+    #for now we will only take into account the leading vehicles of the subject agent's relevant vehicles when constructing the possible actions.'''
+    lead_vehicle = get_leading_vehicles(r_a_state)
+    r_a_state.set_leading_vehicle(lead_vehicle)
+    merging_vehicle = get_merging_vehicle(r_a_state)
+    r_a_state.set_merging_vehicle(merging_vehicle)
+    r_a_direction = 'L_'+r_a_track_segment_seq[0][3].upper()+'_'+r_a_track_segment_seq[-1][3].upper()
+    r_a_traffic_light = get_traffic_signal(time_ts, r_a_direction)
+    r_a_state.set_traffic_light(r_a_traffic_light)
+    r_a_state.set_direction(r_a_direction)
+    next_signal_change = get_time_to_next_signal(time_ts, r_a_direction, r_a_traffic_light)
+    r_a_state.set_time_to_next_signal(next_signal_change)
+    return r_a_state
+
+def calc_traj_len(traj):
+    return sum([math.hypot(x2[0]-x1[0], x2[1]-x1[1]) for x1,x2 in zip(traj[:-1],traj[1:])])
+
+def load_traj_from_db(all_traj_id_list,baseline_only):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
     c = conn.cursor()
     traj_dict_list = []
     for traj_id_list in all_traj_id_list:
-        q_string = "SELECT * FROM GENERATED_TRAJECTORY WHERE trajectory_id in "+str(tuple(traj_id_list))+" order by trajectory_id,time"
+        if not baseline_only:
+            q_string = "SELECT * FROM GENERATED_TRAJECTORY WHERE trajectory_id in "+str(tuple(traj_id_list))+" order by trajectory_id,time"
+        else:
+            q_string = "SELECT * FROM GENERATED_BASELINE_TRAJECTORY WHERE trajectory_id = "+str(traj_id_list[0])+" order by trajectory_id,time"
         c.execute(q_string)
         res = c.fetchall()
         trajs = dict()
@@ -247,9 +416,7 @@ def load_traj_from_db(all_traj_id_list):
                 trajs[row[0]] = [list(row[2:])]
             else:
                 trajs[row[0]].append(list(row[2:]))
-        data_index = ['time', 'x', 'y', 'yaw', 'v', 'a', 'j']
         trajs = {k:np.vstack(v) for k,v in trajs.items()}
-        #trajs = {k:pd.DataFrame(v, columns=data_index, dtype = np.float).T for k,v in trajs.items()}
         traj_dict_list.append(trajs)
     return traj_dict_list 
     
@@ -289,11 +456,11 @@ def get_track(veh_state,curr_time,from_current=None):
     l = []
     '''
     if len(res) == 0:
-        if curr_time is not None:
+        if time_ts is not None:
             if from_current is None:
-                q_string = "select * from trajectories_0769 where trajectories_0769.track_id="+str(agent_id)+" and trajectories_0769.time="+str(curr_time)+" order by trajectories_0769.time"
+                q_string = "select * from trajectories_0769 where trajectories_0769.track_id="+str(agent_id)+" and trajectories_0769.time="+str(time_ts)+" order by trajectories_0769.time"
             else:
-                q_string = "select * from trajectories_0769 where trajectories_0769.track_id="+str(agent_id)+" and trajectories_0769.time >="+str(curr_time)+" order by trajectories_0769.time"
+                q_string = "select * from trajectories_0769 where trajectories_0769.track_id="+str(agent_id)+" and trajectories_0769.time >="+str(time_ts)+" order by trajectories_0769.time"
         else:
             q_string = "select * from trajectories_0769 where trajectories_0769.track_id="+str(agent_id)+" order by trajectories_0769.time"
         c.execute(q_string)
@@ -465,6 +632,26 @@ def get_traffic_segment_from_gates(gates):
         segment_seq.append(ast.literal_eval(row[0]))
     conn.close()
     return segment_seq
+
+
+def get_l1_action_string(code):
+    for k,v in constants.L1_ACTION_CODES.items():
+        if v==code:
+            return k
+
+def get_l2_action_string(code):
+    for k,v in constants.L2_ACTION_CODES.items():
+        if v==code:
+            return k  
+def print_readable(eq):
+    readable_eq = []
+    if isinstance(eq, str):
+        s = eq
+        return s[3:6]+'_'+s[6:9]+'_'+get_l1_action_string(int(s[9:11]))+'_'+get_l2_action_string(int(s[11:13]))
+    else:
+        for s in eq:
+            readable_eq.append(s[3:6]+'_'+s[6:9]+'_'+get_l1_action_string(int(s[9:11]))+'_'+get_l2_action_string(int(s[11:13])))
+        return readable_eq
     
 def query_agent(conflict,subject_path,veh_state):
     vehicles = []
@@ -481,11 +668,23 @@ def query_agent(conflict,subject_path,veh_state):
     gates = ast.literal_eval(other_agent_gates)
     path = other_agent_path[1:-1].split(',')
     entry_gate,exit_gate = gates[0],gates[1]
-    q_string = "SELECT DISTINCT TRAJECTORIES_0769.TRACK_ID FROM TRAJECTORIES_0769,TRACKS WHERE TRAJECTORIES_0769.TRACK_ID=TRACKS.TRACK_ID AND (TIME BETWEEN "+str(curr_time-constants.RELEV_VEHS_TIME_THRESH)+" AND "+str(curr_time+constants.RELEV_VEHS_TIME_THRESH)+") AND TRACKS.TYPE <> 'Pedestrian' AND TRACKS.TRACK_ID IN (SELECT DISTINCT TRACK_ID FROM TRAJECTORY_MOVEMENTS WHERE TRAFFIC_SEGMENT_SEQ LIKE '%"+path[0][:-1]+"%"+path[1][:-2]+"%' ORDER BY TRACK_ID)"
+    veh_intersection_exit_time = veh_state.gate_crossing_times[1]
+    veh_scene_exit_time = veh_state.entry_exit_time[1]
+    if conflict[-1] == 'ON_INTERSECTION':
+        end_time = curr_time+constants.RELEV_VEHS_TIME_THRESH if veh_intersection_exit_time is None else veh_intersection_exit_time+constants.RELEV_VEHS_TIME_THRESH
+    else:
+        end_time = curr_time+constants.RELEV_VEHS_TIME_THRESH if veh_scene_exit_time is None else veh_scene_exit_time
+    q_string = "SELECT DISTINCT TRAJECTORIES_0769.TRACK_ID FROM TRAJECTORIES_0769,TRACKS WHERE TRAJECTORIES_0769.TRACK_ID=TRACKS.TRACK_ID AND (TIME BETWEEN "+str(curr_time)+" AND "+str(end_time)+") AND TRACKS.TYPE <> 'Pedestrian' AND TRACKS.TRACK_ID IN (SELECT DISTINCT TRACK_ID FROM TRAJECTORY_MOVEMENTS WHERE TRAFFIC_SEGMENT_SEQ LIKE '%"+path[0][:-1]+"%"+path[1][:-2]+"%' ORDER BY TRACK_ID)"
     c.execute(q_string)
     res = c.fetchall()
     if len(res) < 1:
         print('no relevant agents for query:',q_string)
+    elif len(res) > 7:
+        ''' too many agents. we can reduce the number by restricting the time threshold without significant impact '''
+        q_string = "SELECT DISTINCT TRAJECTORIES_0769.TRACK_ID FROM TRAJECTORIES_0769,TRACKS WHERE TRAJECTORIES_0769.TRACK_ID=TRACKS.TRACK_ID AND TIME = "+str(curr_time)+" AND TRACKS.TYPE <> 'Pedestrian' AND TRACKS.TRACK_ID IN (SELECT DISTINCT TRACK_ID FROM TRAJECTORY_MOVEMENTS WHERE TRAFFIC_SEGMENT_SEQ LIKE '%"+path[0][:-1]+"%"+path[1][:-2]+"%' ORDER BY TRACK_ID)"
+        c.execute(q_string)
+        res = c.fetchall()
+    
     for row in res:
         vehicles.append(row[0])
     conn.close()
@@ -505,7 +704,11 @@ def is_out_of_view(pos):
     return False if in_view[0] else True
         
     
-        
+def can_exclude(veh_state,ra_segment_type):
+    if veh_state.task == 'LEFT_TURN' and ra_segment_type == 'exit-lane':
+        return True
+    else:
+        return False
 
 
 def get_relevant_agents(veh_state):
@@ -614,7 +817,20 @@ def get_traffic_signal(time,direction,file_id='769'):
         signal = res[1]
         conn.close()
         return signal
-
+    
+def get_time_to_next_signal(time_ts,direction,curr_signal):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "SELECT * FROM TRAFFIC_LIGHTS WHERE TIME - 0 > 0 AND "+direction+" <> '"+curr_signal+"' order by time"
+    curr = c.execute(q_string)
+    res = c.fetchone()
+    all_directions = [description[0] for description in curr.description]
+    dir_idx = all_directions.index(direction)
+    next_signal = res[dir_idx]
+    time_to_change = float(res[-1]) - time_ts
+    return (time_to_change,next_signal)
+    
+    
 def get_actions(veh_state):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
@@ -831,6 +1047,20 @@ def generate_baseline_velocity(time_tx,v_s,a_s,target_vel,max_acc,max_jerk,acc):
         vels.append(v)
     return vels
     
+def get_baseline_trajectory(agent_id,relev_agent_id,l1_action,l2_action,curr_time):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    c = conn.cursor()
+    q_string = "select * from GENERATED_BASELINE_TRAJECTORY where GENERATED_BASELINE_TRAJECTORY.time BETWEEN "+str(curr_time)+" AND "+str(curr_time+constants.PLAN_FREQ)+" AND GENERATED_BASELINE_TRAJECTORY.TRAJECTORY_INFO_ID in (select GENERATED_TRAJECTORY_INFO.TRAJ_ID FROM GENERATED_TRAJECTORY_INFO WHERE GENERATED_TRAJECTORY_INFO.AGENT_ID="+str(agent_id)+" AND GENERATED_TRAJECTORY_INFO.RELEV_AGENT_ID="+str(relev_agent_id)+" AND GENERATED_TRAJECTORY_INFO.L1_ACTION='"+l1_action+"' AND GENERATED_TRAJECTORY_INFO.L2_ACTION='"+l2_action+"' AND GENERATED_TRAJECTORY_INFO.TIME="+str(curr_time)+") order by GENERATED_BASELINE_TRAJECTORY.TRAJECTORY_INFO_ID,GENERATED_BASELINE_TRAJECTORY.time"
+    c.execute(q_string)
+    res = c.fetchall()
+    return [list(row) for row in res]
+
+def calc_traj_diff(traj1,traj2):
+    slice_len = min(len(traj1),len(traj2))
+    _t1,_t2 = [(x[1],x[2]) for x in traj1[:slice_len]], [(x[1],x[2]) for x in traj2[:slice_len]]
+    residual = sum([math.hypot(x[1][0]-x[0][0], x[1][1]-x[0][1]) for x in zip(_t1,_t2)])
+    return residual
+    
 def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,acc):
     dist_from_origin = [0] + [math.hypot(p2[0]-p1[0], p2[1]-p1[1]) for p1,p2 in list(zip(path[:-1],path[1:]))]
     dist_from_origin = [sum(dist_from_origin[:i]) for i in np.arange(1,len(dist_from_origin))]
@@ -1041,7 +1271,7 @@ def interpolate_track_info(veh_state,forward,backward,partial_track=None):
     track_info[0],track_info[6] = veh_id,curr_time
     veh_entry_segment, veh_exit_segment = veh_state.segment_seq[0],veh_state.segment_seq[-1]
     if not hasattr(veh_state, 'track'):
-        q_string = "select TIME,TRAFFIC_REGIONS,X,Y,SPEED from trajectories_0769 where track_id="+str(veh_id)+" and time between "+str(curr_time-2)+" and "+str(curr_time+2)+" order by time"
+        q_string = "select TIME,TRAFFIC_REGIONS,X,Y,SPEED from trajectories_0769 where track_id="+str(veh_id)+" order by time"
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
         c = conn.cursor()
         c.execute(q_string)

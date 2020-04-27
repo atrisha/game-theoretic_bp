@@ -142,7 +142,7 @@ SEGMENT_MAP = {'ln_s_1':'left-turn-lane',
 
 
 LP_FREQ = 0.1
-PLAN_FREQ = 2
+PLAN_FREQ = 1
 DATASET_FPS = 30
 OTH_AGENT_L3_ACT_HORIZON = 5
 
@@ -155,7 +155,9 @@ L1_ACTION_CODES = {'wait-for-oncoming':1,
                    'decelerate-to-stop':5,
                    'wait_for_lead_to_cross':6,
                    'follow_lead_into_intersection':7,
-                   'wait-on-red':8}
+                   'wait-on-red':8,
+                   'cut-in':9,
+                   'yield-to-merging':10}
 
 L1_ACTION_CODES_2_NAME = {1:'wait',
                    2:'proceed-turn',
@@ -174,6 +176,7 @@ gate_map = {'north_exit':[72,73],
 #traffic_segment_seq_map = {:'d'}
 
 RELEV_VEHS_TIME_THRESH = 1
+LEAD_VEH_DIST_THRESH = 50
 VEH_ARRIVAL_HORIZON = 3
 
 
@@ -193,9 +196,14 @@ DIST_COST_SD = 0.5
 SPEED_COST_MEAN = 11
 SPEED_COST_SD = 5
 
-INHIBITORY_PAYOFF_WEIGHT = 0.9
-EXCITATORY_PAYOFF_WEIGHT = 0.1
-L2_ACTION_PAYOFF_ADDITIVE = 0.3
+INHIBITORY_PAYOFF_WEIGHT = 0.5
+EXCITATORY_PAYOFF_WEIGHT = 0.5
+
 
 ''' This is kept here so that we don't have to query the db everytime'''
 VIEWPORT = ([538782.42,538861.33,538892.67,538811.68],[4814012.83,4814060.05,4814013.85,4813967.66])
+
+''' analysis configurations '''
+BASELINE_TRAJECTORIES_ONLY = True
+INHIBITORY = True
+EXCITATORY = True

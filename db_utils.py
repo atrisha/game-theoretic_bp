@@ -12,12 +12,13 @@ import constants
 from planning_objects import VehicleState
 import ast
 import matplotlib.pyplot as plt
-from game_tree_builder import get_leading_vehicles
+from utils import get_leading_vehicles
 import os
 from os import listdir
 from collections import OrderedDict
 import pandas as pd
 from cost_evaluation import eval_complexity
+from utils import get_agents_for_task
 
 
 
@@ -355,7 +356,7 @@ def assign_curent_segment():
     '''
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    vehs = utils.get_agents_for_task('S_W')
+    vehs = utils.get_agents_for_task('S_W') + utils.get_agents_for_task('N_S') + utils.get_agents_for_task('E_W') + utils.get_agents_for_task('W_N')
     #vehs = [140]
     q_string = "select TRAJECTORIES_0769.*,TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ,v_TIMES.ENTRY_TIME,v_TIMES.EXIT_TIME from TRAJECTORIES_0769,TRAJECTORY_MOVEMENTS,v_TIMES where TRAJECTORIES_0769.TRACK_ID=TRAJECTORY_MOVEMENTS.TRACK_ID and v_TIMES.TRACK_ID = TRAJECTORIES_0769.TRACK_ID ORDER BY TRAJECTORIES_0769.TRACK_ID,TRAJECTORIES_0769.TIME"
     res = c.execute(q_string)
@@ -758,6 +759,47 @@ def insert_trajectory_complexity():
         conn.commit()
     conn.close()
 
+
+def get_traj_metadata(task):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    c = conn.cursor()
+    q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE GENERATED_TRAJECTORY_INFO.TRAJ_ID IN (SELECT DISTINCT GENERATED_BASELINE_TRAJECTORY.TRAJECTORY_INFO_ID FROM GENERATED_BASELINE_TRAJECTORY) AND GENERATED_TRAJECTORY_INFO.AGENT_ID IN "+str(tuple(get_agents_for_task(task)))+" ORDER BY GENERATED_TRAJECTORY_INFO.AGENT_ID"
+    c.execute(q_string)
+    res = c.fetchall()
+    state_dict = OrderedDict()
+    for row in res:
+        time_ts = row[6]
+        agent_id = int(row[2])
+        relev_agent = None if int(row[3])==0 else int(row[3])
+        l1_action = row[4]
+        l2_action = row[5]
+        if time_ts not in state_dict:
+            state_dict[time_ts] = dict()
+        if 'raw_data' not in state_dict[time_ts]:
+            state_dict[time_ts]['raw_data'] = dict()
+        if str(agent_id)+'-'+str(row[3]) not in state_dict[time_ts]['raw_data']:
+            state_dict[time_ts]['raw_data'][str(agent_id)+'-'+str(row[3])] = [list(row)]
+        else:
+            state_dict[time_ts]['raw_data'][str(agent_id)+'-'+str(row[3])].append(list(row))
+        if agent_id not in state_dict[time_ts]:
+            state_dict[time_ts][agent_id] = dict()
+        if relev_agent is None:
+            if l1_action not in state_dict[time_ts][agent_id]:
+                state_dict[time_ts][agent_id][l1_action] = [l2_action]
+            else:
+                state_dict[time_ts][agent_id][l1_action].append(l2_action)
+        else:
+            if 'relev_agents' not in state_dict[time_ts]: 
+                state_dict[time_ts]['relev_agents'] = dict()
+            if relev_agent not in state_dict[time_ts]['relev_agents']:
+                state_dict[time_ts]['relev_agents'][relev_agent] = dict()
+            if l1_action not in state_dict[time_ts]['relev_agents'][relev_agent]:
+                state_dict[time_ts]['relev_agents'][relev_agent][l1_action] = [l2_action]
+            else:
+                if l2_action not in state_dict[time_ts]['relev_agents'][relev_agent][l1_action]:
+                    state_dict[time_ts]['relev_agents'][relev_agent][l1_action].append(l2_action)
+        
+    return state_dict
 
 
 #assign_curent_segment()

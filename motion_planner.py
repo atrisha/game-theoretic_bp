@@ -45,10 +45,17 @@ class TrajectoryPlan:
             proceed_pos_yaw = math.atan2(center_line[1][1]-center_line[0][1], center_line[1][0]-center_line[0][0])
             end_pos = ((proceed_pos_ends[1][0]+proceed_pos_ends[0][0])/2, (proceed_pos_ends[1][1]+proceed_pos_ends[1][1])/2)
             end_pos_but_last = (end_pos[0]-((constants.CAR_LENGTH/2)*np.cos(proceed_pos_yaw)) , end_pos[1]-((constants.CAR_LENGTH/2)*np.sin(proceed_pos_yaw)))
+        elif l1_action == 'cut-in':
+            proceed_pos_ends = get_exitline(veh_state.current_segment[:-1]+str(int(veh_state.current_segment[-1])-1))
+            if math.hypot(proceed_pos_ends[0][0]-veh_state.x, proceed_pos_ends[0][1]-veh_state.y) < constants.CAR_LENGTH/2:
+                proceed_pos_ends = get_exitline(veh_state.segment_seq[ veh_state.segment_seq.index(veh_state.current_segment)+1 ])
+            proceed_pos_yaw = math.atan2(proceed_pos_ends[1][0]-proceed_pos_ends[0][0], proceed_pos_ends[1][1]-proceed_pos_ends[1][1]) + (math.pi/2)
+            end_pos = ((proceed_pos_ends[1][0]+proceed_pos_ends[0][0])/2, (proceed_pos_ends[1][1]+proceed_pos_ends[1][1])/2)
+            end_pos_but_last = (end_pos[0]-((constants.CAR_LENGTH/2)*np.cos(proceed_pos_yaw)) , end_pos[1]-((constants.CAR_LENGTH/2)*np.sin(proceed_pos_yaw)))
         elif l1_action == 'follow_lead_into_intersection' or l1_action == 'wait_for_lead_to_cross':
             end_pos_but_last = (veh_state.leading_vehicle.x, veh_state.leading_vehicle.y)
             end_pos = (end_pos_but_last[0] + (constants.CAR_LENGTH/2) * np.cos(veh_state.leading_vehicle.yaw), end_pos_but_last[1] + (constants.CAR_LENGTH/2) * np.sin(veh_state.leading_vehicle.yaw))
-        elif l1_action == 'decelerate-to-stop' or l1_action == 'wait-on-red':
+        elif l1_action == 'decelerate-to-stop' or l1_action == 'wait-on-red' or l1_action == 'yield-to-merging':
             stop_line = utils.get_exit_boundary(veh_state.current_segment)
             stop_point = (np.mean(stop_line[0]), np.mean(stop_line[1]))
             dist_to_stopline = math.hypot(stop_point[0]-veh_state.x, stop_point[1]-veh_state.y)
@@ -96,13 +103,15 @@ class TrajectoryPlan:
         else:
             max_acc, max_dec, max_acc_jerk, max_dec_jerk = constants.MAX_LONG_ACC_NORMAL, constants.MAX_LONG_DEC_NORMAL/2, constants.MAX_ACC_JERK_NORMAL, constants.MAX_DEC_JERK_NORMAL
         time_tx = np.arange(veh_state.current_time,veh_state.current_time+constants.OTH_AGENT_L3_ACT_HORIZON,constants.LP_FREQ)
-        if l1_action == 'decelerate-to-stop' or l1_action == 'wait-on-red' or l1_action == 'wait_for_lead_to_cross' or l1_action == 'wait-for-oncoming':
+        if l1_action == 'decelerate-to-stop' or l1_action == 'wait-on-red' or l1_action == 'wait_for_lead_to_cross' or l1_action == 'wait-for-oncoming' or l1_action == 'yield-to-merging':
             V, path = utils.generate_baseline_trajectory(time_tx,baseline_path,veh_state.speed,veh_state.long_acc,max_dec,max_dec_jerk,0.0,constants.LP_FREQ,False)
-        elif l1_action == 'proceed-turn' or l1_action == 'track_speed' or l1_action == 'follow_lead' or l1_action == 'follow_lead_into_intersection':
+        elif l1_action == 'proceed-turn' or l1_action == 'track_speed' or l1_action == 'follow_lead' or l1_action == 'follow_lead_into_intersection' or l1_action == 'cut-in':
             if l1_action == 'proceed-turn':
                 v_g = 8.8
             elif l1_action == 'follow_lead' or l1_action == 'follow_lead_into_intersection':
                 v_g = veh_state.leading_vehicle.speed
+            elif l1_action == 'cut-in':
+                v_g = min(8.8, math.sqrt(veh_state.speed**2 + 2*max((veh_state.long_acc+max_acc)/2,0)*math.hypot(veh_state.x-baseline_path[-1][0], veh_state.y-baseline_path[-1][1])))
             else:
                 v_g = max(16,veh_state.speed)
             V, path = utils.generate_baseline_trajectory(time_tx,baseline_path,veh_state.speed,veh_state.long_acc,max_acc,max_acc_jerk,v_g,constants.LP_FREQ,True)
@@ -457,6 +466,7 @@ def get_exitline_from_direction(direction,veh_state):
     else:
         exit_segment = 'exec-turn_'+direction[2].lower()
     return get_exitline(exit_segment)
+
 
 def get_exitline(exit_segment):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')

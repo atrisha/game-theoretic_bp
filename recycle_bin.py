@@ -4,6 +4,30 @@ Created on Mar 19, 2020
 @author: Atrisha
 '''
 
+
+def calc_max_num_relev_agents():
+    ''' calc max num of relev agents start'''
+        max_vals = [None,None,-np.inf]
+        for k,v in traj_metadata.items():
+            relev_dict = dict()
+            for k1,v1 in v.items():
+                if k1 == 'raw_data':
+                    for rdk1,rdv1 in v1.items():
+                        (ag_id,relev_agent) = [int(s) for s in rdk1.split('-')]
+                        if ag_id not in relev_dict:
+                            relev_dict[ag_id] = [relev_agent]
+                        else:
+                            relev_dict[ag_id].append(relev_agent)
+            max_num_agent = max([len(s) for s in list(relev_dict.values())])
+            max_ag_id = None
+            for k1,v1 in relev_dict.items():
+                if len(v1) == max_num_agent:
+                    max_ag_id = k1
+            if max_num_agent >= max_vals[2]:
+                max_vals = [k,max_ag_id,max_num_agent]
+        f=1        
+        ''' end '''
+
 def get_traj_metadata():
     if not os.path.isfile(constants.L3_ACTION_CACHE+'traj_metadata.dict'):
         dir = constants.L3_ACTION_CACHE
@@ -118,7 +142,7 @@ def generate_equilibrium_trajectories():
     veh_state_ts = init_veh_state
     eq_tree_key = ''
     traj_pattern = '769'+str(subject_agent_id_str)+'......._'+str(start_ts)
-    ''' we will work with only the mean payoff equilibria for now'''
+    ''' we will work with only the mean payoff equilibria_core for now'''
     eq_list = cost_evaluation.calc_equilibria(constants.L3_ACTION_CACHE,traj_pattern,'mean',start_ts)
     eq_tree_key = eq_tree_key + '_' + str(start_ts)
     if eq_tree_key not in eq_dict:
@@ -140,7 +164,7 @@ def generate_equilibrium_trajectories():
                     file_key = os.path.join(constants.L3_ACTION_CACHE, cache_dir, strtg_key)
                 traj = utils.pickle_load(file_key)
                 
-                ''' we will work with only the mean payoff equilibria for now'''
+                ''' we will work with only the mean payoff equilibria_core for now'''
                 #traj_type = traj[int(traj_idx[i])][1]
                 plan_horizon_slice = int(constants.PLAN_FREQ / constants.LP_FREQ)
                 #utils.plot_velocity(traj[int(traj_idx[i])][0][4,:plan_horizon_slice],11,(0,30))
@@ -185,7 +209,7 @@ def generate_simulation_action_plans(veh_state_prev,sv_info,list_of_rv_info,cach
     veh_state.track_info_set = False
     veh_state.track_id = veh_state.id
     ''' this has already been incremented '''
-    curr_time = sv_info['current_time']
+    time_ts = sv_info['current_time']
     veh_state.set_current_time(veh_state_prev.current_time+constants.PLAN_FREQ)
     veh_state.x = sv_info['trajectories'][1]
     veh_state.y = sv_info['trajectories'][2]
@@ -239,29 +263,29 @@ def generate_simulation_action_plans(veh_state_prev,sv_info,list_of_rv_info,cach
         veh_current_lane = veh_direction
     veh_state.set_current_lane(veh_current_lane)
         
-    if curr_time not in veh_state.action_plans:
-        veh_state.action_plans[curr_time] = dict()
+    if time_ts not in veh_state.action_plans:
+        veh_state.action_plans[time_ts] = dict()
     actions = utils.get_actions(veh_state)
     actions_l1 = list(actions.keys())
     for l1 in actions_l1:
         actions_l2 = actions[l1]
         for l2 in actions_l2:
-            if l1 not in veh_state.action_plans[curr_time]:
-                veh_state.action_plans[curr_time][l1] = dict()
-            veh_state.action_plans[curr_time][l1][l2] = None
+            if l1 not in veh_state.action_plans[time_ts]:
+                veh_state.action_plans[time_ts][l1] = dict()
+            veh_state.action_plans[time_ts][l1][l2] = None
             trajectory_plan = motion_planner.TrajectoryPlan(l1,l2,task)
             trajectory_plan.set_lead_vehicle(None)
             ''' l3_action_trajectory file id: file_id(3),agent_id(3),relev_agent_id(3),l1_action(2),l2_action(2)'''
             cache_dir_key = cache_dir
-            file_key = os.path.join(constants.L3_ACTION_CACHE, cache_dir_key, get_l3_action_file(None, agent_id, 0, curr_time, l1, l2))
-            print('time',curr_time,'agent',agent_id,l1,l2)
+            file_key = os.path.join(constants.L3_ACTION_CACHE, cache_dir_key, get_l3_action_file(None, agent_id, 0, time_ts, l1, l2))
+            print('time',time_ts,'agent',agent_id,l1,l2)
             if not os.path.isfile(file_key):
                 l3_actions = trajectory_plan.generate_trajectory(veh_state)
                 if len(l3_actions) > 0:
                     utils.pickle_dump(file_key, l3_actions)
             else:
                 l3_actions = utils.pickle_load(file_key)
-            veh_state.action_plans[curr_time][l1][l2] = np.copy(l3_actions)
+            veh_state.action_plans[time_ts][l1][l2] = np.copy(l3_actions)
             
     
     for r_a_id, r_a_state in relev_agents_dict.items():
@@ -278,7 +302,7 @@ def generate_simulation_action_plans(veh_state_prev,sv_info,list_of_rv_info,cach
         
         ''' get relevant state attributes from previous step '''
         lead_vehicle = None
-        for _r in veh_state.action_plans[curr_time-1]['relev_agents']:
+        for _r in veh_state.action_plans[time_ts-1]['relev_agents']:
             if _r.id == r_a_state.id:
                 ''' this is the segment from previous time stamp at this point'''
                 r_a_state.current_segment = _r.current_segment
@@ -307,8 +331,8 @@ def generate_simulation_action_plans(veh_state_prev,sv_info,list_of_rv_info,cach
             else:
                 lead_vehicle = setup_lead_vehicle(lead_vehicle,False)
         r_a_state.set_leading_vehicle(lead_vehicle)
-        if curr_time not in r_a_state.action_plans:
-            r_a_state.action_plans[curr_time] = dict()
+        if time_ts not in r_a_state.action_plans:
+            r_a_state.action_plans[time_ts] = dict()
         r_a_actions = utils.get_actions(r_a_state)
         r_a_actions_l1 = list(r_a_actions.keys())
         for l1 in actions_l1:
@@ -320,16 +344,16 @@ def generate_simulation_action_plans(veh_state_prev,sv_info,list_of_rv_info,cach
                 
                 ''' l3_action_trajectory file id: file_id(3),agent_id(3),relev_agent_id(3),l1_action(2),l2_action(2)'''
                 cache_dir_key = cache_dir
-                file_key = os.path.join(constants.L3_ACTION_CACHE, cache_dir_key, get_l3_action_file(None, agent_id, r_a_state.id, curr_time, l1, l2))
-                if l1 not in r_a_state.action_plans[curr_time]:
-                    r_a_state.action_plans[curr_time][l1] = dict()
-                    r_a_state.action_plans[curr_time][l1][l2] = None
+                file_key = os.path.join(constants.L3_ACTION_CACHE, cache_dir_key, get_l3_action_file(None, agent_id, r_a_state.id, time_ts, l1, l2))
+                if l1 not in r_a_state.action_plans[time_ts]:
+                    r_a_state.action_plans[time_ts][l1] = dict()
+                    r_a_state.action_plans[time_ts][l1][l2] = None
                 trajectory_plan = motion_planner.TrajectoryPlan(l1,l2,r_a_task)
                 trajectory_plan.set_lead_vehicle(lead_vehicle)
                 if lead_vehicle is not None:
-                    print('time',curr_time,'agent',agent_id,'relev agent',r_a_state.id,l1,'(lv:'+str(lead_vehicle.id)+')',l2)
+                    print('time',time_ts,'agent',agent_id,'relev agent',r_a_state.id,l1,'(lv:'+str(lead_vehicle.id)+')',l2)
                 else:
-                    print('time',curr_time,'agent',agent_id,'relev agent',r_a_state.id,l1,l2)
+                    print('time',time_ts,'agent',agent_id,'relev agent',r_a_state.id,l1,l2)
                 if not os.path.isfile(file_key):
                     l3_actions = trajectory_plan.generate_trajectory(r_a_state)
                     if len(l3_actions) > 0:
@@ -337,13 +361,13 @@ def generate_simulation_action_plans(veh_state_prev,sv_info,list_of_rv_info,cach
                 else:
                     l3_actions = utils.pickle_load(file_key)
                 l3_action_size = l3_actions.shape[0] if l3_actions is not None else 0
-                r_a_state.action_plans[curr_time][l1][l2] = np.copy(l3_actions)
+                r_a_state.action_plans[time_ts][l1][l2] = np.copy(l3_actions)
                     
                 
-        if 'relev_agents' not in veh_state.action_plans[curr_time]:
-            veh_state.action_plans[curr_time]['relev_agents'] = [r_a_state]
+        if 'relev_agents' not in veh_state.action_plans[time_ts]:
+            veh_state.action_plans[time_ts]['relev_agents'] = [r_a_state]
         else:
-            veh_state.action_plans[curr_time]['relev_agents'].append(r_a_state)
+            veh_state.action_plans[time_ts]['relev_agents'].append(r_a_state)
     #print(relev_agents)
     return veh_state
 
@@ -369,15 +393,15 @@ def setup_init_scene(agent_id):
     veh_state.action_plans = dict()
     veh_state.origin = (float(agent_track[0,1]),float(agent_track[0,2]))
     track_info = agent_track[0]
-    curr_time = float(track_info[6,])
+    time_ts = float(track_info[6,])
     init_veh_state = generate_action_plans(veh_state,0)
     return init_veh_state
 
 
 
-def get_simulation_cache_dir(file_id,agent_id,curr_time):
-    curr_time = round(float(curr_time)*1000)
+def get_simulation_cache_dir(file_id,agent_id,time_ts):
+    time_ts = round(float(time_ts)*1000)
     file_id = '769'
     agent_id = str(agent_id).zfill(3)
-    dir_key = file_id+agent_id+'_'+str(curr_time)
+    dir_key = file_id+agent_id+'_'+str(time_ts)
     return dir_key

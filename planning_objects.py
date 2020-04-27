@@ -81,6 +81,12 @@ class VehicleState:
         
     def set_direction(self,direction):
         self.direction = direction
+        
+    def set_task(self,task):
+        self.task = task
+        
+    def set_time_to_next_signal(self, next_signal_change):
+        self.next_signal_change = next_signal_change
 
 def kph_to_mps(kph):
     return kph/3.6

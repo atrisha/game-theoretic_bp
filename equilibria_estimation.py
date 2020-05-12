@@ -8,16 +8,21 @@ import equilibria_core
 import utils
 import cost_evaluation
 import itertools
-import constants
+from constants import *
 import numpy as np
 import db_utils
 import matplotlib.pyplot as plt
 from planning_objects import VehicleState
-from equilibria_objects import Equilibria
+from equilibria_objects import *
 import math
 import sqlite3
 import ast
 from dask.dataframe.tests.test_rolling import idx
+import logging
+logging.basicConfig(format='%(levelname)-8s %(filename)s: %(message)s',level=logging.INFO)
+
+
+
 
 
 def calc_equilibria(curr_time,traj_det,payoff_type,status_str,param_str,emp_action):
@@ -81,20 +86,20 @@ def calc_equilibria(curr_time,traj_det,payoff_type,status_str,param_str,emp_acti
     num_agents = len(agent_ids)
     payoff_trajectories_indices_dict = dict()
     equilibria_actions,sv_all_resp_payoffs = [],[]
-    eval_config = cost_evaluation.EvalConfig('baseline_only')
+    eval_config = EvalConfig('baseline_only')
     eval_config.set_traffic_signal(traffic_signal)
     traj_info_to_traj_id = dict()
-    if constants.BASELINE_TRAJECTORIES_ONLY:
+    if BASELINE_TRAJECTORIES_ONLY:
         all_traj_info_ids = []
         for a_c in all_action_combinations:
             for a in a_c:
-                l1_action = [k for k,v in constants.L1_ACTION_CODES.items() if v == int(a[9:11])][0]
-                l2_action = [k for k,v in constants.L2_ACTION_CODES.items() if v == int(a[11:13])][0]
+                l1_action = [k for k,v in L1_ACTION_CODES.items() if v == int(a[9:11])][0]
+                l2_action = [k for k,v in L2_ACTION_CODES.items() if v == int(a[11:13])][0]
                 _k= str(int(a[3:6]))+'-'+str(int(a[6:9]))
                 traj_info_id = [x for x in traj_det['raw_data'][_k] if x[4]==l1_action and x[5]==l2_action][0][1]
                 if traj_info_id not in all_traj_info_ids:
                     all_traj_info_ids.append(traj_info_id)
-        traj_dict_for_traj_info = utils.load_trajs_for_traj_info_id(all_traj_info_ids, constants.BASELINE_TRAJECTORIES_ONLY)
+        traj_dict_for_traj_info = utils.load_trajs_for_traj_info_id(all_traj_info_ids, BASELINE_TRAJECTORIES_ONLY)
         for k,v in traj_dict_for_traj_info.items():
             eval_config.traj_dict[k] = [x[1:] for x in v]
             traj_info_to_traj_id[v[0][0]] = k
@@ -107,18 +112,18 @@ def calc_equilibria(curr_time,traj_det,payoff_type,status_str,param_str,emp_acti
         if calc_beliefs:
             eval_config.set_curr_beliefs(all_belief_combinations[i])
         for a in a_c:
-            l1_action = [k for k,v in constants.L1_ACTION_CODES.items() if v == int(a[9:11])][0]
-            l2_action = [k for k,v in constants.L2_ACTION_CODES.items() if v == int(a[11:13])][0]
+            l1_action = [k for k,v in L1_ACTION_CODES.items() if v == int(a[9:11])][0]
+            l2_action = [k for k,v in L2_ACTION_CODES.items() if v == int(a[11:13])][0]
             _k= str(int(a[3:6]))+'-'+str(int(a[6:9]))
             traj_info_id = [x for x in traj_det['raw_data'][_k] if x[4]==l1_action and x[5]==l2_action][0][1]
-            if not constants.BASELINE_TRAJECTORIES_ONLY:
-                traj_ids = utils.load_traj_ids_for_traj_info_id(traj_info_id, constants.BASELINE_TRAJECTORIES_ONLY)
+            if not BASELINE_TRAJECTORIES_ONLY:
+                traj_ids = utils.load_traj_ids_for_traj_info_id(traj_info_id, BASELINE_TRAJECTORIES_ONLY)
                 traj_id_list.append(traj_ids)
             else:
                 eval_config.strat_traj_ids.append([traj_info_to_traj_id[traj_info_id]])
                 
         #print('calculating payoffs')
-        if not constants.BASELINE_TRAJECTORIES_ONLY:
+        if not BASELINE_TRAJECTORIES_ONLY:
             payoffs,traj_indices,eq = cost_evaluation.calc_l3_equilibrium_payoffs(True,True,traj_id_list,a_c,traffic_signal)
             if a_c not in pay_off_dict:
                 pay_off_dict[a_c] = payoffs
@@ -133,7 +138,7 @@ def calc_equilibria(curr_time,traj_det,payoff_type,status_str,param_str,emp_acti
             traj_ct += 1
             print(status_str,traj_ct,'/',N_traj_ct)
         #print('calculating payoffs....DONE')
-    if not constants.BASELINE_TRAJECTORIES_ONLY:    
+    if not BASELINE_TRAJECTORIES_ONLY:    
         seq = ['max','min','mean']
         
         for i in np.arange(len(seq)):
@@ -190,115 +195,12 @@ def calc_equilibria(curr_time,traj_det,payoff_type,status_str,param_str,emp_acti
     #print(len(all_action_combinations))
     return equilibria_actions,sub_veh_actions,sv_all_resp_payoffs
 
-def truncate(number, digits) -> float:
-    stepper = 10.0 ** digits
-    return math.trunc(stepper * number) / stepper
 
-def calc_empirical_actions(time_ts,act_dict,sv_only):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
-    c = conn.cursor()
-    agent_acts = dict()
-    agent_id = None
-    for k,v in act_dict.items():
-        if k!='raw_data' and k!='relev_agents':
-            agent_id = k
-    for k,v in act_dict.items():
-        if k == 'raw_data':
-                continue
-        if k == 'relev_agents':
-            for ra,rv in act_dict[k].items():
-                ac_l = []
-                for l1,l2 in rv.items():
-                    for l2_a in l2:
-                        act_str = ((l1,l2_a),None)
-                        ac_l.append(act_str)
-                agent_acts[(agent_id,ra)] = ac_l
-        else:
-            ac_l = []
-            for l1,l2 in v.items():
-                for l2_a in l2:
-                    act_str = ((l1,l2_a),None)
-                    ac_l.append(act_str)
-            agent_acts[(k,0)] = ac_l
-    for k,v in agent_acts.items():
-        veh_state = VehicleState()
-        id = k[0] if k[1]==0 else k[1]
-        veh_state.set_id(id)
-        agent_track = utils.get_track(veh_state, time_ts, True)
-        if agent_track is not None and len(agent_track) > 1:
-            selected_time_ts = np.arange(0,min(len(agent_track),(constants.DATASET_FPS*constants.PLAN_FREQ)+(constants.DATASET_FPS*constants.LP_FREQ)),constants.DATASET_FPS*constants.LP_FREQ)
-            ts_sampled_track = [agent_track[int(i)] for i in selected_time_ts]
-            sampled_traj = [(round(x[6],3),x[1],x[2]) for x in ts_sampled_track]
-            acts_with_residual = []
-            for acts in v:
-                if truncate(time_ts,1) != truncate(sampled_traj[0][0],1):
-                    ''' the starting timestamps of the two trajectories are different. (The trajectory arrives in the scene later than the current time) '''
-                    emp_traj_start_ts = sampled_traj[0][0]
-                    q_string = "select distinct time from GENERATED_TRAJECTORY_INFO where GENERATED_TRAJECTORY_INFO.AGENT_ID="+str(id)+" or GENERATED_TRAJECTORY_INFO.RELEV_AGENT_ID="+str(id)+" order by time"
-                    c.execute(q_string)
-                    available_times = [x[0] for x in c.fetchall()]
-                    if emp_traj_start_ts > available_times[-1]:
-                        ''' there is no appropriate baseline track for this agent for the current time'''
-                        baseline_track = None
-                    else:
-                        ''' find the closest baseline track. we want to extrapolate the first observed action of this agent back to the current time.'''
-                        baseline_track_time_ref = available_times[[round(x) for x in available_times].index(int(emp_traj_start_ts))]
-                        baseline_track = utils.get_baseline_trajectory(agent_id, k[1], acts[0][0], acts[0][1], baseline_track_time_ref) 
-                else:
-                    baseline_track = utils.get_baseline_trajectory(agent_id, k[1], acts[0][0], acts[0][1], time_ts) 
-                if baseline_track is not None:
-                    baseline_traj = [(x[2],x[3],x[4]) for x in baseline_track]
-                    _traj_diff = utils.calc_traj_diff(sampled_traj, baseline_traj)
-                    acts_with_residual.append((acts[0],_traj_diff))
-                else:
-                    acts_with_residual.append((acts[0],np.inf))
-            agent_acts[k] = sorted(acts_with_residual, key=lambda tup: tup[1])
-        else:
-            brk = 1
-    empirical_acts = []
-    for k,v in agent_acts.items():
-        _act_str = []
-        if sv_only:
-            if k[1] == 0:
-                for acts in v:
-                    if acts[1] == v[0][1]:
-                        empirical_acts.append(str(k[0]).zfill(3)+'_'+str(k[1]).zfill(3)+'_'+acts[0][0]+'_'+acts[0][1])
-        else:
-            for acts in v:
-                if acts[1] == v[0][1]:
-                    _act_str.append(str(k[0]).zfill(3)+'_'+str(k[1]).zfill(3)+'_'+acts[0][0]+'_'+acts[0][1])
-            empirical_acts.append(_act_str)
-    conn.close()
-    return empirical_acts
+
+
             
 
-def split_traj_metadata_by_agents(m_data):
-    agents = dict()
-    for k,v in m_data.items():
-        if k == 'raw_data':
-            for rdk,rdv in v.items():
-                (ag_id,relev_agent) = [int(s) for s in rdk.split('-')]
-                if ag_id not in agents:
-                    agents[ag_id] = [relev_agent]
-                else:
-                    agents[ag_id].append(relev_agent)
-    split_dict = {k:dict() for k in agents.keys()}
-    for ag_id,ag_v in agents.items():
-        for k,v in m_data.items():
-            if k == 'raw_data':
-                split_dict[ag_id][k] = dict()
-                for rd_k,rd_v in v.items():
-                    if int(rd_k.split('-')[0]) == ag_id:
-                        split_dict[ag_id][k][rd_k] = rd_v
-            elif k == 'relev_agents':
-                split_dict[ag_id][k] = dict()
-                for ra_k,ra_v in v.items():
-                    if ra_k in ag_v:
-                        split_dict[ag_id][k][ra_k] = ra_v
-            else:
-                if k == ag_id:
-                    split_dict[ag_id][k] = v
-    return split_dict
+
                 
                 
                         
@@ -423,7 +325,7 @@ def analyse_equilibrium_data():
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
     all_segs = ['prep-turn%','exec-turn%','ln\__\__']
-    for seg in ['prep-turn%','exec-turn%']:
+    for seg in ['ln\__\__']:
         eq_dict_l = []
         q_string = "select * from EQUILIBRIUM_ACTIONS where EQUILIBRIUM_ACTIONS.TRAFFIC_SIGNAL in ('G','Y') and EQ_CONFIG_PARMS= 'l2_Nash|l3_baseline_only' and EQUILIBRIUM_ACTIONS.SEGMENT like '"+seg+"' ESCAPE '\\' "
         c.execute(q_string)                 
@@ -509,10 +411,20 @@ def calc_eqs_for_hopping_trajectories():
     param_str = 'l2_BR_w_true_belief|l3_baseline_only'
     if update_only:
         eq_acts_in_db = get_equil_action_in_db(param_str)
+    eval_config = EvalConfig()
     task_list = ['S_W','W_N']
-    for task in task_list:
-        traj_metadata = db_utils.get_traj_metadata(task)
-        step_size_secs = constants.PLAN_FREQ
+    for direction in task_list:
+        logging.info('setting parameters')
+        eval_config.setup_parameters(direction)
+        eval_config.set_l1_eq_type(L1_EQ_TYPE)
+        eval_config.set_l3_eq_type(L3_EQ_TYPE)
+        eq = Equilibria(eval_config)
+        logging.info('setting empirical actions')
+        eq.calc_empirical_actions()
+        equilibria_dict = eq.calc_equilibrium()
+        f=1
+        '''
+        step_size_secs = PLAN_FREQ
         ct = 0
         N_tot = len(traj_metadata)
         for k,v in traj_metadata.items():
@@ -530,7 +442,7 @@ def calc_eqs_for_hopping_trajectories():
                         if ag_id in eq_acts_in_db[k]:
                             continue
                 if len(ag_dat[ag_id]) == 0:
-                    ''' the subject agent has no registered action (might be due to only partial track in data), so continue '''
+                     the subject agent has no registered action (might be due to only partial track in data), so continue 
                     continue
                 if param_str == 'l2_BR_w_true_belief|l3_baseline_only':
                     sv_only = False
@@ -547,14 +459,14 @@ def calc_eqs_for_hopping_trajectories():
                         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
                         for _ag_idx,act in enumerate(eqs):
                             agent_id = int(act[6:9]) if int(act[6:9])!=0 else int(act[3:6]) 
-                            file_key = constants.L3_ACTION_CACHE+act
+                            file_key = L3_ACTION_CACHE+act
                             traj = utils.pickle_load(file_key)
                             #visualizer.plot_all_trajectories(traj,ax1,ax2,ax3)
-                            plan_horizon_slice = step_size_secs * int(constants.PLAN_FREQ / constants.LP_FREQ)
-                            ''' we can cut the slice from 0 since the trajectory begins at the given timestamp (i) and not from the beginning of the scene '''
+                            plan_horizon_slice = step_size_secs * int(PLAN_FREQ / LP_FREQ)
+                             we can cut the slice from 0 since the trajectory begins at the given timestamp (i) and not from the beginning of the scene 
                             traj_slice = traj[int(traj_idx[_ag_idx])][0][:,:plan_horizon_slice]
                             traj_vels = traj_slice[4,:] 
-                            '''get the timestamp in ms and convert it to seconds'''
+                            get the timestamp in ms and convert it to seconds
                             horizon_start = int(act.split('_')[1])/1000
                             horizon_end = step_size_secs + (int(act.split('_')[1])+step_size_secs)/1000
                             traj_vels_times = [horizon_start + x for x in traj_slice[0,:]]
@@ -562,6 +474,6 @@ def calc_eqs_for_hopping_trajectories():
                         plt.show()
                         plt.clf()
 
-                
+        '''        
 
-analyse_equilibrium_data()
+calc_eqs_for_hopping_trajectories()

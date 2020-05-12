@@ -26,32 +26,51 @@ import equilibria_core
 from scipy.interpolate import CubicSpline
 from planning_objects import TrajectoryDef
 from collections import OrderedDict
+import db_utils
 
 
-class EvalConfig:
+
+
+
+
+
+
+class CostEvaluation():
     
-    def __init__(self,eval_type):
-        self.eval_type = eval_type
-        self.traj_dict = dict()
-        strat_traj_ids = []
+       
+    def calc_l3_payoffs(self,eq,strategy_tuple):
+        if eq.eval_config.l3_eq is None:
+            ''' payoffs will be calculated just from the baselines '''
+            baseline_ids = [[int(x.split('-')[1])] for x in strategy_tuple]
+            all_possible_payoffs = {k:np.zeros(shape=len(k)) for k in list(itertools.product(*[v for v in baseline_ids]))}
+            traj_dict_list = [{t:eq.trajectory_cache[k[0]] for t in k} for k in baseline_ids]
+        else:
+            ''' payoffs will be calculated based on some equilibrium'''
+            all_possible_payoffs = eq.l3_utility_dict
+        all_possible_payoffs_inh,all_possible_payoffs_exc = 0,0
         
-    def set_l3_traj_dict(self,traj_dict):
-        self.traj_dict = traj_dict
         
-    def set_num_agents(self,num_agents):
-        self.num_agents = num_agents
+        '''
+        if len(eval_config.traj_dict) > 0:
+            traj_dict_list = [{t:np.vstack(eval_config.traj_dict[k[0]]) for t in k} for k in eval_config.strat_traj_ids]
+        else:
+            traj_dict_list = utils.load_traj_from_db(chosen_trajectory_ids,baseline_only)
+        '''
+        if constants.INHIBITORY:
+            all_possible_payoffs_inh = eval_inhibitory(traj_dict_list, all_possible_payoffs, strategy_tuple)
+        if constants.EXCITATORY:
+            all_possible_payoffs_exc = eval_excitatory(traj_dict_list, all_possible_payoffs, strategy_tuple)
+        for k,v in all_possible_payoffs.items():
+            if constants.INHIBITORY and constants.EXCITATORY:
+                all_possible_payoffs[k] = all_possible_payoffs[k] + (constants.INHIBITORY_PAYOFF_WEIGHT * all_possible_payoffs_inh[k])
+                all_possible_payoffs[k] = all_possible_payoffs[k] + (constants.EXCITATORY_PAYOFF_WEIGHT * all_possible_payoffs_exc[k])
+            else:
+                if constants.EXCITATORY:
+                    all_possible_payoffs[k] = all_possible_payoffs[k] +  all_possible_payoffs_exc[k]
+                if constants.INHIBITORY:
+                    all_possible_payoffs[k] = all_possible_payoffs[k] + all_possible_payoffs_inh[k]
         
-    def set_traffic_signal(self,traffic_signal):
-        self.traffic_signal = traffic_signal
-        
-    def set_curr_strat_tuple(self,strat_tuple):
-        self.strat_tuple = strat_tuple
-        
-    def set_curr_beliefs(self,strat_beliefs):
-        self.belief_tuple = strat_beliefs
-        
-    def set_curr_strat_traj_ids(self, curr_traj_ids):
-        self.strat_traj_ids = curr_traj_ids
+        return all_possible_payoffs
 
 
 def eval_trajectory_viability(traj_id_list):
@@ -89,35 +108,13 @@ def eval_regulatory(traj_list,time_ts,dist_arr,traffic_signal,strat_str):
     
 
 def calc_baseline_traj_payoffs(eval_config):
+    cost_eval = CostEvaluation(eval_config)
     num_agents = eval_config.num_agents
     chosen_trajectory_ids = eval_config.strat_traj_ids
     chosen_trajectory_id_combinations = list(itertools.product(*chosen_trajectory_ids))
-    all_possible_payoffs = calc_l3_payoffs(chosen_trajectory_id_combinations,chosen_trajectory_ids,num_agents,eval_config,True)
+    all_possible_payoffs = cost_eval.calc_l3_payoffs(chosen_trajectory_id_combinations,chosen_trajectory_ids,num_agents,eval_config,True)
     return all_possible_payoffs
     
-def calc_l3_payoffs(chosen_trajectory_id_combinations,chosen_trajectory_ids,num_agents,eval_config,baseline_only):
-    strategy_tuple = eval_config.strat_tuple
-    all_possible_payoffs = dict(zip(chosen_trajectory_id_combinations, [[0]*num_agents]*len(chosen_trajectory_id_combinations)))
-    all_possible_payoffs_inh,all_possible_payoffs_exc = 0,0
-    if len(eval_config.traj_dict) > 0:
-        traj_dict_list = [{t:np.vstack(eval_config.traj_dict[k[0]]) for t in k} for k in eval_config.strat_traj_ids]
-    else:
-        traj_dict_list = utils.load_traj_from_db(chosen_trajectory_ids,baseline_only)
-    if constants.INHIBITORY:
-        all_possible_payoffs_inh = eval_inhibitory(traj_dict_list, all_possible_payoffs, strategy_tuple)
-    if constants.EXCITATORY:
-        all_possible_payoffs_exc = eval_excitatory(traj_dict_list, all_possible_payoffs, strategy_tuple)
-    for k in chosen_trajectory_id_combinations:
-        if constants.INHIBITORY and constants.EXCITATORY:
-            all_possible_payoffs[k] = all_possible_payoffs[k] + (constants.INHIBITORY_PAYOFF_WEIGHT * all_possible_payoffs_inh[k])
-            all_possible_payoffs[k] = all_possible_payoffs[k] + (constants.EXCITATORY_PAYOFF_WEIGHT * all_possible_payoffs_exc[k])
-        else:
-            if constants.EXCITATORY:
-                all_possible_payoffs[k] = all_possible_payoffs[k] +  all_possible_payoffs_exc[k]
-            if constants.INHIBITORY:
-                all_possible_payoffs[k] = all_possible_payoffs[k] + all_possible_payoffs_inh[k]
-    
-    return all_possible_payoffs
 
 def calc_l3_equilibrium_payoffs(inhibitory,excitatory,traj_id_list,strategy_tuple,traffic_signal):
     num_agents = len(traj_id_list)
@@ -171,39 +168,7 @@ def calc_l3_equilibrium_payoffs(inhibitory,excitatory,traj_id_list,strategy_tupl
     
     return ns_dicts,eq,br     
 
-def eval_complexity(traj,strat_str):
-    if isinstance(traj, pd.DataFrame):
-        rv = traj['v'].to_numpy()
-        rx = traj['x'].to_numpy()
-        ry = traj['y'].to_numpy()
-        ra = traj['a'].to_numpy()
-        time = traj['time'].to_numpy()
-    else:
-        assert(traj.shape[1]==9)
-        rv,rx,ry,ra,time = traj[:,6],traj[:,3],traj[:,4],traj[:,7],traj[:,2]
-    dt = constants.LP_FREQ
-    traj_def = TrajectoryDef(strat_str)
-    '''
-    plt.plot(time,rv,'g')
-    plt.plot(time,ra,'r')
-    plt.show()
-    #linear_plan_x = utils.linear_planner(sx, vxs, axs, gx, vxg, axg, max_accel, max_jerk, dt)
-    '''
-    hpx = [rx[0],rx[len(rx)//3],rx[2*len(rx)//3],rx[-1]]
-    hpy = [ry[0],ry[len(ry)//3],ry[2*len(ry)//3],ry[-1]]
-    _d = OrderedDict(sorted(list(zip(hpx,hpy)),key=lambda tup: tup[0]))
-    hpx,hpy = list(_d.keys()),list(_d.values())
-    try:
-        cs = CubicSpline(hpx, hpy)
-    except ValueError:
-        print(hpx,hpy)
-        raise
-    path_residuals = sum([abs(cs(x)-ry[_i]) for _i,x in enumerate(rx)])
-    new_vels = utils.generate_baseline_trajectory(time,[(x,cs(x)) for x in rx],rv[0],ra[0],traj_def.max_acc_long/2,traj_def.max_jerk/2,rv[-1],dt,traj_def.acc)
-    slice_len = min(len(new_vels),len(rv))
-    vel_residuals = sum([abs(x[0]-x[1]) for x in zip(rv[:slice_len],  new_vels[:slice_len])])
-    compl = math.hypot(path_residuals, vel_residuals)
-    return compl
+
     
 def eval_trajectory_complexity_unloaded(traj_list,strategy_tuple):
     f = 1
@@ -212,7 +177,7 @@ def eval_trajectory_complexity_unloaded(traj_list,strategy_tuple):
         traj_complexity = []
         trajectories = utils.load_traj_from_str(file_str)
         for traj in trajectories:
-            compl = eval_complexity(traj,strat)
+            compl = utils.eval_complexity(traj,strat)
             traj_complexity.append(compl)
         _sum = sum(traj_complexity)
         traj_complexity = [x/_sum for x in traj_complexity]
@@ -234,12 +199,12 @@ def eval_inhibitory(traj_dict_list, all_possible_payoffs, strategy_tuple):
         for i in np.arange(num_agents):
             for j in np.arange(i,num_agents):
                 if i != j:
-                    s_x,r_x = traj_dict_list[i][traj_idx_tuple[i]][:,1],traj_dict_list[j][traj_idx_tuple[j]][:,1]
+                    s_x,r_x = traj_dict_list[i][traj_idx_tuple[i]][:,2],traj_dict_list[j][traj_idx_tuple[j]][:,2]
                     ''' for now calculate the plan payoffs instead of payoffs for the next 1 second '''
                     #slice_len = min(s_x.shape[0],r_x.shape[0])
                     slice_len = int(min(5*constants.PLAN_FREQ/constants.LP_FREQ,s_x.shape[0],r_x.shape[0]))
                     s_x,r_x = s_x[:slice_len],r_x[:slice_len]
-                    s_y,r_y = traj_dict_list[i][traj_idx_tuple[i]][:,2],traj_dict_list[j][traj_idx_tuple[j]][:,2]
+                    s_y,r_y = traj_dict_list[i][traj_idx_tuple[i]][:,3],traj_dict_list[j][traj_idx_tuple[j]][:,3]
                     #slice_len = min(s_y.shape[0],r_y.shape[0])
                     slice_len = int(min(5*constants.PLAN_FREQ/constants.LP_FREQ,s_y.shape[0],r_y.shape[0]))
                     s_y,r_y = s_y[:slice_len],r_y[:slice_len]
@@ -261,8 +226,8 @@ def eval_excitatory(traj_dict_list, all_possible_payoffs, strategy_tuple):
     for traj_idx_tuple in all_possible_payoffs.keys():
         payoffs = np.full(shape=(num_agents,),fill_value=np.inf)
         for i in np.arange(num_agents):
-            s_V = traj_dict_list[i][traj_idx_tuple[i]][:,4]
-            s_traj = list(zip(traj_dict_list[i][traj_idx_tuple[i]][:,1],traj_dict_list[i][traj_idx_tuple[i]][:,2]))
+            s_V = traj_dict_list[i][traj_idx_tuple[i]][:,5]
+            s_traj = list(zip(traj_dict_list[i][traj_idx_tuple[i]][:,2],traj_dict_list[i][traj_idx_tuple[i]][:,3]))
             traj_len = utils.calc_traj_len(s_traj)
             
             ''' for now calculate the plan payoffs '''

@@ -213,18 +213,8 @@ def debug_traj():
     plt.plot(tx[:-2],V)
     plt.show()
 
-def plot_regions():
-    import ast
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
-    c = conn.cursor()
-    q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point' and region_property <> 'left_boundary'"
-    c.execute(q_string)
-    q_res = c.fetchall()
-    plt.axis("equal")
-    for row in q_res:
-        plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
-    plt.show()
 
+'''
 import scipy.special
 import constants
 def dist_payoffs(dist_arr):
@@ -232,7 +222,30 @@ def dist_payoffs(dist_arr):
 
 plt.plot(np.arange(0,50,.1),dist_payoffs(np.arange(0,50,.1)))
 plt.show()
+'''
 
+
+    
+import utils
+import numpy as np
+A1,B1 = [538856.03,4814002.42],[538855.83,4814005.40]
+A2,B2 = (538833.73,4813993.36),(538836.72,4813992.06)
+pt = (538859.98,4814009.83)
+#pt = [538854.94,4814004.24]
+#pt = [538830.43,4813993.59]
+#pt = [538831.95,4813989.97]
+A1,B1,A2,B2,pt = np.asarray(A1),np.asarray(B1),np.asarray(A2),np.asarray(B2),np.asarray(pt)
+#print(utils.distance_numpy(A1, B1, pt))
+#print(utils.distance_numpy(A2, B2, pt))
+vector_1,vector_2 = pt-B1,pt-A2
+unit_vector_1 = vector_1 / np.linalg.norm(vector_1)
+unit_vector_2 = vector_2 / np.linalg.norm(vector_2)
+dot_product = np.dot(unit_vector_1, unit_vector_2)
+angle = np.arccos(dot_product)
+print(np.rad2deg(angle))
+print(utils.distance_numpy([538856.03,4814002.42], [538836.72,4813992.06], pt))
+print(utils.distance_numpy([538855.83,4814005.40], [538833.73,4813993.36], pt))
+print(A1-B1)
     
     
     

@@ -32,11 +32,16 @@ class TrajectoryPlan:
         yaw = veh_state.yaw
         hpx,hpy = [veh_state.x,veh_state.x+((constants.CAR_LENGTH/2)*np.cos(yaw))],[veh_state.y,veh_state.y+((constants.CAR_LENGTH/2)*np.sin(yaw))]
         path = None
-        if l1_action == 'proceed-turn' or l1_action == 'wait-for-oncoming':
+        if l1_action == 'proceed-turn' or l1_action == 'wait-for-oncoming' or l1_action == 'wait-for-pedestrian':
             proceed_pos_ends = get_exitline_from_direction(veh_state.direction,veh_state)
             if math.hypot(proceed_pos_ends[0][0]-veh_state.x, proceed_pos_ends[0][1]-veh_state.y) < constants.CAR_LENGTH/2:
                 proceed_pos_ends = get_exitline(veh_state.segment_seq[-1])
-            proceed_pos_yaw = math.atan2(proceed_pos_ends[1][0]-proceed_pos_ends[0][0], proceed_pos_ends[1][1]-proceed_pos_ends[1][1]) + (math.pi/2)
+            exit_segment = get_exitsegment_from_direction(veh_state.direction, veh_state)
+            mean_yaws = utils.get_mean_yaws_for_segments(exit_segment)
+            if exit_segment in mean_yaws:
+                proceed_pos_yaw = mean_yaws[exit_segment]
+            else:
+                proceed_pos_yaw = math.atan2(proceed_pos_ends[1][0]-proceed_pos_ends[0][0], proceed_pos_ends[1][1]-proceed_pos_ends[1][1]) + (math.pi/2)
             end_pos = ((proceed_pos_ends[1][0]+proceed_pos_ends[0][0])/2, (proceed_pos_ends[1][1]+proceed_pos_ends[1][1])/2)
             end_pos_but_last = (end_pos[0]-((constants.CAR_LENGTH/2)*np.cos(proceed_pos_yaw)) , end_pos[1]-((constants.CAR_LENGTH/2)*np.sin(proceed_pos_yaw)))
         elif l1_action == 'track_speed' or l1_action == 'follow_lead':
@@ -59,7 +64,11 @@ class TrajectoryPlan:
             stop_line = utils.get_exit_boundary(veh_state.current_segment)
             stop_point = (np.mean(stop_line[0]), np.mean(stop_line[1]))
             dist_to_stopline = math.hypot(stop_point[0]-veh_state.x, stop_point[1]-veh_state.y)
-            stop_yaw = math.atan2(stop_line[1][1]-stop_line[1][0], stop_line[0][1]-stop_line[0][0]) + math.pi/2
+            mean_yaws = utils.get_mean_yaws_for_segments(veh_state.current_segment) 
+            if veh_state.current_segment in mean_yaws:
+                stop_yaw = mean_yaws[veh_state.current_segment]
+            else: 
+                stop_yaw = math.atan2(stop_line[1][1]-stop_line[1][0], stop_line[0][1]-stop_line[0][0]) + math.pi/2
             if dist_to_stopline > constants.CAR_LENGTH/2:
                 hpx.append(stop_point[0])
                 hpy.append(stop_point[1])
@@ -103,11 +112,15 @@ class TrajectoryPlan:
         else:
             max_acc, max_dec, max_acc_jerk, max_dec_jerk = constants.MAX_LONG_ACC_NORMAL, constants.MAX_LONG_DEC_NORMAL/2, constants.MAX_ACC_JERK_NORMAL, constants.MAX_DEC_JERK_NORMAL
         time_tx = np.arange(veh_state.current_time,veh_state.current_time+constants.OTH_AGENT_L3_ACT_HORIZON,constants.LP_FREQ)
-        if l1_action == 'decelerate-to-stop' or l1_action == 'wait-on-red' or l1_action == 'wait_for_lead_to_cross' or l1_action == 'wait-for-oncoming' or l1_action == 'yield-to-merging':
+        if l1_action == 'decelerate-to-stop' or l1_action == 'wait-on-red' or l1_action == 'wait_for_lead_to_cross' or l1_action == 'wait-for-oncoming' or l1_action == 'yield-to-merging' \
+            or l1_action == 'wait-for-pedestrian':
             V, path = utils.generate_baseline_trajectory(time_tx,baseline_path,veh_state.speed,veh_state.long_acc,max_dec,max_dec_jerk,0.0,constants.LP_FREQ,False)
         elif l1_action == 'proceed-turn' or l1_action == 'track_speed' or l1_action == 'follow_lead' or l1_action == 'follow_lead_into_intersection' or l1_action == 'cut-in':
             if l1_action == 'proceed-turn':
-                v_g = 8.8
+                if veh_state.task == 'RIGHT_TURN':
+                    v_g = 7
+                else:
+                    v_g = 8.8
             elif l1_action == 'follow_lead' or l1_action == 'follow_lead_into_intersection':
                 v_g = veh_state.leading_vehicle.speed
             elif l1_action == 'cut-in':
@@ -460,13 +473,16 @@ def get_stopline(init_segment):
     conn.close()
     return stop_coordinates
 
-def get_exitline_from_direction(direction,veh_state):
+def get_exitsegment_from_direction(direction,veh_state):
     if constants.SEGMENT_MAP[veh_state.current_segment] == 'left-turn-lane':
         exit_segment = 'prep-turn_'+direction[2].lower()
     else:
         exit_segment = 'exec-turn_'+direction[2].lower()
-    return get_exitline(exit_segment)
+    return exit_segment
 
+def get_exitline_from_direction(direction,veh_state):
+    exit_segment = get_exitsegment_from_direction(direction, veh_state)
+    return get_exitline(exit_segment)
 
 def get_exitline(exit_segment):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')

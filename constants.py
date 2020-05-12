@@ -111,25 +111,41 @@ LANE_MAP = {'n_2-s_-1':'l_n_s_l',
             'w_2-e_-1':'l_w_e_l',
             }
 
-SEGMENT_MAP = {'ln_s_1':'left-turn-lane',
-               'ln_w_1':'left-turn-lane',
+SEGMENT_MAP = {
                'prep-turn_s':'prep-left-turn',
+               'prep-turn_n':'prep-left-turn',
+               'prep-turn_e':'prep-left-turn',
+               'exec-turn_e':'exec-left-turn',
+               'exec-turn_n':'exec-left-turn',
                'exec-turn_s':'exec-left-turn',
                'prep-turn_w':'prep-left-turn',
                'exec-turn_w':'exec-left-turn',
-               'ln_w_-1':'exit-lane',
+               'rt_prep-turn_s':'prep-right-turn',
+               'rt_exec-turn_s':'exec-right-turn',
+               'rt_prep-turn_w':'prep-right-turn',
+               'rt_exec-turn_w':'exec-right-turn',
                'ln_w_-2':'exit-lane',
-               'ln_n_-1':'exit-lane',
+               'ln_w_-1':'exit-lane',
+               'ln_w_1':'left-turn-lane',
+               'ln_w_2':'through-lane-entry',
+               'ln_w_3':'through-lane-entry',
+               'ln_w_4':'right-turn-lane',
                'ln_n_-2':'exit-lane',
+               'ln_n_-1':'exit-lane',
                'ln_n_1':'left-turn-lane',
                'ln_n_2':'through-lane-entry',
-               'ln_s_2':'through-lane-entry',
                'ln_n_3':'through-lane-entry',
+               'ln_s_-2':'exit-lane',
+               'ln_s_-1':'exit-lane',
+               'ln_s_1':'left-turn-lane',
+               'ln_s_2':'through-lane-entry',
+               'ln_s_3':'through-lane-entry',
+               'ln_s_4':'right-turn-lane',
+               'ln_e_-2':'exit-lane',
+               'ln_e_-1':'exit-lane',
                'ln_e_1':'left-turn-lane',
                'ln_e_2':'through-lane-entry',
                'ln_e_3':'through-lane-entry',
-               'ln_s_-1':'exit-lane',
-               'ln_s_-2':'exit-lane',
                'l_n_s_l':'through-lane',
                'l_n_s_r':'through-lane',
                'l_s_n_l':'through-lane',
@@ -147,6 +163,9 @@ DATASET_FPS = 30
 OTH_AGENT_L3_ACT_HORIZON = 5
 
 colors = ['k','g','r','c','m','b','w']
+BEFORE_CROSSWALK = 'BEFORE_CROSSWALK' 
+ON_CROSSWALK = 'ON_CROSSWALK'
+AFTER_CROSSWALK = 'AFTER_CROSSWALK' 
 
 L1_ACTION_CODES = {'wait-for-oncoming':1,
                    'proceed-turn':2,
@@ -157,7 +176,8 @@ L1_ACTION_CODES = {'wait-for-oncoming':1,
                    'follow_lead_into_intersection':7,
                    'wait-on-red':8,
                    'cut-in':9,
-                   'yield-to-merging':10}
+                   'yield-to-merging':10,
+                   'wait-for-pedestrian':11}
 
 L1_ACTION_CODES_2_NAME = {1:'wait',
                    2:'proceed-turn',
@@ -178,6 +198,8 @@ gate_map = {'north_exit':[72,73],
 RELEV_VEHS_TIME_THRESH = 1
 LEAD_VEH_DIST_THRESH = 50
 VEH_ARRIVAL_HORIZON = 3
+
+PEDESTRIAN_CROSSWALK_DIST_THRESH = 10
 
 
 L2_ACTION_CODES = {'AGGRESSIVE':1,
@@ -202,8 +224,18 @@ EXCITATORY_PAYOFF_WEIGHT = 0.5
 
 ''' This is kept here so that we don't have to query the db everytime'''
 VIEWPORT = ([538782.42,538861.33,538892.67,538811.68],[4814012.83,4814060.05,4814013.85,4813967.66])
+CROSSWALK_GATES = [(20,21),(36,37),(68,69),(66,67)]
+CROSSWALK_SIGNAL_MAP = {'P_20_21':'L_W_E',
+                        'P_36_37':'L_S_N',
+                        'P_68_69':'L_E_W',
+                        'P_66_67':'L_N_S'}
 
-''' analysis configurations '''
+''' equilibrium analysis configurations '''
 BASELINE_TRAJECTORIES_ONLY = True
 INHIBITORY = True
 EXCITATORY = True
+L1_EQ_TYPE = 'BR_TRUE_BELIEF'
+L3_EQ_TYPE = None
+
+
+CURRENT_FILE_ID = '769'

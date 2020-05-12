@@ -170,34 +170,34 @@ def plot_baselines():
     res = c.fetchall()
     traj_dict = dict()
     for row in res:
+        if row[1] in [13729,13730]:
+            continue
         if row[6] in traj_dict:
             traj_dict[row[6]].append(row[1])
         else:
             traj_dict[row[6]] = [row[1]] 
-    '''
-    for k,v in traj_dict.items():
-        q_string = "select * from GENERATED_TRAJECTORY where GENERATED_BASELINE_TRAJECTORY.TRAJECTORY_INFO_ID in "+str(tuple(all_traj_info_ids))
-    c.execute(q_string)
-    print(q_string)
-    '''
-    traj_dict = dict()
-    res = c.fetchall()
-    ct = 0
-    for row in res:
-        print(ct)
-        ct += 1
-        if row[0] not in traj_dict:
-            traj_dict[row[0]] = [ [ row[3] ], [ row[4] ] ]
-        else:
-            traj_dict[row[0]][0].append(row[3])
-            traj_dict[row[0]][1].append(row[4])
-    for k,v in traj_dict.items():
-        plt.plot(v[0],v[1])
     
-    ax = plt.gca()
-    ax.set_facecolor('black')
-    plt.axis('equaL')
-    plt.show()
+    for k,v in traj_dict.items():
+        q_string = "select * from GENERATED_BASELINE_TRAJECTORY where TRAJECTORY_INFO_ID in "+str(tuple(v))+" order by trajectory_id,time"
+        c.execute(q_string)
+        traj_dict = dict()
+        res = c.fetchall()
+        ct = 0
+        for row in res:
+            print(ct)
+            ct += 1
+            if row[0] not in traj_dict:
+                traj_dict[row[0]] = [ [ row[3] ], [ row[4] ] ]
+            else:
+                traj_dict[row[0]][0].append(row[3])
+                traj_dict[row[0]][1].append(row[4])
+        for k,v in traj_dict.items():
+            plt.plot(v[0],v[1])
+        
+        ax = plt.gca()
+        #ax.set_facecolor('black')
+        plt.axis('equaL')
+        plt.show()
     
     
 
@@ -214,5 +214,46 @@ def plot_all_trajectories(traj,ax1,ax2,ax3):
         ax2.plot(np.arange(len(V)),V)
         ax3.plot(np.arange(len(A)),A)
         
-        
-#plot_paths_for_traj_info_id()
+def plot_traffic_regions():
+    import ast
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point' and region_property <> 'left_boundary'"
+    c.execute(q_string)
+    q_res = c.fetchall()
+    plt.axis("equal")
+    for row in q_res:
+        plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
+    q_string = "SELECT X_POSITION,Y_POSITION FROM CONFLICT_POINTS"
+    c.execute(q_string)
+    q_res = c.fetchall()
+    plt.plot([x[0] for x in q_res], [x[1] for x in q_res], 'x')
+    plt.show()   
+    
+def plot_exit_yaws():
+    import ast
+    import utils
+    import math
+    import statistics
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    all_exits = dict()
+    c = conn.cursor()
+    q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point' and region_property == 'exit_boundary'"
+    c.execute(q_string)
+    q_res = c.fetchall()
+    plt.axis("equal")
+    for row in q_res:
+        plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
+        if row[0] not in all_exits:
+            all_exits[row[0]] = [ast.literal_eval(row[4]),ast.literal_eval(row[5])] 
+    yaws = utils.get_mean_yaws_for_segments(list(all_exits.keys()))
+    for k,v in yaws.items():
+        if k in all_exits:
+            plt.arrow(statistics.mean(all_exits[k][0]), statistics.mean(all_exits[k][1]), 5 * math.cos(v), 5 * math.sin(v), fc='r', ec='k', head_width=.25, head_length=.25)
+    plt.show()
+    
+      
+    
+    
+       
+#plot_traffic_regions()

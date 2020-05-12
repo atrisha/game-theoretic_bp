@@ -14,7 +14,7 @@ import sys
 import constants
 from matplotlib import cm
 import pickle
-from planning_objects import VehicleState
+from planning_objects import VehicleState,PedestrianState
 import os,shutil
 from matplotlib import path
 from decimal import Decimal
@@ -22,9 +22,13 @@ from collections import OrderedDict
 import pandas as pd
 from builtins import isinstance
 import planning_objects
+import statistics
+from scipy.interpolate import CubicSpline
 
 
 
+PI = math.pi
+PI_BY_2 = math.pi/2
 
 # from: https://gist.github.com/nim65s/5e9902cd67f094ce65b0
 def distance_numpy(A, B, P):
@@ -41,6 +45,81 @@ def distance_numpy(A, B, P):
     #return norm(cross(A-B, A-P))/norm(B-A),
     return cross(A-B, A-P)/norm(B-A)
 
+
+
+def truncate(number, digits) -> float:
+    stepper = 10.0 ** digits
+    return math.trunc(stepper * number) / stepper
+
+def split_traj_metadata_by_agents(m_data):
+    agents = dict()
+    for k,v in m_data.items():
+        if k == 'raw_data':
+            for rdk,rdv in v.items():
+                (ag_id,relev_agent) = [int(s) for s in rdk.split('-')]
+                if ag_id not in agents:
+                    agents[ag_id] = [relev_agent]
+                else:
+                    agents[ag_id].append(relev_agent)
+    split_dict = {k:dict() for k in agents.keys()}
+    for ag_id,ag_v in agents.items():
+        for k,v in m_data.items():
+            if k == 'raw_data':
+                split_dict[ag_id][k] = dict()
+                for rd_k,rd_v in v.items():
+                    if int(rd_k.split('-')[0]) == ag_id:
+                        split_dict[ag_id][k][rd_k] = rd_v
+            elif k == 'relev_agents':
+                split_dict[ag_id][k] = dict()
+                for ra_k,ra_v in v.items():
+                    if ra_k in ag_v:
+                        split_dict[ag_id][k][ra_k] = ra_v
+            else:
+                if k == ag_id:
+                    split_dict[ag_id][k] = v
+    return split_dict
+
+def angle_between_lines(A,B):
+    unit_vector_1 = A / np.linalg.norm(A)
+    unit_vector_2 = B / np.linalg.norm(B)
+    dot_product = np.dot(unit_vector_1, unit_vector_2)
+    angle = np.arccos(dot_product)
+    return angle
+
+
+def eval_complexity(traj,strat_str):
+    if isinstance(traj, pd.DataFrame):
+        rv = traj['v'].to_numpy()
+        rx = traj['x'].to_numpy()
+        ry = traj['y'].to_numpy()
+        ra = traj['a'].to_numpy()
+        time = traj['time'].to_numpy()
+    else:
+        assert(traj.shape[1]==9)
+        rv,rx,ry,ra,time = traj[:,6],traj[:,3],traj[:,4],traj[:,7],traj[:,2]
+    dt = constants.LP_FREQ
+    traj_def = planning_objects.TrajectoryDef(strat_str)
+    '''
+    plt.plot(time,rv,'g')
+    plt.plot(time,ra,'r')
+    plt.show()
+    #linear_plan_x = utils.linear_planner(sx, vxs, axs, gx, vxg, axg, max_accel, max_jerk, dt)
+    '''
+    hpx = [rx[0],rx[len(rx)//3],rx[2*len(rx)//3],rx[-1]]
+    hpy = [ry[0],ry[len(ry)//3],ry[2*len(ry)//3],ry[-1]]
+    _d = OrderedDict(sorted(list(zip(hpx,hpy)),key=lambda tup: tup[0]))
+    hpx,hpy = list(_d.keys()),list(_d.values())
+    try:
+        cs = CubicSpline(hpx, hpy)
+    except ValueError:
+        print(hpx,hpy)
+        raise
+    path_residuals = sum([abs(cs(x)-ry[_i]) for _i,x in enumerate(rx)])
+    new_vels = generate_baseline_trajectory(time,[(x,cs(x)) for x in rx],rv[0],ra[0],traj_def.max_acc_long/2,traj_def.max_jerk/2,rv[-1],dt,traj_def.acc)
+    slice_len = min(len(new_vels),len(rv))
+    vel_residuals = sum([abs(x[0]-x[1]) for x in zip(rv[:slice_len],  new_vels[:slice_len])])
+    compl = math.hypot(path_residuals, vel_residuals)
+    return compl
 '''
 def line_intersection(line_1,line_2):
     x1,y1,x2,y2,x3,y3,x4,y4 = line_1[0][0], line_1[1][0], line_1[0][1], line_1[1][1], line_2[0][0], line_2[1][0], line_2[0][1], line_2[1][1]
@@ -61,6 +140,20 @@ def get_centerline(lane_segment):
         center_coordinates = list(zip(x_coords,y_coords))
     conn.close()
     return center_coordinates
+
+def get_mean_yaws_for_segments(segments):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    if isinstance(segments, str):
+        segments = "('"+segments+"')"
+        q_string = "SELECT gate_id, AVG(YAW) FROM GATE_CROSSING_EVENTS WHERE GATE_CROSSING_EVENTS.GATE_ID in "+segments+" group by gate_id"
+    else:
+        q_string = "SELECT gate_id, AVG(YAW) FROM GATE_CROSSING_EVENTS WHERE GATE_CROSSING_EVENTS.GATE_ID in "+str(tuple(segments))+" group by gate_id"
+    c.execute(q_string)
+    res = c.fetchall()
+    yaws = {r[0]:r[1] for r in res}
+    return yaws
+    
 
 def get_leading_vehicles(veh_state):
     path = veh_state.segment_seq
@@ -324,7 +417,8 @@ def load_traj_ids_for_traj_info_id(traj_info_id,baseline_only):
     traj_ids = [row[0] for row in res]
     return traj_ids
 
-def load_trajs_for_traj_info_id(traj_info_id,baseline_only):
+def load_trajs_for_traj_info_id(traj_info_id,baseline_only=True):
+    traj_info_id = [int(e) for e in traj_info_id]
     import struct
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
     c = conn.cursor()
@@ -332,14 +426,19 @@ def load_trajs_for_traj_info_id(traj_info_id,baseline_only):
     if not baseline_only:
         q_string = "SELECT * FROM GENERATED_TRAJECTORY WHERE TRAJECTORY_INFO_ID IN "+str(tuple(traj_info_id))
     else:
-        q_string = "SELECT * FROM GENERATED_BASELINE_TRAJECTORY WHERE TRAJECTORY_INFO_ID IN "+str(tuple(traj_info_id))
+        if len(traj_info_id) > 1:
+            q_string = "SELECT * FROM GENERATED_BASELINE_TRAJECTORY WHERE TRAJECTORY_INFO_ID IN "+str(tuple(traj_info_id))
+        else:
+            q_string = "SELECT * FROM GENERATED_BASELINE_TRAJECTORY WHERE TRAJECTORY_INFO_ID = "+str(traj_info_id[0])
     c.execute(q_string)
     res = c.fetchall()
     for row in res:
-        if row[0] not in traj_dict:
-            traj_dict[row[0]] = [[struct.unpack('f', x)[0] if isinstance(x,bytes) else x for x in list(row[1:])]]
+        if row[1] not in traj_dict:
+            traj_dict[row[1]] = [[struct.unpack('f', x)[0] if isinstance(x,bytes) else x for x in list(row[1:])]]
         else:
-            traj_dict[row[0]].append([struct.unpack('f', x)[0] if isinstance(x,bytes) else x for x in list(row[1:])])
+            traj_dict[row[1]].append([struct.unpack('f', x)[0] if isinstance(x,bytes) else x for x in list(row[1:])])
+    for k,v in traj_dict.items():
+        traj_dict[k] = np.vstack(v)
     return traj_dict
 
 
@@ -471,6 +570,23 @@ def get_track(veh_state,curr_time,from_current=None):
     conn.close()
     return np.asarray(l)
 
+def get_pedestrian_track(p_state,q_time):
+    p_id = p_state.p_id
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "select * from TRAJECTORIES_0769 WHERE TRAJECTORIES_0769.TRACK_ID="+str(p_id)+" AND ROUND(TIME,2)=ROUND("+str(q_time)+",2) ORDER BY TIME"
+    c.execute(q_string)
+    res = c.fetchone()
+    return res
+    
+    
+    
+    
+    
+    
+    
+    
+    
 def gate_crossing_times(veh_state):
     entry_gate,exit_gate = veh_state.gates[0],veh_state.gates[1]
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
@@ -703,12 +819,26 @@ def is_out_of_view(pos):
     in_view = p.contains_points([(pos[0], pos[1])])
     return False if in_view[0] else True
         
-    
-def can_exclude(veh_state,ra_segment_type):
+''' True if relevant agent r_a_state can be excluded from the relevant vehicle list of vehicle veh_state '''    
+def can_exclude(veh_state,r_a_state):
+    ra_segment_type = constants.SEGMENT_MAP[r_a_state.current_segment]
     if veh_state.task == 'LEFT_TURN' and ra_segment_type == 'exit-lane':
+        return True
+    elif veh_state.task == 'LEFT_TURN' and (r_a_state.task=='RIGHT_TURN' and (r_a_state.leading_vehicle is not None and r_a_state.leading_vehicle.current_segment == r_a_state.current_segment) and constants.SEGMENT_MAP[r_a_state.current_segment] == 'right-turn-lane'):
+        ''' exclude vehicles that are turning right from oncoming lane to the common lane but are behind a more relevant vehicle '''
+        return True
+    elif veh_state.task == 'RIGHT_TURN' and (r_a_state.task=='LEFT_TURN' and (r_a_state.leading_vehicle is not None and r_a_state.leading_vehicle.current_segment == r_a_state.current_segment) and constants.SEGMENT_MAP[r_a_state.current_segment] == 'left-turn-lane'):
+        ''' exclude vehicles that are turning left from oncoming lane to the common lane but are behind a more relevant vehicle '''
         return True
     else:
         return False
+    
+def is_only_leading_relevant(veh_state):
+    if veh_state.task == 'RIGHT_TURN' and constants.SEGMENT_MAP[veh_state.current_segment] == 'right-turn-lane' and constants.SEGMENT_MAP[veh_state.leading_vehicle.current_segment] in ['right-turn-lane','prep-right-turn']:
+        return True
+    else:
+        return False
+
 
 
 def get_relevant_agents(veh_state):
@@ -748,7 +878,7 @@ def get_relevant_agents(veh_state):
                     conflicts.append((row,subject_path))
     elif path[0] != 'NA' and path[1] != 'NA':
         path_string = '['+path[0]+','+path[1]+']'
-        if veh_state.gate_crossing_times[1] is not None and veh_state.current_time is not None and veh_state.current_time < veh_state.gate_crossing_times[1]:
+        if (veh_state.gate_crossing_times[1] is not None and veh_state.current_time is not None and veh_state.current_time < veh_state.gate_crossing_times[1]) or (veh_state.current_segment != veh_state.segment_seq[-1]):
             q_string = "SELECT * FROM CONFLICT_POINTS WHERE (PATH_1 LIKE '"+path_string+"' AND SIGNAL_STATE_PATH_1 LIKE '%"+signal \
                     +"%') OR (PATH_2 LIKE '"+path_string+"' AND SIGNAL_STATE_PATH_2 LIKE '%"+signal+"%')"
         else:
@@ -832,6 +962,7 @@ def get_time_to_next_signal(time_ts,direction,curr_signal):
     
     
 def get_actions(veh_state):
+    
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
     segment = constants.SEGMENT_MAP[veh_state.current_segment]
@@ -843,6 +974,11 @@ def get_actions(veh_state):
         q_string = q_string + " AND MERGING_VEHICLE_PRESENT IN ('Y','*')"
     else:
         q_string = q_string + " AND MERGING_VEHICLE_PRESENT IN ('N','*')"
+    if veh_state.relev_pedestrians is not None:
+        q_string = q_string + " AND PEDESTRIAN_PRESENT IN ('Y','*')"
+    else:
+        q_string = q_string + " AND PEDESTRIAN_PRESENT IN ('N','*')"
+    
     c.execute(q_string)
     rows = c.fetchall()
     actions = dict() 
@@ -850,6 +986,9 @@ def get_actions(veh_state):
         if res[3] is not None and (res[3] == veh_state.signal or res[3] == '*'):
             if res[1] not in  actions.items():
                 actions[res[1]] = ast.literal_eval(res[2])
+    
+    
+    
     return actions
 
 def region_equivalence(track_region,track_segment):
@@ -1194,8 +1333,197 @@ def generate_trajectory_from_vel_profile(time,ref_path,vel_profile):
     dist_from_origin_newpath = [sum(dist_from_origin_newpath[:i]) for i in np.arange(1,len(dist_from_origin_newpath))]
     
     return new_path
+   
+def get_relevant_crosswalks(veh_state):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "select * from RELEVANT_CROSSWALK_MAP WHERE RELEVANT_CROSSWALK_MAP.VEH_PATH='"+veh_state.direction+"'"
+    c.execute(q_string)
+    res = c.fetchone()
+    if res is None:
+        return None
+    else:
+        relev_crosswalks = (ast.literal_eval(res[1]), ast.literal_eval(res[2])) 
+        return relev_crosswalks
+    
+
+                 
+
+def setup_pedestrian_info(curr_time):
+    pedestrian_list = []
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "select * from TRAFFIC_REGIONS_DEF WHERE TRAFFIC_REGIONS_DEF.REGION_PROPERTY='gate_line'"
+    c.execute(q_string)
+    res = c.fetchall()
+    gate_lines = {int(row[0]):[ast.literal_eval(row[4]), ast.literal_eval(row[5])] for row in res}
+    q_string = "select * from RELEVANT_CROSSWALK_MAP"
+    c.execute(q_string)
+    res = c.fetchall()
+    all_relev_crosswalks = []
+    for row in res:
+        x_walk = ast.literal_eval(row[1])
+        for x in x_walk:
+            if x not in all_relev_crosswalks:
+                all_relev_crosswalks.append(x)
+    q_string = "SELECT TRAJECTORY_MOVEMENTS.TRACK_ID,GATES_PASSED,entry_time,exit_time,TRAJECTORIES_0769.* FROM v_times,TRAJECTORY_MOVEMENTS,TRAJECTORIES_0769 WHERE v_times.track_id=TRAJECTORY_MOVEMENTS.track_id and TRAJECTORY_MOVEMENTS.TYPE='Pedestrian' and gates_passed is not NULL and entry_time<="+str(curr_time)+" and exit_time>="+str(curr_time)+" and TRAJECTORIES_0769.TRACK_ID = TRAJECTORY_MOVEMENTS.track_id AND TRAJECTORIES_0769.TIME="+str(curr_time)
+    c.execute(q_string)
+    res = c.fetchall()
+    for row in res:
+        ped_state = PedestrianState(row[0],curr_time)
+        gates_passed = list(ast.literal_eval(row[1]))
+        ped_state.set_gates_passed(gates_passed)
+        time_tup = (row[2],row[3])
+        ped_state.set_scene_entry_exit_times(time_tup)
+        ped_state.set_speed(row[7])
+        ped_state.set_x(row[5])
+        ped_state.set_y(row[6])
+        ped_state.set_yaw(row[11])
+        if len(gates_passed) > 1:
+            q_string_2 = "select * from GATE_CROSSING_EVENTS WHERE GATE_CROSSING_EVENTS.TRACK_ID="+str(ped_state.p_id)+" AND GATE_CROSSING_EVENTS.GATE_ID IN "+str(tuple(gates_passed))
+        else:
+            q_string_2 = "select * from GATE_CROSSING_EVENTS WHERE GATE_CROSSING_EVENTS.TRACK_ID="+str(ped_state.p_id)+" AND GATE_CROSSING_EVENTS.GATE_ID = "+gates_passed[0]
+        c.execute(q_string_2)
+        gate_passing_info = c.fetchall()
+        gate_passing_info = {int(g[1]):g for g in gate_passing_info}
+        crosswalk_data = dict()
+        for relev_xwalk in all_relev_crosswalks:
+            r_gate_1,r_gate_2 = int(relev_xwalk.split('_')[1]), int(relev_xwalk.split('_')[2])
+            if r_gate_1 in gates_passed or r_gate_2 in gates_passed:
+                crosswalk_data[relev_xwalk] = dict()
+                if r_gate_1 in gates_passed and r_gate_2 in gates_passed:
+                    traversal_order = [x[0] for x in sorted([(r_gate_1,gate_passing_info[r_gate_1][6]), (r_gate_2,gate_passing_info[r_gate_2][6])], key=lambda tup: tup[1])]
+                    if curr_time < min(gate_passing_info[r_gate_1][6],gate_passing_info[r_gate_2][6]):
+                        loc = constants.BEFORE_CROSSWALK
+                    elif curr_time > max(gate_passing_info[r_gate_1][6],gate_passing_info[r_gate_2][6]):
+                        loc = constants.AFTER_CROSSWALK
+                    else:
+                        loc = constants.ON_CROSSWALK
+                    dist_to_entry = math.hypot(ped_state.x-statistics.mean(gate_lines[traversal_order[0]][0]), ped_state.y-statistics.mean(gate_lines[traversal_order[0]][1]))
+                    dist_to_exit = math.hypot(ped_state.x-statistics.mean(gate_lines[traversal_order[1]][0]), ped_state.y-statistics.mean(gate_lines[traversal_order[1]][1]))
+                else:
+                    ''' track likely passes by the side of the gate '''
+                    if r_gate_1 in gates_passed:
+                        gate_angle = math.atan2(gate_lines[r_gate_1][1][1]-gate_lines[r_gate_1][1][0], gate_lines[r_gate_1][0][1]-gate_lines[r_gate_1][0][0])
+                        gate_angle = gate_angle if gate_angle >= 0 else (2*PI)-abs(gate_angle)
+                        entry_angle = gate_angle + PI_BY_2
+                        passing_yaw = get_pedestrian_track(ped_state,gate_passing_info[r_gate_1][6])[7]
+                        if abs(entry_angle%(2*PI) - passing_yaw%(2*PI)) < PI_BY_2:
+                            traversal_order = [r_gate_1,r_gate_2]
+                        else:
+                            traversal_order = [r_gate_2,r_gate_1]
+                    else:
+                        gate_angle = math.atan2(gate_lines[r_gate_2][0][1]-gate_lines[r_gate_2][0][0], gate_lines[r_gate_2][1][1]-gate_lines[r_gate_2][1][0])
+                        gate_angle = gate_angle if gate_angle >= 0 else (2*PI)-abs(gate_angle)
+                        entry_angle = gate_angle + PI_BY_2
+                        passing_yaw = get_pedestrian_track(ped_state,gate_passing_info[r_gate_1][6])[7]
+                        if abs(entry_angle%(2*PI) - passing_yaw%(2*PI)) < PI_BY_2:
+                            traversal_order = [r_gate_2,r_gate_1]
+                        else:
+                            traversal_order = [r_gate_1,r_gate_2]
+                    dist_to_entry = math.hypot(ped_state.x-statistics.mean(gate_lines[traversal_order[0]][0]), ped_state.y-statistics.mean(gate_lines[traversal_order[0]][1]))
+                    dist_to_exit = math.hypot(ped_state.x-statistics.mean(gate_lines[traversal_order[1]][0]), ped_state.y-statistics.mean(gate_lines[traversal_order[1]][1]))
+                    gl_1 = gate_lines[r_gate_1]
+                    gl_2 = gate_lines[r_gate_2]
+                    l_1, l_2 = np.asarray([ped_state.x, ped_state.y])-np.asarray([gl_1[0][1], gl_1[1][1]]), np.asarray([ped_state.x, ped_state.y])-np.asarray([gl_2[0][0], gl_2[1][0]]) 
+                    angle_wrt_boundary_1 = angle_between_lines(l_1,l_2)
+                    l_1, l_2 = np.asarray([ped_state.x, ped_state.y])-np.asarray([gl_1[0][0], gl_1[1][0]]), np.asarray([ped_state.x, ped_state.y])-np.asarray([gl_2[0][1], gl_2[1][1]])
+                    angle_wrt_boundary_2 = angle_between_lines(l_1,l_2)
+                    if angle_wrt_boundary_1 > PI_BY_2 and angle_wrt_boundary_2 > PI_BY_2:
+                        loc = constants.ON_CROSSWALK
+                    else:
+                        if dist_to_entry <= dist_to_exit:
+                            loc = constants.BEFORE_CROSSWALK
+                        else:
+                            loc = constants.AFTER_CROSSWALK
+                crosswalk_data[relev_xwalk]['location'] = loc
+                crosswalk_data[relev_xwalk]['dist_to_entry'] = dist_to_entry
+                crosswalk_data[relev_xwalk]['dist_to_exit'] = dist_to_exit
+                if relev_xwalk in constants.CROSSWALK_SIGNAL_MAP:
+                    signal = get_traffic_signal(curr_time, constants.CROSSWALK_SIGNAL_MAP[relev_xwalk])
+                    next_change = get_time_to_next_signal(curr_time, constants.CROSSWALK_SIGNAL_MAP[relev_xwalk], signal)
+                    crosswalk_data[relev_xwalk]['signal'] = signal
+                    crosswalk_data[relev_xwalk]['next_change'] = next_change
+                crosswalk_data[relev_xwalk]['traversal_order'] = traversal_order
                 
-      
+            else:
+                continue
+        ped_state.set_crosswalks(crosswalk_data)
+        pedestrian_list.append(ped_state)
+        '''
+        dist_to_gates,gate_passing_times,signal_states = dict(), dict(), dict()
+        for gates in gates_passed:
+            if gates in gate_lines:
+                dist_to_gate = math.hypot(ped_state.x-statistics.mean(gate_lines[gates][0]), ped_state.y-statistics.mean(gate_lines[gates][1]))
+                dist_to_gates[gates] = dist_to_gate
+            if gates in gate_passing_info:
+                gate_passing_times[gates] = gate_passing_info[gates][6]
+        for k,v in constants.CROSSWALK_SIGNAL_MAP.items():
+            gate_ids = [int(k.split('_')[1]), int(k.split('_')[2])]
+            if gate_ids[0] in gates_passed or gate_ids[1] in gates_passed:
+                signal_states[k] = get_traffic_signal(curr_time, v)
+                time_to_next_change = get_time_to_next_signal(curr_time, v, signal_states[k])
+                signal_states[k] = (signal_states[k], time_to_next_change[0], time_to_next_change[1])
+        ped_state.set_signal(signal_states)           
+        ped_state.set_dist_to_gates(dist_to_gates)
+        ped_state.set_gate_passing_times(gate_passing_times)
+        location_info = dict()
+        for gate_pairs in constants.CROSSWALK_GATES:
+            if gate_pairs[0] in gates_passed or gate_pairs[1] in gates_passed:
+                sorted_pairs = sorted(gate_pairs)
+                path_key = "P"+"_"+str(sorted_pairs[0])+"_"+str(sorted_pairs[1])
+                loc = None
+                if (gate_pairs[0] in gate_passing_times and gate_pairs[1] not in gate_passing_times) or (gate_pairs[1] in gate_passing_times and gate_pairs[0] not in gate_passing_times):
+                    
+                    gl_1 = gate_lines[gate_pairs[0]]
+                    gl_2 = gate_lines[gate_pairs[1]]
+                    l_1, l_2 = np.asarray([ped_state.x, ped_state.y])-np.asarray([gl_1[0][1], gl_1[1][1]]), np.asarray([ped_state.x, ped_state.y])-np.asarray([gl_2[0][0], gl_2[1][0]]) 
+                    angle_wrt_boundary_1 = angle_between_lines(l_1,l_2)
+                    l_1, l_2 = np.asarray([ped_state.x, ped_state.y])-np.asarray([gl_1[0][0], gl_1[1][0]]), np.asarray([ped_state.x, ped_state.y])-np.asarray([gl_2[0][1], gl_2[1][1]])
+                    angle_wrt_boundary_2 = angle_between_lines(l_1,l_2)
+                    if angle_wrt_boundary_1 > PI_BY_2 and angle_wrt_boundary_2 > PI_BY_2:
+                        f=1
+                    else:
+                        f=1
+                else:
+                    if gate_pairs[0] in gate_passing_times:
+                        if gate_pairs[1] in gate_passing_times:
+                            if curr_time < min(gate_passing_times[gate_pairs[0]],gate_passing_times[gate_pairs[1]]):
+                                loc = constants.BEFORE_CROSSWALK
+                            elif curr_time > max(gate_passing_times[gate_pairs[0]],gate_passing_times[gate_pairs[1]]):
+                                loc = constants.AFTER_CROSSWALK
+                            else:
+                                loc = constants.ON_CROSSWALK
+                
+                location_info[path_key] = loc
+        ped_state.set_location_info(location_info)
+        '''
+    return pedestrian_list
+                
+                        
+def get_relevant_pedestrians(veh_state, pedestrian_info):
+    relev_pedestrians = []
+    if veh_state.relev_crosswalks is None or constants.SEGMENT_MAP[veh_state.current_segment] == 'exit-lane':
+        return None
+    else:
+        xwalks,near_gates = veh_state.relev_crosswalks[0], veh_state.relev_crosswalks[1] 
+        for xwalk in xwalks:
+            for ped_state in pedestrian_info:
+                if xwalk in ped_state.crosswalks:
+                    if ped_state.crosswalks[xwalk]['location'] == constants.ON_CROSSWALK:
+                        relev_pedestrians.append(ped_state)
+                    elif ped_state.crosswalks[xwalk]['location'] == constants.BEFORE_CROSSWALK and ped_state.crosswalks[xwalk]['dist_to_entry'] < constants.PEDESTRIAN_CROSSWALK_DIST_THRESH:
+                        relev_pedestrians.append(ped_state)
+    return relev_pedestrians
+                        
+            
+                               
+            
+        
+        
+                
+        
+          
 
 def get_current_segment(r_a_state,r_a_track_region,r_a_track_segment_seq,curr_time):
     r_a_current_segment = assign_curent_segment(r_a_track_region,r_a_state,False)
@@ -1476,7 +1804,10 @@ def entry_exit_gate_cond(entry_gate,exit_gate):
                         " OR (EXIT_GATE = "+str(exit_gate)+" AND ENTRY_GATE IS NULL))"
                         
 
-  
+def dist_to_line(A,B,pt):
+    ''' line is from A to B '''
+    d=((pt[0]-A[0])*(B[1]-A[1]))-((pt[1]-A[1])*(B[0]-A[0]))
+    return d  
     
 
     

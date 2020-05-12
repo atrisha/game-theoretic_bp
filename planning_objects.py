@@ -87,6 +87,13 @@ class VehicleState:
         
     def set_time_to_next_signal(self, next_signal_change):
         self.next_signal_change = next_signal_change
+        
+    def set_relev_crosswalks(self,crosswalks):
+        self.relev_crosswalks = crosswalks
+        
+    def set_relev_pedestrians(self,pedestrians):
+        self.relev_pedestrians = pedestrians
+    
 
 def kph_to_mps(kph):
     return kph/3.6
@@ -106,5 +113,88 @@ class TrajectoryDef:
         else:
             self.max_acc_long = constants.MAX_LONG_DEC_NORMAL if self.l2_action == 2 else constants.MAX_LONG_DEC_AGGR
             self.max_jerk = constants.MAX_DEC_JERK_AGGR
+        
+
+class PedestrianState:
+    
+    def __init__(self,p_id,curr_time):
+        self.curr_time = curr_time
+        self.p_id = p_id
+        
+    def set_scene_entry_exit_times(self,time_tup):
+        self.entry_time = time_tup[0]
+        self.exit_time = time_tup[1]
+        
+    def set_gates_passed(self,gates):
+        self.gates_passed = gates
+        
+    def set_speed(self,speed):
+        self.speed = speed
+        
+    def set_yaw(self,yaw):
+        self.yaw = yaw
+        
+    def set_x(self,x):
+        self.x = x
+    
+    def set_y(self,y):
+        self.y = y    
+        
+    def set_dist_to_gates(self,dist_dict):
+        self.dist_to_gates = dist_dict
+        
+    def set_gate_passing_times(self,passing_times):
+        self.passing_times = passing_times
+        
+    def set_location_info(self,location_info):
+        self.location_inf = location_info
+        
+    def set_signal(self,signal):
+        self.signal = signal
+        
+    def set_crosswalks(self,crosswalks):
+        self.crosswalks = crosswalks
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
         
 

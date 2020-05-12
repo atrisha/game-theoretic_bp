@@ -17,7 +17,6 @@ import os
 from os import listdir
 from collections import OrderedDict
 import pandas as pd
-from cost_evaluation import eval_complexity
 from utils import get_agents_for_task
 
 
@@ -306,6 +305,26 @@ def insert_gate_crossing_events():
     conn.commit()
     conn.close()
     
+def insert_segment_gate_events():
+    file_id = int(constants.CURRENT_FILE_ID)
+    gate_crossing_list = []
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "select * from TRAJECTORIES_0769_EXT,TRAJECTORIES_0769 where TRAJECTORIES_0769_EXT.TRACK_ID=TRAJECTORIES_0769.TRACK_ID AND TRAJECTORIES_0769.TIME=TRAJECTORIES_0769_EXT.TIME order by track_id,time"
+    c.execute(q_string)
+    res = c.fetchall()
+    for idx in np.arange(len(res)-1):
+        print(idx)
+        this_row = res[idx]
+        next_row = res[idx+1]
+        if this_row[2] != next_row[2] and this_row[0] == next_row[0]:
+            gate_crossing_list.append((769,this_row[2],'SEGMENT_GATE',this_row[0],None,None,next_row[1],this_row[8],this_row[9],this_row[10],None,None,this_row[12]))
+    i_string = 'REPLACE INTO GATE_CROSSING_EVENTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
+    c.executemany(i_string,gate_crossing_list)
+    conn.commit()
+    conn.close()
+    
+    
 def insert_traffic_lights():
     file_path = "D:\\intersections_dataset\\all_tracks\\exported\\DJI_0769_traffic_lights.csv"
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
@@ -356,7 +375,7 @@ def assign_curent_segment():
     '''
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    vehs = utils.get_agents_for_task('S_W') + utils.get_agents_for_task('N_S') + utils.get_agents_for_task('E_W') + utils.get_agents_for_task('W_N')
+    vehs = utils.get_agents_for_task('S_N') + utils.get_agents_for_task('W_E')
     #vehs = [140]
     q_string = "select TRAJECTORIES_0769.*,TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ,v_TIMES.ENTRY_TIME,v_TIMES.EXIT_TIME from TRAJECTORIES_0769,TRAJECTORY_MOVEMENTS,v_TIMES where TRAJECTORIES_0769.TRACK_ID=TRAJECTORY_MOVEMENTS.TRACK_ID and v_TIMES.TRACK_ID = TRAJECTORIES_0769.TRACK_ID ORDER BY TRAJECTORIES_0769.TRACK_ID,TRAJECTORIES_0769.TIME"
     res = c.execute(q_string)
@@ -798,8 +817,10 @@ def get_traj_metadata(task):
             else:
                 if l2_action not in state_dict[time_ts]['relev_agents'][relev_agent][l1_action]:
                     state_dict[time_ts]['relev_agents'][relev_agent][l1_action].append(l2_action)
-        
+    for k,v in state_dict.items():
+        split_traj_metadata = utils.split_traj_metadata_by_agents(v)
+        state_dict[k] = split_traj_metadata
     return state_dict
 
 
-#assign_curent_segment()
+#insert_segment_gate_events()

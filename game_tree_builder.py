@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 import visualizer
 from os import listdir
 from collections import OrderedDict
-import planning_objects
+
 
 
 
@@ -95,6 +95,7 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
     agent_track = veh_state.track
     agent_id = veh_state.id
     time_ts = float(track_info[6,])
+    pedestrian_info = utils.setup_pedestrian_info(time_ts)
     veh_state.set_current_time(time_ts)
     track_region_seq = veh_state.segment_seq
     veh_state.set_track_info(track_info)
@@ -103,6 +104,8 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
     path,gates,direction = utils.get_path_gates_direction(agent_track[:,8],agent_id)
     veh_direction = 'L_'+track_region_seq[0][3].upper()+'_'+track_region_seq[-1][3].upper()
     veh_state.set_direction(veh_direction)
+    relev_crosswalks = utils.get_relevant_crosswalks(veh_state)
+    veh_state.set_relev_crosswalks(relev_crosswalks)
     traffic_light = utils.get_traffic_signal(time_ts, veh_direction)
     task = constants.TASK_MAP[veh_direction]
     veh_state.set_task(task)
@@ -132,6 +135,8 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
     veh_state.set_leading_vehicle(sub_v_lead_vehicle)
     merging_vehicle = utils.get_merging_vehicle(veh_state)
     veh_state.set_merging_vehicle(merging_vehicle)
+    relev_pedestrians = utils.get_relevant_pedestrians(veh_state, pedestrian_info)
+    veh_state.set_relev_pedestrians(relev_pedestrians)
     if selected_action is None:
         actions = utils.get_actions(veh_state)
     else:
@@ -178,7 +183,10 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
     else:
         relev_agents = utils.get_relevant_agents(veh_state)
         if sub_v_lead_vehicle is not None:
-            relev_agents.append(veh_state.leading_vehicle.id)
+            if utils.is_only_leading_relevant(veh_state):
+                relev_agents = [veh_state.leading_vehicle.id]
+            else:
+                relev_agents.append(veh_state.leading_vehicle.id)
     print('relev agents',relev_agents)
     for r_a in relev_agents:
         if r_a == agent_id:
@@ -219,9 +227,6 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
         else:
             r_a_current_segment = r_a_track[11]
         
-        ''' check if this relevant vehicle can be excluded '''
-        if utils.can_exclude(veh_state,constants.SEGMENT_MAP[r_a_current_segment]):
-            continue
             
         r_a_state.set_current_segment(r_a_current_segment)
         ''' 
@@ -236,6 +241,8 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
         r_a_traffic_light = utils.get_traffic_signal(time_ts, r_a_direction)
         r_a_state.set_traffic_light(r_a_traffic_light)
         r_a_state.set_direction(r_a_direction)
+        relev_crosswalks = utils.get_relevant_crosswalks(r_a_state)
+        r_a_state.set_relev_crosswalks(relev_crosswalks)
         r_a_current_lane = None
         if r_a_current_segment[0:2] == 'ln':
             r_a_current_lane = r_a_current_segment
@@ -247,6 +254,12 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
         r_a_state.set_current_lane(r_a_current_lane)
         r_a_task = constants.TASK_MAP[r_a_direction]
         r_a_state.set_task(r_a_task)
+        relev_pedestrians = utils.get_relevant_pedestrians(r_a_state, pedestrian_info)
+        r_a_state.set_relev_pedestrians(relev_pedestrians)
+        ''' check if this relevant vehicle can be excluded '''
+        if utils.can_exclude(veh_state,r_a_state):
+            continue
+        
         if selected_action is None:
             r_a_actions = utils.get_actions(r_a_state)
         else:
@@ -301,14 +314,18 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
 and stores trajectory plans in L3_ACTION_CACHE. It's called hopping because at every time interval the state hops back
 to the real state in the real trajectory, and does not go on a counterfactual path. '''
 def generate_hopping_plans(state_dicts=None):
-    trajs_in_db = utils.get_trajectories_in_db() if not constants.BASELINE_TRAJECTORIES_ONLY else utils.get_baseline_trajectories_in_db()
+    skip_existing = False
+    if skip_existing:
+        trajs_in_db = utils.get_trajectories_in_db() if not constants.BASELINE_TRAJECTORIES_ONLY else utils.get_baseline_trajectories_in_db()
+    else:
+        trajs_in_db = dict()
     if state_dicts is not None:
         agent_ids = state_dicts.keys()
     else:
-        agent_ids = utils.get_agents_for_task('S_W') + utils.get_agents_for_task('W_N') 
+        agent_ids = utils.get_agents_for_task('N_E') 
     for agent_id in agent_ids: 
         ''' veh_state object maintains details about an agent'''
-        veh_state = planning_objects.VehicleState()
+        veh_state = VehicleState()
         veh_state.set_id(agent_id)
         veh_state.set_current_time(None)
         
@@ -342,81 +359,7 @@ def generate_hopping_plans(state_dicts=None):
                 generate_action_plans(veh_state,track_info,None,trajs_in_db)
 
 
-''' this cleans up the hopping plan generation process'''
-def finalize_hopping_plans():
-    if not os.path.isfile(constants.L3_ACTION_CACHE+'zero_len_trajectories.dict'):
-        dir = constants.L3_ACTION_CACHE
-        N,ct = 0,0
-        state_dict = dict()
-        for f in listdir(dir):
-            traj = utils.pickle_load(os.path.join(dir, f))
-            N += 1
-            if len(traj) == 0:
-                agent_id = int(f[3:6])
-                time_ts = round(float(f.split('_')[-1])/1000,3)
-                relev_agent = None if f[6:9] == '000' else int(f[6:9])
-                v = VehicleState()
-                if relev_agent is None:
-                    v.set_id(agent_id)
-                    time_tuple = utils.get_entry_exit_time(agent_id)
-                else:
-                    v.set_id(relev_agent)
-                    time_tuple = utils.get_entry_exit_time(relev_agent)
-                agent_track = utils.get_track(v, None)
-                if time_ts < time_tuple[0] or time_ts > time_tuple[1]:
-                    #print('action outside of view',agent_id,relev_agent,f.split('_')[-1],time_ts)
-                    continue 
-                if agent_id == 58 and relev_agent is None:
-                    brk=1
-                all_times = [float(agent_track[i][6,]) for i in np.arange(len(agent_track))]
-                real_ts = -1
-                for ts in all_times:
-                    if ts==104.437667:
-                        brk = 1
-                    if round(float(ts)*1000) == time_ts*1000:
-                        real_ts = ts
-                        break
-                if real_ts == -1:
-                    track = utils.get_track(v, time_ts)
-                else:
-                    track = utils.get_track(v, real_ts)
-                if len(track) < 1:
-                    ct += 1
-                    print('cant find track for',agent_id,relev_agent,f.split('_')[-1],time_ts,real_ts)
-                    continue
-                time_ts = real_ts
-                l1_action = [k for k,v in constants.L1_ACTION_CODES.items() if v == int(f[9:11])][0]
-                l2_action = [k for k,v in constants.L2_ACTION_CODES.items() if v == int(f[11:13])][0]
-                print(agent_id,time_ts,relev_agent,l1_action,l2_action)
-                if agent_id not in state_dict:
-                    state_dict[agent_id] = dict()
-                if time_ts not in state_dict[agent_id]:
-                    state_dict[agent_id][time_ts] = dict()
-                if 'action' not in state_dict[agent_id][time_ts]:
-                    state_dict[agent_id][time_ts]['action'] = dict()
-                if 'relev_agents' not in state_dict[agent_id][time_ts]:
-                    state_dict[agent_id][time_ts]['relev_agents'] = dict()    
-                if relev_agent is None:
-                    if l1_action not in state_dict[agent_id][time_ts]['action']:
-                        state_dict[agent_id][time_ts]['action'][l1_action] = [l2_action]
-                    else:
-                        state_dict[agent_id][time_ts]['action'][l1_action].append(l2_action)
-                else:
-                    if relev_agent not in state_dict[agent_id][time_ts]['relev_agents']:
-                        state_dict[agent_id][time_ts]['relev_agents'][relev_agent] = dict()
-                        state_dict[agent_id][time_ts]['relev_agents'][relev_agent][l1_action] = [l2_action]
-                    else:
-                        if l1_action not in state_dict[agent_id][time_ts]['relev_agents'][relev_agent]:
-                            state_dict[agent_id][time_ts]['relev_agents'][relev_agent][l1_action] = [l2_action]
-                        else:
-                            state_dict[agent_id][time_ts]['relev_agents'][relev_agent][l1_action].append(l2_action)
-                
-                ct += 1
-        print(ct,'/',N)
-        utils.pickle_dump(constants.L3_ACTION_CACHE+'zero_len_trajectories.dict', state_dict)
-    else:
-        state_dict = utils.pickle_load(constants.L3_ACTION_CACHE+'zero_len_trajectories.dict')
-        generate_hopping_plans(state_dict)
+
     
 
 

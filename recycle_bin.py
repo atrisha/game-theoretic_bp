@@ -405,3 +405,80 @@ def get_simulation_cache_dir(file_id,agent_id,time_ts):
     agent_id = str(agent_id).zfill(3)
     dir_key = file_id+agent_id+'_'+str(time_ts)
     return dir_key
+
+
+''' this cleans up the hopping plan generation process'''
+def finalize_hopping_plans():
+    if not os.path.isfile(constants.L3_ACTION_CACHE+'zero_len_trajectories.dict'):
+        dir = constants.L3_ACTION_CACHE
+        N,ct = 0,0
+        state_dict = dict()
+        for f in listdir(dir):
+            traj = utils.pickle_load(os.path.join(dir, f))
+            N += 1
+            if len(traj) == 0:
+                agent_id = int(f[3:6])
+                time_ts = round(float(f.split('_')[-1])/1000,3)
+                relev_agent = None if f[6:9] == '000' else int(f[6:9])
+                v = VehicleState()
+                if relev_agent is None:
+                    v.set_id(agent_id)
+                    time_tuple = utils.get_entry_exit_time(agent_id)
+                else:
+                    v.set_id(relev_agent)
+                    time_tuple = utils.get_entry_exit_time(relev_agent)
+                agent_track = utils.get_track(v, None)
+                if time_ts < time_tuple[0] or time_ts > time_tuple[1]:
+                    #print('action outside of view',agent_id,relev_agent,f.split('_')[-1],time_ts)
+                    continue 
+                if agent_id == 58 and relev_agent is None:
+                    brk=1
+                all_times = [float(agent_track[i][6,]) for i in np.arange(len(agent_track))]
+                real_ts = -1
+                for ts in all_times:
+                    if ts==104.437667:
+                        brk = 1
+                    if round(float(ts)*1000) == time_ts*1000:
+                        real_ts = ts
+                        break
+                if real_ts == -1:
+                    track = utils.get_track(v, time_ts)
+                else:
+                    track = utils.get_track(v, real_ts)
+                if len(track) < 1:
+                    ct += 1
+                    print('cant find track for',agent_id,relev_agent,f.split('_')[-1],time_ts,real_ts)
+                    continue
+                time_ts = real_ts
+                l1_action = [k for k,v in constants.L1_ACTION_CODES.items() if v == int(f[9:11])][0]
+                l2_action = [k for k,v in constants.L2_ACTION_CODES.items() if v == int(f[11:13])][0]
+                print(agent_id,time_ts,relev_agent,l1_action,l2_action)
+                if agent_id not in state_dict:
+                    state_dict[agent_id] = dict()
+                if time_ts not in state_dict[agent_id]:
+                    state_dict[agent_id][time_ts] = dict()
+                if 'action' not in state_dict[agent_id][time_ts]:
+                    state_dict[agent_id][time_ts]['action'] = dict()
+                if 'relev_agents' not in state_dict[agent_id][time_ts]:
+                    state_dict[agent_id][time_ts]['relev_agents'] = dict()    
+                if relev_agent is None:
+                    if l1_action not in state_dict[agent_id][time_ts]['action']:
+                        state_dict[agent_id][time_ts]['action'][l1_action] = [l2_action]
+                    else:
+                        state_dict[agent_id][time_ts]['action'][l1_action].append(l2_action)
+                else:
+                    if relev_agent not in state_dict[agent_id][time_ts]['relev_agents']:
+                        state_dict[agent_id][time_ts]['relev_agents'][relev_agent] = dict()
+                        state_dict[agent_id][time_ts]['relev_agents'][relev_agent][l1_action] = [l2_action]
+                    else:
+                        if l1_action not in state_dict[agent_id][time_ts]['relev_agents'][relev_agent]:
+                            state_dict[agent_id][time_ts]['relev_agents'][relev_agent][l1_action] = [l2_action]
+                        else:
+                            state_dict[agent_id][time_ts]['relev_agents'][relev_agent][l1_action].append(l2_action)
+                
+                ct += 1
+        print(ct,'/',N)
+        utils.pickle_dump(constants.L3_ACTION_CACHE+'zero_len_trajectories.dict', state_dict)
+    else:
+        state_dict = utils.pickle_load(constants.L3_ACTION_CACHE+'zero_len_trajectories.dict')
+        generate_hopping_plans(state_dict)

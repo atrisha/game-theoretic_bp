@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 import visualizer
 from os import listdir
 from collections import OrderedDict
+from numba.roc.hsadrv.driver import Agent
 
 
 
@@ -96,47 +97,54 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
     agent_id = veh_state.id
     time_ts = float(track_info[6,])
     pedestrian_info = utils.setup_pedestrian_info(time_ts)
-    veh_state.set_current_time(time_ts)
-    track_region_seq = veh_state.segment_seq
-    veh_state.set_track_info(track_info)
-    current_segment = track_info[11,]
-    veh_state.set_current_segment(current_segment)
-    path,gates,direction = utils.get_path_gates_direction(agent_track[:,8],agent_id)
-    veh_direction = 'L_'+track_region_seq[0][3].upper()+'_'+track_region_seq[-1][3].upper()
-    veh_state.set_direction(veh_direction)
-    relev_crosswalks = utils.get_relevant_crosswalks(veh_state)
-    veh_state.set_relev_crosswalks(relev_crosswalks)
-    traffic_light = utils.get_traffic_signal(time_ts, veh_direction)
-    task = constants.TASK_MAP[veh_direction]
-    veh_state.set_task(task)
-    veh_state.set_traffic_light(traffic_light)
-    veh_state.set_gates(gates)
-    gate_crossing_times = utils.gate_crossing_times(veh_state)
-    veh_state.set_gate_crossing_times(gate_crossing_times)
-    if current_segment is None:
-        print(time_ts,track_info[8,],track_region_seq)
-        sys.exit('no current segment found')
-    agent_loc = (track_info[1,],track_info[2,])
-    veh_state.set_current_time(time_ts)
-    veh_state.set_current_segment(current_segment)
-    
-    if current_segment[0:2] == 'ln':
-        veh_current_lane = current_segment
-    elif 'int-entry' in current_segment:
-        dir_key = str(track_region_seq[0][3:])+'-'+track_region_seq[-1][3:]
-        veh_current_lane = constants.LANE_MAP[dir_key]
+    ag_file_key = constants.L3_ACTION_CACHE + str(veh_state.id)+'-0_'+str(time_ts).replace('.', ',')
+    if os.path.exists(ag_file_key):
+        veh_state = utils.pickle_load(ag_file_key)
+        task = veh_state.task
+        sub_v_lead_vehicle = veh_state.leading_vehicle
     else:
-        veh_current_lane = veh_direction
-    veh_state.set_current_lane(veh_current_lane)
+        veh_state.set_current_time(time_ts)
+        track_region_seq = veh_state.segment_seq
+        veh_state.set_track_info(track_info)
+        current_segment = track_info[11,]
+        veh_state.set_current_segment(current_segment)
+        path,gates,direction = utils.get_path_gates_direction(agent_track[:,8],agent_id)
+        veh_direction = 'L_'+track_region_seq[0][3].upper()+'_'+track_region_seq[-1][3].upper()
+        veh_state.set_direction(veh_direction)
+        relev_crosswalks = utils.get_relevant_crosswalks(veh_state)
+        veh_state.set_relev_crosswalks(relev_crosswalks)
+        traffic_light = utils.get_traffic_signal(time_ts, veh_direction)
+        task = constants.TASK_MAP[veh_direction]
+        veh_state.set_task(task)
+        veh_state.set_traffic_light(traffic_light)
+        veh_state.set_gates(gates)
+        gate_crossing_times = utils.gate_crossing_times(veh_state)
+        veh_state.set_gate_crossing_times(gate_crossing_times)
+        if current_segment is None:
+            print(time_ts,track_info[8,],track_region_seq)
+            sys.exit('no current segment found')
+        agent_loc = (track_info[1,],track_info[2,])
+        veh_state.set_current_time(time_ts)
+        veh_state.set_current_segment(current_segment)
         
-    if time_ts not in veh_state.action_plans:
-        veh_state.action_plans[time_ts] = dict()
-    sub_v_lead_vehicle = utils.get_leading_vehicles(veh_state)
-    veh_state.set_leading_vehicle(sub_v_lead_vehicle)
-    merging_vehicle = utils.get_merging_vehicle(veh_state)
-    veh_state.set_merging_vehicle(merging_vehicle)
-    relev_pedestrians = utils.get_relevant_pedestrians(veh_state, pedestrian_info)
-    veh_state.set_relev_pedestrians(relev_pedestrians)
+        if current_segment[0:2] == 'ln':
+            veh_current_lane = current_segment
+        elif 'int-entry' in current_segment:
+            dir_key = str(track_region_seq[0][3:])+'-'+track_region_seq[-1][3:]
+            veh_current_lane = constants.LANE_MAP[dir_key]
+        else:
+            veh_current_lane = veh_direction
+        veh_state.set_current_lane(veh_current_lane)
+            
+        if time_ts not in veh_state.action_plans:
+            veh_state.action_plans[time_ts] = dict()
+        sub_v_lead_vehicle = utils.get_leading_vehicles(veh_state)
+        veh_state.set_leading_vehicle(sub_v_lead_vehicle)
+        merging_vehicle = utils.get_merging_vehicle(veh_state)
+        veh_state.set_merging_vehicle(merging_vehicle)
+        relev_pedestrians = utils.get_relevant_pedestrians(veh_state, pedestrian_info)
+        veh_state.set_relev_pedestrians(relev_pedestrians)
+        utils.pickle_dump(str(veh_state.id)+'-0_'+str(time_ts).replace('.', ','), veh_state)
     if selected_action is None:
         actions = utils.get_actions(veh_state)
     else:
@@ -165,12 +173,6 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
                     l3_actions = trajectory_plan.generate_baseline(veh_state)
                     if l3_actions is not None and len(l3_actions) > 0:
                         utils.insert_baseline_trajectory(l3_actions, file_key)
-                '''
-                if len(l3_actions) > 0:
-                    utils.insert_generated_trajectory(l3_actions, file_key)
-                else:
-                    utils.pickle_dump(constants.L3_ACTION_CACHE+file_key, dict())
-                '''
             else:
                 print('loaded from cache: True')   
             #veh_state.action_plans[time_ts][l1][l2] = np.copy(l3_actions)
@@ -193,69 +195,76 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
             continue
         if r_a == 4 and time_ts==50.5505:
             brk = 1
-        r_a_state = motion_planner.VehicleState()
-        r_a_state.set_id(r_a)
-        r_a_state.set_current_time(time_ts)
-        r_a_track = utils.get_track(r_a_state,time_ts)
-        r_a_track_segment_seq = utils.get_track_segment_seq(r_a)
-        r_a_state.set_segment_seq(r_a_track_segment_seq)
-        r_a_state.action_plans = dict()
-        r_a_state.set_current_time(time_ts)
-        entry_exit_time = utils.get_entry_exit_time(r_a_state.id)
-        r_a_state.set_entry_exit_time(entry_exit_time)
-        if time_ts not in r_a_state.action_plans:
-            r_a_state.action_plans[time_ts] = dict()
-    
-        if len(r_a_track) == 0:
-            ''' this agent is out of the view currently'''
-            r_a_state.set_out_of_view(True)
-            r_a_track = None
+        ra_file_key = constants.L3_ACTION_CACHE + str(veh_state.id)+'-'+str(r_a)+'_'+str(time_ts).replace('.', ',')
+        if os.path.exists(ra_file_key):
+            r_a_state = utils.pickle_load(ra_file_key)
+            lead_vehicle = r_a_state.leading_vehicle
+            r_a_task = r_a_state.task
         else:
-            r_a_state.set_out_of_view(False)
-            r_a_state.set_track_info(r_a_track[0,])
-            r_a_track = r_a_track[0,]
+            r_a_state = motion_planner.VehicleState()
+            r_a_state.set_id(r_a)
+            r_a_state.set_current_time(time_ts)
+            r_a_track = utils.get_track(r_a_state,time_ts)
+            r_a_track_segment_seq = utils.get_track_segment_seq(r_a)
+            r_a_state.set_segment_seq(r_a_track_segment_seq)
+            r_a_state.action_plans = dict()
+            r_a_state.set_current_time(time_ts)
+            entry_exit_time = utils.get_entry_exit_time(r_a_state.id)
+            r_a_state.set_entry_exit_time(entry_exit_time)
+            if time_ts not in r_a_state.action_plans:
+                r_a_state.action_plans[time_ts] = dict()
         
-        if r_a_state.out_of_view or r_a_track[11] is None:
-            r_a_track_info = utils.guess_track_info(r_a_state,r_a_track)
-            if r_a_track_info[1,] is None:
-                brk = 1
-            r_a_state.set_track_info(r_a_track_info)
-            r_a_track_region = r_a_track_info[8,]
-            if r_a_track_region is None:
-                sys.exit('need to guess traffic region for relev agent')
-            r_a_current_segment = utils.get_current_segment(r_a_state,r_a_track_region,r_a_track_segment_seq,time_ts)
-        else:
-            r_a_current_segment = r_a_track[11]
-        
+            if len(r_a_track) == 0:
+                ''' this agent is out of the view currently'''
+                r_a_state.set_out_of_view(True)
+                r_a_track = None
+            else:
+                r_a_state.set_out_of_view(False)
+                r_a_state.set_track_info(r_a_track[0,])
+                r_a_track = r_a_track[0,]
             
-        r_a_state.set_current_segment(r_a_current_segment)
-        ''' 
-        r_a_current_segment = r_a_track[0,11]
-        r_a_state.set_current_segment(r_a_current_segment)
-        #for now we will only take into account the leading vehicles of the subject agent's relevant vehicles when constructing the possible actions.'''
-        lead_vehicle = utils.get_leading_vehicles(r_a_state)
-        r_a_state.set_leading_vehicle(lead_vehicle)
-        merging_vehicle = utils.get_merging_vehicle(r_a_state)
-        r_a_state.set_merging_vehicle(merging_vehicle)
-        r_a_direction = 'L_'+r_a_track_segment_seq[0][3].upper()+'_'+r_a_track_segment_seq[-1][3].upper()
-        r_a_traffic_light = utils.get_traffic_signal(time_ts, r_a_direction)
-        r_a_state.set_traffic_light(r_a_traffic_light)
-        r_a_state.set_direction(r_a_direction)
-        relev_crosswalks = utils.get_relevant_crosswalks(r_a_state)
-        r_a_state.set_relev_crosswalks(relev_crosswalks)
-        r_a_current_lane = None
-        if r_a_current_segment[0:2] == 'ln':
-            r_a_current_lane = r_a_current_segment
-        elif 'int-entry' in r_a_current_segment:
-            dir_key = str(r_a_track_segment_seq[0][3:])+'-'+r_a_track_segment_seq[-1][3:]
-            r_a_current_lane = constants.LANE_MAP[dir_key]
-        else:
-            r_a_current_lane = r_a_direction
-        r_a_state.set_current_lane(r_a_current_lane)
-        r_a_task = constants.TASK_MAP[r_a_direction]
-        r_a_state.set_task(r_a_task)
-        relev_pedestrians = utils.get_relevant_pedestrians(r_a_state, pedestrian_info)
-        r_a_state.set_relev_pedestrians(relev_pedestrians)
+            if r_a_state.out_of_view or r_a_track[11] is None:
+                r_a_track_info = utils.guess_track_info(r_a_state,r_a_track)
+                if r_a_track_info[1,] is None:
+                    brk = 1
+                r_a_state.set_track_info(r_a_track_info)
+                r_a_track_region = r_a_track_info[8,]
+                if r_a_track_region is None:
+                    sys.exit('need to guess traffic region for relev agent')
+                r_a_current_segment = utils.get_current_segment(r_a_state,r_a_track_region,r_a_track_segment_seq,time_ts)
+            else:
+                r_a_current_segment = r_a_track[11]
+            
+                
+            r_a_state.set_current_segment(r_a_current_segment)
+            ''' 
+            r_a_current_segment = r_a_track[0,11]
+            r_a_state.set_current_segment(r_a_current_segment)
+            #for now we will only take into account the leading vehicles of the subject agent's relevant vehicles when constructing the possible actions.'''
+            lead_vehicle = utils.get_leading_vehicles(r_a_state)
+            r_a_state.set_leading_vehicle(lead_vehicle)
+            merging_vehicle = utils.get_merging_vehicle(r_a_state)
+            r_a_state.set_merging_vehicle(merging_vehicle)
+            r_a_direction = 'L_'+r_a_track_segment_seq[0][3].upper()+'_'+r_a_track_segment_seq[-1][3].upper()
+            r_a_traffic_light = utils.get_traffic_signal(time_ts, r_a_direction)
+            r_a_state.set_traffic_light(r_a_traffic_light)
+            r_a_state.set_direction(r_a_direction)
+            relev_crosswalks = utils.get_relevant_crosswalks(r_a_state)
+            r_a_state.set_relev_crosswalks(relev_crosswalks)
+            r_a_current_lane = None
+            if r_a_current_segment[0:2] == 'ln':
+                r_a_current_lane = r_a_current_segment
+            elif 'int-entry' in r_a_current_segment:
+                dir_key = str(r_a_track_segment_seq[0][3:])+'-'+r_a_track_segment_seq[-1][3:]
+                r_a_current_lane = constants.LANE_MAP[dir_key]
+            else:
+                r_a_current_lane = r_a_direction
+            r_a_state.set_current_lane(r_a_current_lane)
+            r_a_task = constants.TASK_MAP[r_a_direction]
+            r_a_state.set_task(r_a_task)
+            relev_pedestrians = utils.get_relevant_pedestrians(r_a_state, pedestrian_info)
+            r_a_state.set_relev_pedestrians(relev_pedestrians)
+            utils.pickle_dump(str(veh_state.id)+'-'+str(r_a_state.id)+'_'+str(time_ts).replace('.', ','),r_a_state)
         ''' check if this relevant vehicle can be excluded '''
         if utils.can_exclude(veh_state,r_a_state):
             continue
@@ -315,6 +324,8 @@ and stores trajectory plans in L3_ACTION_CACHE. It's called hopping because at e
 to the real state in the real trajectory, and does not go on a counterfactual path. '''
 def generate_hopping_plans(state_dicts=None):
     skip_existing = False
+    task_list = ['S_E','S_W','N_E','W_S','W_N','E_S']
+    agent_ids = []
     if skip_existing:
         trajs_in_db = utils.get_trajectories_in_db() if not constants.BASELINE_TRAJECTORIES_ONLY else utils.get_baseline_trajectories_in_db()
     else:
@@ -322,9 +333,12 @@ def generate_hopping_plans(state_dicts=None):
     if state_dicts is not None:
         agent_ids = state_dicts.keys()
     else:
-        agent_ids = utils.get_agents_for_task('N_E') 
-    for agent_id in agent_ids: 
+        for t in task_list:
+            agent_ids = agent_ids + [int(x) for x in utils.get_agents_for_task(t)] 
+    agent_ids.sort()
+    for agent_id in [53]: 
         ''' veh_state object maintains details about an agent'''
+        
         veh_state = VehicleState()
         veh_state.set_id(agent_id)
         veh_state.set_current_time(None)
@@ -366,4 +380,4 @@ def generate_hopping_plans(state_dicts=None):
     
 
 
-#generate_hopping_plans()
+generate_hopping_plans()

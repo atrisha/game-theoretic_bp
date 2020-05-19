@@ -225,7 +225,7 @@ plt.show()
 '''
 
 
-    
+'''    
 import utils
 import numpy as np
 A1,B1 = [538856.03,4814002.42],[538855.83,4814005.40]
@@ -246,10 +246,56 @@ print(np.rad2deg(angle))
 print(utils.distance_numpy([538856.03,4814002.42], [538836.72,4813992.06], pt))
 print(utils.distance_numpy([538855.83,4814005.40], [538833.73,4813993.36], pt))
 print(A1-B1)
+'''
+
+from scipy.interpolate import CubicSpline
+from collections import OrderedDict
+veh_pos = (5,5)
+veh_yaw = math.pi/4
+veh = [veh_pos,(veh_pos[0] + (1*np.cos(veh_yaw)), veh_pos[1] + (1*np.sin(veh_yaw)))]
+
+def generate_path(hpx,hpy):
+    #path = utils.split_in_n((hpx[0],hpy[0]), (hpx[1],hpy[1]), 2)
+    path = [(hpx[0],hpy[0])]
+    s_x = [0] + [p2-p1 for p1,p2 in list(zip(hpx[:-1],hpx[1:]))]
+    s_x = [0] + [sum(s_x[:i+1]) for i in np.arange(1,len(s_x))]
+    s_y = [0] + [p2-p1 for p1,p2 in list(zip(hpy[:-1],hpy[1:]))]
+    s_y = [0] + [sum(s_y[:i+1]) for i in np.arange(1,len(s_y))]
+    indx = np.arange(len(s_x))
+    cs_x = CubicSpline(indx,s_x)
+    cs_y = CubicSpline(indx,s_y)
+    for i_a in np.arange(indx[0],indx[-1]+.1,.1):
+        path.append(((path[0][0]+cs_x(i_a)), ((path[0][1]+cs_y(i_a)))))
+    max_coeff = max(np.max(np.abs(cs_x.c[-1,:])), np.max(np.abs(cs_y.c[-1,:])))
+    return path,max_coeff
     
-    
-    
-    
+l1 = [(6,8),(7,9),(8,10),(10,12)]
+selected_path = ([],np.inf)
+cl_list = [l1]
+for d in np.arange(0,1.16,.1):
+    pl1,pl2 = utils.add_parallel(l1, d)
+    cl_list.append(pl1)
+    cl_list.append(pl2)
+
+for m_idx,l in enumerate(cl_list):
+    hpx = [veh_pos[0], veh_pos[0] + (1*np.cos(veh_yaw))]
+    hpy = [veh_pos[1], veh_pos[1] + (1*np.sin(veh_yaw))]
+    hpx = hpx + [x[0] for x in l]
+    hpy = hpy + [x[1] for x in l]
+    plt.plot(hpx,hpy,'x')
+    path,max_coeff = generate_path(hpx, hpy)
+    if max_coeff < selected_path[1]:
+        selected_path = (path,max_coeff)
+    print(max_coeff)
+plt.plot([x[0] for x in path], [x[1] for x in path],'green')
+print(max_coeff)
+plt.show()
+'''
+pl1,pl2 = utils.add_parallel(l1, 2)
+for l in [l1,pl1,pl2]:
+    plt.plot([x[0] for x in l], [x[1] for x in l])
+plt.show()
+''' 
     
     
     

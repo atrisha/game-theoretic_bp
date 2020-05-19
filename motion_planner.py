@@ -22,75 +22,190 @@ from scipy.stats import halfnorm
 from pip._vendor.distlib.util import proceed
 from collections import OrderedDict
 from constants import L2_ACTION_CODES
+import visualizer
+from tkinter.constants import BASELINE
 
     
     
 class TrajectoryPlan:
+    
+    def generate_path(self,hpx,hpy):
+        path = [(hpx[0],hpy[0])]
+        s_x = [0] + [p2-p1 for p1,p2 in list(zip(hpx[:-1],hpx[1:]))]
+        s_x = [0] + [sum(s_x[:i+1]) for i in np.arange(1,len(s_x))]
+        s_y = [0] + [p2-p1 for p1,p2 in list(zip(hpy[:-1],hpy[1:]))]
+        s_y = [0] + [sum(s_y[:i+1]) for i in np.arange(1,len(s_y))]
+        indx = np.arange(len(s_x))
+        cs_x = CubicSpline(indx,s_x)
+        cs_y = CubicSpline(indx,s_y)
+        for i_a in np.arange(indx[0],indx[-1]+.1,.1):
+            path.append(((path[0][0]+cs_x(i_a)), ((path[0][1]+cs_y(i_a)))))
+        max_coeff = max(np.max(np.abs(cs_x.c[-1,:])), np.max(np.abs(cs_y.c[-1,:])))
+        return path,max_coeff
     
     def construct_baseline_path(self,veh_state):
         l1_action = veh_state.l1_action
         yaw = veh_state.yaw
         hpx,hpy = [veh_state.x,veh_state.x+((constants.CAR_LENGTH/2)*np.cos(yaw))],[veh_state.y,veh_state.y+((constants.CAR_LENGTH/2)*np.sin(yaw))]
         path = None
-        if l1_action == 'proceed-turn' or l1_action == 'wait-for-oncoming' or l1_action == 'wait-for-pedestrian':
-            proceed_pos_ends = get_exitline_from_direction(veh_state.direction,veh_state)
-            if math.hypot(proceed_pos_ends[0][0]-veh_state.x, proceed_pos_ends[0][1]-veh_state.y) < constants.CAR_LENGTH/2:
-                proceed_pos_ends = get_exitline(veh_state.segment_seq[-1])
-            exit_segment = get_exitsegment_from_direction(veh_state.direction, veh_state)
-            mean_yaws = utils.get_mean_yaws_for_segments(exit_segment)
-            if exit_segment in mean_yaws:
-                proceed_pos_yaw = mean_yaws[exit_segment]
-            else:
-                proceed_pos_yaw = math.atan2(proceed_pos_ends[1][0]-proceed_pos_ends[0][0], proceed_pos_ends[1][1]-proceed_pos_ends[1][1]) + (math.pi/2)
-            end_pos = ((proceed_pos_ends[1][0]+proceed_pos_ends[0][0])/2, (proceed_pos_ends[1][1]+proceed_pos_ends[1][1])/2)
-            end_pos_but_last = (end_pos[0]-((constants.CAR_LENGTH/2)*np.cos(proceed_pos_yaw)) , end_pos[1]-((constants.CAR_LENGTH/2)*np.sin(proceed_pos_yaw)))
-        elif l1_action == 'track_speed' or l1_action == 'follow_lead':
-            proceed_pos_ends = get_exitline(veh_state.segment_seq[-1])
-            center_line = utils.get_centerline(veh_state.segment_seq[-1])
-            proceed_pos_yaw = math.atan2(center_line[1][1]-center_line[0][1], center_line[1][0]-center_line[0][0])
-            end_pos = ((proceed_pos_ends[1][0]+proceed_pos_ends[0][0])/2, (proceed_pos_ends[1][1]+proceed_pos_ends[1][1])/2)
-            end_pos_but_last = (end_pos[0]-((constants.CAR_LENGTH/2)*np.cos(proceed_pos_yaw)) , end_pos[1]-((constants.CAR_LENGTH/2)*np.sin(proceed_pos_yaw)))
-        elif l1_action == 'cut-in':
-            proceed_pos_ends = get_exitline(veh_state.current_segment[:-1]+str(int(veh_state.current_segment[-1])-1))
-            if math.hypot(proceed_pos_ends[0][0]-veh_state.x, proceed_pos_ends[0][1]-veh_state.y) < constants.CAR_LENGTH/2:
-                proceed_pos_ends = get_exitline(veh_state.segment_seq[ veh_state.segment_seq.index(veh_state.current_segment)+1 ])
-            proceed_pos_yaw = math.atan2(proceed_pos_ends[1][0]-proceed_pos_ends[0][0], proceed_pos_ends[1][1]-proceed_pos_ends[1][1]) + (math.pi/2)
-            end_pos = ((proceed_pos_ends[1][0]+proceed_pos_ends[0][0])/2, (proceed_pos_ends[1][1]+proceed_pos_ends[1][1])/2)
-            end_pos_but_last = (end_pos[0]-((constants.CAR_LENGTH/2)*np.cos(proceed_pos_yaw)) , end_pos[1]-((constants.CAR_LENGTH/2)*np.sin(proceed_pos_yaw)))
+        if veh_state.current_time==32.866167 and veh_state.id==44:
+            brk=1
+        if l1_action == 'proceed-turn' or l1_action == 'wait-for-oncoming' or l1_action == 'wait-for-pedestrian' \
+            or l1_action == 'track_speed' or l1_action == 'follow_lead' or l1_action == 'decelerate-to-stop' or l1_action == 'wait-on-red' or l1_action == 'yield-to-merging':
+            segments_in_path = veh_state.segment_seq[veh_state.segment_seq.index(veh_state.current_segment):]
+            for p_segment in segments_in_path:
+                if p_segment == veh_state.current_segment:
+                    centerline = utils.get_forward_line((veh_state.x,veh_state.y), veh_state.yaw, utils.get_centerline(p_segment))
+                else:
+                    centerline = utils.get_centerline(p_segment)
+                ''' add lattice points along the centerline '''
+                for cl_pt in centerline:
+                    min_hpx_dist = constants.CAR_LENGTH/2 if veh_state.task == 'RIGHT_TURN' else constants.CAR_LENGTH
+                    if math.hypot(cl_pt[0]-hpx[-1],cl_pt[1]-hpy[-1]) > min_hpx_dist:
+                        if len(hpx) > 1:
+                            angle_bet_lines = utils.angle_between_lines_2pi([(hpx[-2],hpy[-2]),(hpx[-1],hpy[-1])], [(hpx[-1],hpy[-1]),cl_pt])
+                        ''' add only if it is ahead in the path'''
+                        if (len(hpx) > 1 and (angle_bet_lines < math.pi/2 or 2*math.pi-angle_bet_lines < math.pi/2)) or len(hpx) <= 1:
+                            if math.hypot(cl_pt[0]-hpx[-1],cl_pt[1]-hpy[-1]) > 4*constants.CAR_LENGTH:
+                                seg_l = math.hypot(cl_pt[0]-hpx[-1],cl_pt[1]-hpy[-1])
+                                seg_pts = utils.split_in_n((hpx[-1],hpy[-1]), cl_pt, int(seg_l//constants.CAR_LENGTH))
+                                for s_p in seg_pts:
+                                    ''' check again since dist might be less after splitting '''
+                                    if math.hypot(s_p[0]-hpx[-1],s_p[1]-hpy[-1]) > min_hpx_dist:
+                                        hpx.append(s_p[0])
+                                        hpy.append(s_p[1])
+                            hpx.append(cl_pt[0])
+                            hpy.append(cl_pt[1])
+                
         elif l1_action == 'follow_lead_into_intersection' or l1_action == 'wait_for_lead_to_cross':
+            lead_veh_segment = veh_state.leading_vehicle.current_segment
+            if not (lead_veh_segment == veh_state.current_segment or math.hypot(veh_state.leading_vehicle.x-veh_state.x, veh_state.leading_vehicle.y-veh_state.y) < (constants.CAR_LENGTH*2)):
+                ''' add the current segment exit '''
+                exit_line = utils.get_exit_boundary(veh_state.current_segment)
+                exit_line = [(exit_line[0][0], exit_line[1][0]), (exit_line[0][1], exit_line[1][1])]
+                exit_line_center = ((exit_line[0][0]+exit_line[1][0])/2, (exit_line[0][1]+exit_line[1][1])/2)
+                dist_to_exit = math.hypot(exit_line_center[0]-veh_state.x, exit_line_center[1]-veh_state.y)
+                exit_line_len = math.hypot(exit_line[0][0]-exit_line[1][0], exit_line[0][1]-exit_line[1][1])
+                if dist_to_exit > constants.CAR_LENGTH*2:
+                    if exit_line_len > constants.LANE_WIDTH*1.5:
+                        if veh_state.segment_seq[-1][-2:] == '-1':
+                            exit_line = [(exit_line[0][0],exit_line[0][1]), ((exit_line[0][0]+exit_line_center[0])/2, (exit_line[0][1]+exit_line_center[1])/2)]
+                        else:
+                            exit_line = [((exit_line[1][0]+exit_line_center[0])/2, (exit_line[1][1]+exit_line_center[1])/2), (exit_line[1][0],exit_line[1][1]) ]
+                        exit_line_center = ((exit_line[0][0]+exit_line[1][0])/2, (exit_line[0][1]+exit_line[1][1])/2)
+                    dist_from_exit_to_lead = math.hypot(veh_state.leading_vehicle.x-exit_line_center[0], veh_state.leading_vehicle.y-exit_line_center[1])
+                    if dist_from_exit_to_lead > constants.CAR_LENGTH*2:
+                        hpx.append(exit_line_center[0])
+                        hpy.append(exit_line_center[1])
+            ''' add leading vehicle position'''
             end_pos_but_last = (veh_state.leading_vehicle.x, veh_state.leading_vehicle.y)
-            end_pos = (end_pos_but_last[0] + (constants.CAR_LENGTH/2) * np.cos(veh_state.leading_vehicle.yaw), end_pos_but_last[1] + (constants.CAR_LENGTH/2) * np.sin(veh_state.leading_vehicle.yaw))
-        elif l1_action == 'decelerate-to-stop' or l1_action == 'wait-on-red' or l1_action == 'yield-to-merging':
-            stop_line = utils.get_exit_boundary(veh_state.current_segment)
-            stop_point = (np.mean(stop_line[0]), np.mean(stop_line[1]))
-            dist_to_stopline = math.hypot(stop_point[0]-veh_state.x, stop_point[1]-veh_state.y)
-            mean_yaws = utils.get_mean_yaws_for_segments(veh_state.current_segment) 
-            if veh_state.current_segment in mean_yaws:
-                stop_yaw = mean_yaws[veh_state.current_segment]
-            else: 
-                stop_yaw = math.atan2(stop_line[1][1]-stop_line[1][0], stop_line[0][1]-stop_line[0][0]) + math.pi/2
-            if dist_to_stopline > constants.CAR_LENGTH/2:
-                hpx.append(stop_point[0])
-                hpy.append(stop_point[1])
-                end_pos = (stop_point[0] + (constants.CAR_LENGTH/2) * np.cos(stop_yaw), stop_point[1] + (constants.CAR_LENGTH/2) * np.sin(stop_yaw))
-                hpx.append(end_pos[0])
-                hpy.append(end_pos[1])
-            path = list(zip(hpx,hpy))
-        else:
-            raise ValueError(l1_action+" l1_action not implemented")
-        if path is None:
+            end_pos = (end_pos_but_last[0] + ((constants.CAR_LENGTH/2) * np.cos(veh_state.leading_vehicle.yaw)), end_pos_but_last[1] + ((constants.CAR_LENGTH/2) * np.sin(veh_state.leading_vehicle.yaw)))
+            hpx.append(end_pos_but_last[0])
+            #hpx.append(end_pos[0])
+            hpy.append(end_pos_but_last[1])
+            #hpy.append(end_pos[1])
+        elif l1_action == 'cut-in':
+            proceed_pos_ends = get_exitline_from_direction(veh_state.direction,veh_state)
+            proceed_pos_center = ((proceed_pos_ends[0][0]+proceed_pos_ends[1][0])/2, (proceed_pos_ends[0][1]+proceed_pos_ends[1][1])/2) 
+            if math.hypot(proceed_pos_center[0]-veh_state.x, proceed_pos_center[1]-veh_state.y) < constants.CAR_LENGTH/2:
+                next_segment = veh_state.segment_seq[min(veh_state.segment_seq.index(veh_state.current_segment)+1, len(veh_state.segment_seq)-1)]
+                proceed_pos_ends = get_exitline(next_segment)
+            procced_line_len = math.hypot(proceed_pos_ends[0][0]-proceed_pos_ends[1][0], proceed_pos_ends[0][1]-proceed_pos_ends[1][1])
+            if procced_line_len > constants.LANE_WIDTH*1.5:
+                if veh_state.segment_seq[-1][-2:] == '-1':
+                    proceed_pos_ends = [(proceed_pos_ends[0][0],proceed_pos_ends[0][1]), (proceed_pos_ends[0][0]+proceed_pos_center[0]/2, proceed_pos_ends[0][1]+proceed_pos_center[1]/2)]
+                else:
+                    [(proceed_pos_ends[1][0]+proceed_pos_center[0]/2, proceed_pos_ends[1][1]+proceed_pos_center[1]/2), (proceed_pos_ends[1][0],proceed_pos_ends[1][1]) ]
+                proceed_pos_center = ((proceed_pos_ends[0][0]+proceed_pos_ends[1][0])/2, (proceed_pos_ends[0][1]+proceed_pos_ends[1][1])/2)
+            proceed_pos_yaw = math.atan2(proceed_pos_ends[1][0]-proceed_pos_ends[0][0], proceed_pos_ends[1][1]-proceed_pos_ends[1][1]) + (math.pi/2)
+            end_pos = proceed_pos_center
+            end_pos_but_last = (end_pos[0]-((constants.CAR_LENGTH/2)*np.cos(proceed_pos_yaw)) , end_pos[1]-((constants.CAR_LENGTH/2)*np.sin(proceed_pos_yaw)))
             hpx.append(end_pos_but_last[0])
             hpx.append(end_pos[0])
             hpy.append(end_pos_but_last[1])
             hpy.append(end_pos[1])
-            _d = OrderedDict(sorted(list(zip(hpx,hpy)),key=lambda tup: tup[0]))
-            hpx,hpy = list(_d.keys()),list(_d.values())
-            cs = CubicSpline(hpx, hpy)
-            if veh_state.x > end_pos[0]:
-                path = [(x,float(cs(x))) for x in np.arange(veh_state.x,end_pos[0]-0.1,-0.1)]
+        else:
+            raise ValueError(l1_action+" l1_action not implemented")
+        hpx_f,hpy_f = utils.map_to_fresnet(veh_state.x, veh_state.y, hpx, hpy, veh_state.yaw)
+        '''
+        HP_f = []
+        for i in np.arange(len(hpx_f)-1):
+            seg_l = math.hypot(hpx_f[i+1]-hpx_f[i], hpy_f[i+1]-hpy_f[i]) 
+            if seg_l > constants.CAR_LENGTH:
+                split_seg = utils.split_in_n((hpx_f[i],hpy_f[i]), (hpx_f[i+1],hpy_f[i+1]), int(seg_l//constants.CAR_LENGTH))
+                for s in split_seg:
+                    if s not in HP_f:
+                        HP_f.append(s)
             else:
-                path = [(x,float(cs(x))) for x in np.arange(veh_state.x,end_pos[0]+0.1,0.1)]
-        plt.plot(hpx,hpy,'x')  
+                HP_f.append((hpx_f[i],hpy_f[i]))
+        hpx_f,hpy_f = [x[0] for x in HP_f],[x[1] for x in HP_f]
+        '''
+        '''
+        waypts = list(zip(hpx_f,hpy_f))
+        path_vertex_segments = utils.split_into_strict_order(waypts)
+        path_f = []
+        for wp_seg in path_vertex_segments:
+            _d = OrderedDict(sorted(wp_seg,key=lambda tup: tup[0]))
+            _hx,_hy = list(_d.keys()),list(_d.values())
+                 
+            if len(_hx) > 2:
+                cs = CubicSpline(_hx, _hy)
+                t_p = []
+                for dx in np.arange(0,wp_seg[-1][0]-wp_seg[0][0]+.1,.1 * ((wp_seg[-1][0]-wp_seg[0][0])/abs(wp_seg[-1][0]-wp_seg[0][0]))):
+                    pt_x = wp_seg[0][0] + dx
+                    pt_y = float(cs(pt_x))
+                    path_f.append((pt_x,pt_y))
+                '''
+        '''
+                if min([math.hypot(t_p[-1][0]-x[0], t_p[-1][1]-x[1]) for x in waypts]) > 2*constants.LANE_WIDTH:
+                    t_p = []
+                    for w_s in list(zip(wp_seg[:-1],wp_seg[1:])):
+                        s_ws = utils.split_in_n(w_s[0],w_s[1],int(math.hypot(w_s[0][0]-w_s[1][0],w_s[0][1]-w_s[1][1])//1))
+                        t_p = t_p + s_ws
+                    path_f = path_f + t_p
+                else:
+                    path_f = path_f + t_p
+                '''
+        '''
+            else:
+                for w_s in wp_seg:
+                    path_f.append(w_s)
+                    path_f.append(w_s)
+            '''
+        selected_path = ([],np.inf)
+        ''' forward centerline without the current vehicle location'''
+        if len(hpx_f) < 2:
+            path_f = utils.split_in_n((hpx_f[0],hpy_f[0]), (hpx_f[1],hpy_f[1]), 2)
+        else:
+            cl_for = list(zip(hpx_f[2:],hpy_f[2:]))
+            cl_list = [cl_for]
+            for d in np.arange(0,1.16,.1):
+                pl1,pl2 = utils.add_parallel(cl_for, d)
+                cl_list.append(pl1)
+                cl_list.append(pl2)
+            for m_idx,l in enumerate(cl_list):
+                hpx_l = [hpx_f[0],hpx_f[1]] + [x[0] for x in l]
+                hpy_l = [hpy_f[0],hpy_f[1]] + [x[1] for x in l]
+                cl_mx,cl_my = utils.fresnet_to_map(veh_state.x, veh_state.y, [x[0] for x in l], [x[1] for x in l], veh_state.yaw)
+                #plt.plot(cl_mx,cl_my,'x')
+                path_g,max_coeff = self.generate_path(hpx_l, hpy_l)
+                if max_coeff < selected_path[1]:
+                    selected_path = (path_g,max_coeff)
+            path_f,path_max_coeff = selected_path[0],selected_path[1]
+        path_X,path_Y = utils.fresnet_to_map(veh_state.x, veh_state.y, [x[0] for x in path_f], [x[1] for x in path_f], veh_state.yaw)
+        path = list(zip(path_X,path_Y))
+        '''
+        for s_p,e_p in sections:
+            if s_p > e_p:
+                path = path + [(x,float(cs(x))) for x in np.arange(s_p,e_p,-0.1)]
+            else:
+                path = path + [(x,float(cs(x))) for x in np.arange(s_p,e_p,0.1)]
+        '''  
+        
+        #if veh_state.current_time==48.715333 and veh_state.id==43:
+        '''
+        plt.plot(hpx,hpy,'x')
+        '''
         return path
         
     
@@ -102,7 +217,18 @@ class TrajectoryPlan:
         l2_action = self.l2_action
         veh_state.set_current_l1_action(l1_action)
         veh_state.set_current_l2_action(l2_action)
+        if l1_action == 'wait-for-pedestrian' and veh_state.id == 9:
+            brk=1
         baseline_path = self.construct_baseline_path(veh_state)
+        baseline_path = list(OrderedDict.fromkeys(baseline_path))
+        
+        '''
+        #if veh_state.current_time==48.715333 and veh_state.id==43:
+        visualizer.plot_traffic_regions()
+        plt.plot([x[0] for x in baseline_path],[x[1] for x in baseline_path],'--',color='black')
+        plt.show()
+        '''
+        
         dt = constants.LP_FREQ
         if l2_action == 'AGGRESSIVE':
             max_acc = (constants.MAX_LONG_ACC_AGGR - constants.MAX_LONG_ACC_NORMAL)/2
@@ -476,8 +602,25 @@ def get_stopline(init_segment):
 def get_exitsegment_from_direction(direction,veh_state):
     if constants.SEGMENT_MAP[veh_state.current_segment] == 'left-turn-lane':
         exit_segment = 'prep-turn_'+direction[2].lower()
+    elif constants.SEGMENT_MAP[veh_state.current_segment] == 'right-turn-lane':
+        exit_segment = 'rt_exec-turn_'+direction[2].lower()
     else:
-        exit_segment = 'exec-turn_'+direction[2].lower()
+        '''
+        if constants.SEGMENT_MAP[veh_state.current_segment] != 'exit-lane':
+            if constants.TASK_MAP[direction] == 'RIGHT_TURN':
+                exit_segment = 'rt_exec-turn_'+direction[2].lower()
+            else:
+                exit_segment = 'exec-turn_'+direction[2].lower()
+        else:
+            exit_segment = veh_state.current_segment
+        '''
+        ''' next segment '''
+        if constants.SEGMENT_MAP[veh_state.current_segment] == 'prep-left-turn':
+            exit_segment = 'exec-turn_'+direction[2].lower()
+        elif constants.SEGMENT_MAP[veh_state.current_segment] == 'prep-right-turn':
+            exit_segment = 'rt_exec-turn_'+direction[2].lower()
+        else:    
+            exit_segment = veh_state.current_segment
     return exit_segment
 
 def get_exitline_from_direction(direction,veh_state):

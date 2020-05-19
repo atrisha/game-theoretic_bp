@@ -163,28 +163,30 @@ def plot_paths_for_traj_info_id(traj_info_id=79):
     
     
 def plot_baselines():
+    import ast
+    
+    all_l1_actions = []
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
     c = conn.cursor()
-    q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO"
+    conn1 = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c1 = conn1.cursor()
+    ag_id = 53
+    q_string = "select distinct l1_action from GENERATED_TRAJECTORY_INFO where agent_id="+str(ag_id)
     c.execute(q_string)
     res = c.fetchall()
-    traj_dict = dict()
-    for row in res:
-        if row[1] in [13729,13730]:
-            continue
-        if row[6] in traj_dict:
-            traj_dict[row[6]].append(row[1])
-        else:
-            traj_dict[row[6]] = [row[1]] 
-    
-    for k,v in traj_dict.items():
-        q_string = "select * from GENERATED_BASELINE_TRAJECTORY where TRAJECTORY_INFO_ID in "+str(tuple(v))+" order by trajectory_id,time"
+    all_l1_actions = ['proceed-turn']        
+    for l1_act in all_l1_actions:
+        q_string = "SELECT DISTINCT TRAJ_ID FROM GENERATED_TRAJECTORY_INFO where l1_action='"+l1_act+"' and agent_id="+str(ag_id)
+        c.execute(q_string)
+        res = tuple(row[0] for row in c.fetchall())
+        
+        q_string = "select * from GENERATED_BASELINE_TRAJECTORY where TRAJECTORY_INFO_ID in "+str(tuple(res))+" order by trajectory_id,time"
+        print(q_string)
         c.execute(q_string)
         traj_dict = dict()
         res = c.fetchall()
         ct = 0
         for row in res:
-            print(ct)
             ct += 1
             if row[0] not in traj_dict:
                 traj_dict[row[0]] = [ [ row[3] ], [ row[4] ] ]
@@ -192,13 +194,21 @@ def plot_baselines():
                 traj_dict[row[0]][0].append(row[3])
                 traj_dict[row[0]][1].append(row[4])
         for k,v in traj_dict.items():
-            plt.plot(v[0],v[1])
-        
+            print(k)
+            plt.plot(v[0],v[1],'--',color='black')
+            
         ax = plt.gca()
         #ax.set_facecolor('black')
+        plt.title(l1_act)
         plt.axis('equaL')
+        q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point' and region_property <> 'left_boundary'"
+        c1.execute(q_string)
+        q_res = c1.fetchall()
+        plt.axis("equal")
+        for row in q_res:
+            plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
         plt.show()
-    
+    conn.close()
     
 
 def plot_all_trajectories(traj,ax1,ax2,ax3):
@@ -224,12 +234,40 @@ def plot_traffic_regions():
     plt.axis("equal")
     for row in q_res:
         plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
+    '''
     q_string = "SELECT X_POSITION,Y_POSITION FROM CONFLICT_POINTS"
     c.execute(q_string)
     q_res = c.fetchall()
     plt.plot([x[0] for x in q_res], [x[1] for x in q_res], 'x')
     plt.show()   
-    
+    '''
+    #plt.show()
+        
+def verify_traffic_regions():
+    import ast
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point' and region_property <> 'left_boundary' and region_property <> 'gate_line'"
+    c.execute(q_string)
+    q_res = c.fetchall()
+    plt.axis("equal")
+    N = len(q_res)
+    for idx,row in enumerate(q_res):
+        plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]),'--',color='black')
+        for idx2,row2 in enumerate(q_res):
+            if idx!=idx2 and (row[4]!=row2[4] and row[5] != row2[5]): 
+                plt.plot(ast.literal_eval(row2[4]),ast.literal_eval(row2[5]))
+        plt.title(row[0]+' , '+row[3]+' '+'['+str(idx)+'/'+str(N)+']')
+        plt.show()
+        
+    '''
+    q_string = "SELECT X_POSITION,Y_POSITION FROM CONFLICT_POINTS"
+    c.execute(q_string)
+    q_res = c.fetchall()
+    plt.plot([x[0] for x in q_res], [x[1] for x in q_res], 'x')
+    plt.show()   
+    '''
+        
 def plot_exit_yaws():
     import ast
     import utils
@@ -255,5 +293,5 @@ def plot_exit_yaws():
       
     
     
-       
-#plot_traffic_regions()
+     
+#plot_baselines()

@@ -24,6 +24,8 @@ from builtins import isinstance
 import planning_objects
 import statistics
 from scipy.interpolate import CubicSpline
+import logging
+logging.basicConfig(format='%(levelname)-8s %(filename)s: %(message)s',level=logging.INFO)
 
 
 
@@ -127,10 +129,30 @@ def line_intersection(line_1,line_2):
     py= ( (x1*y2-y1*x2)*(y3-y4)-(y1-y2)*(x3*y4-y3*x4) ) / ( (x1-x2)*(y3-y4)-(y1-y2)*(x3-x4) )
     return (px, py)
 '''
+
+def get_forward_line(pt,yaw,line):
+    forward_line = []
+    for l_pt in line:
+        angle_to_line_pt = math.atan2(l_pt[1]-pt[1], l_pt[0]-pt[0])
+        yaw = yaw % (2*math.pi)
+        angle_to_line_pt = angle_to_line_pt if angle_to_line_pt > 0 else (2*math.pi)-abs(angle_to_line_pt)
+        if abs(angle_to_line_pt-yaw) < math.pi/2 or 2*math.pi-abs(angle_to_line_pt-yaw) < math.pi/2:
+            forward_line.append(l_pt)
+    return forward_line
+
+def angle_between_lines_2pi(line_1,line_2):
+    '''x2-x1'''
+    line_1_angle = math.atan2(line_1[1][1]-line_1[0][1], line_1[1][0]-line_1[0][0])
+    line_1_angle = line_1_angle if line_1_angle > 0 else (2*math.pi)-abs(line_1_angle)
+    line_2_angle = math.atan2(line_2[1][1]-line_2[0][1], line_2[1][0]-line_2[0][0])
+    line_2_angle = line_2_angle if line_2_angle > 0 else (2*math.pi)-abs(line_2_angle)
+    diff = abs(line_1_angle-line_2_angle)
+    return diff
+
 def get_centerline(lane_segment):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    q_string = "SELECT X_POSITIONS,Y_POSITIONS FROM TRAFFIC_REGIONS_DEF WHERE NAME = '"+lane_segment+"' and REGION_PROPERTY='center_line' and SHAPE='line'"
+    q_string = "SELECT X_POSITIONS,Y_POSITIONS FROM TRAFFIC_REGIONS_DEF WHERE NAME = '"+lane_segment+"' and REGION_PROPERTY='center_line'"
     c.execute(q_string)
     res = c.fetchall()
     center_coordinates = None
@@ -139,6 +161,8 @@ def get_centerline(lane_segment):
         y_coords = ast.literal_eval(row[1])
         center_coordinates = list(zip(x_coords,y_coords))
     conn.close()
+    if center_coordinates is None:
+        sys.exit("no centerline found for "+lane_segment)
     return center_coordinates
 
 def get_mean_yaws_for_segments(segments):
@@ -247,6 +271,7 @@ def pickle_load(file_key):
     return l3_actions
 
 def pickle_dump(file_key,l3_actions):
+    file_key = constants.L3_ACTION_CACHE+file_key
     directory = os.path.dirname(file_key)
     if not os.path.exists(directory):
         os.makedirs(directory)
@@ -304,6 +329,32 @@ def fresnet_to_map(o_x,o_y,X,Y,centerline_angle):
         M_X.append(new_point[0])
         M_Y.append(new_point[1])
     return M_X,M_Y
+
+def map_to_fresnet(o_x,o_y,X,Y,yaw):
+    F_X,F_Y = [],[]
+    a = yaw
+    h,k = o_x,o_y
+    ''' from https://pages.mtu.edu/~shene/COURSES/cs3621/NOTES/geometry/geo-tran.html
+    rotation_and_translation_matrix = np.asarray([[np.cos(a), -np.sin(a), h],\
+                                                 [np.sin(a), np.cos(a), k],\
+                                                 [0, 0, 1]])
+    '''
+    translation_matrix = np.asarray([[1, 0, -h],\
+                                    [0, 1, -k],\
+                                    [0, 0, 1]])
+    
+    rotation_matrix = np.asarray([[np.cos(a), np.sin(a), 0],\
+                                 [-np.sin(a), np.cos(a), 0],\
+                                 [0, 0, 1]])
+    
+    for x,y in zip(X,Y):
+        point = np.asarray([x, y, 1]).T
+        translated_point = np.matmul(translation_matrix,point)
+        new_point = np.matmul(rotation_matrix, translated_point)
+        F_X.append(new_point[0])
+        F_Y.append(-new_point[1])
+    return F_X,F_Y
+    
         
         
 
@@ -330,6 +381,38 @@ def construct_state_grid(pt1,pt2,N,tol,grid_type):
     for r in tol:
         grid.append([(x[0]-(r*math.cos(slope_comp)),x[1]+(r*math.sin(slope_comp))) for x in central_coords])
     return np.asarray(grid)
+
+''' add two parallel lines to line at a lateral distance on either side of line'''
+def add_parallel(line, dist):
+    if len(line) < 2:
+        logging.warn("attemped to add parallel to line size less than 2")
+    polyline = True if len(line) > 2 else False
+    
+    p_line_lat1, p_line_lat2 = [],[]
+    for l_idx in np.arange(1,len(line)):
+        pt1 = line[l_idx-1]
+        pt2 = line[l_idx]
+        cl_angle = math.atan2(pt2[1]-pt1[1], pt2[0]-pt1[0])
+        cl_angle = cl_angle if cl_angle > 0 else (2*math.pi) - abs(cl_angle)
+        cl_normal = (cl_angle + (math.pi/2))%(2*math.pi)
+        ''' add the point normal to pt1 and pt2 on both sides '''
+        pt1_lat1 = (pt1[0] + dist*np.cos(cl_normal), pt1[1] + dist*np.sin(cl_normal))
+        pt1_lat2 = (pt1[0] - dist*np.cos(cl_normal), pt1[1] - dist*np.sin(cl_normal))
+        
+        pt2_lat1 = (pt2[0] + dist*np.cos(cl_normal), pt2[1] + dist*np.sin(cl_normal))
+        pt2_lat2 = (pt2[0] - dist*np.cos(cl_normal), pt2[1] - dist*np.sin(cl_normal))
+        if l_idx == 1:
+            p_line_lat1.append(pt1_lat1)
+            p_line_lat2.append(pt1_lat2)
+        p_line_lat1.append(pt2_lat1)
+        p_line_lat2.append(pt2_lat2)
+        
+    return p_line_lat1, p_line_lat2
+        
+         
+    
+    
+    
 '''
 plt.plot([0,20],[0,30],'ro')
 split_pts = split_in_n((0,0), (20,30), 10)
@@ -569,6 +652,17 @@ def get_track(veh_state,curr_time,from_current=None):
         l.append(row)
     conn.close()
     return np.asarray(l)
+
+def get_current_segment_by_veh_id(veh_id,time_ts):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "SELECT ASSIGNED_SEGMENT FROM TRAJECTORIES_0769_EXT WHERE TRACK_ID="+str(veh_id)+" AND TIME="+str(time_ts)
+    c.execute(q_string)
+    res = c.fetchone()
+    curr_segment = res[0]
+    return curr_segment
+    
+    
 
 def get_pedestrian_track(p_state,q_time):
     p_id = p_state.p_id
@@ -827,7 +921,7 @@ def can_exclude(veh_state,r_a_state):
     elif veh_state.task == 'LEFT_TURN' and (r_a_state.task=='RIGHT_TURN' and (r_a_state.leading_vehicle is not None and r_a_state.leading_vehicle.current_segment == r_a_state.current_segment) and constants.SEGMENT_MAP[r_a_state.current_segment] == 'right-turn-lane'):
         ''' exclude vehicles that are turning right from oncoming lane to the common lane but are behind a more relevant vehicle '''
         return True
-    elif veh_state.task == 'RIGHT_TURN' and (r_a_state.task=='LEFT_TURN' and (r_a_state.leading_vehicle is not None and r_a_state.leading_vehicle.current_segment == r_a_state.current_segment) and constants.SEGMENT_MAP[r_a_state.current_segment] == 'left-turn-lane'):
+    elif veh_state.task == 'RIGHT_TURN' and (r_a_state.task=='LEFT_TURN' and (r_a_state.leading_vehicle is not None and (r_a_state.leading_vehicle.current_segment == r_a_state.current_segment or constants.SEGMENT_MAP[r_a_state.leading_vehicle.current_segment] == 'prep-left-turn')) and constants.SEGMENT_MAP[r_a_state.current_segment] == 'left-turn-lane'):
         ''' exclude vehicles that are turning left from oncoming lane to the common lane but are behind a more relevant vehicle '''
         return True
     else:
@@ -1113,6 +1207,8 @@ def insert_baseline_trajectory(l3_actions,f):
     res = c.fetchone()
     if res is not None and len(res) > 0:
         traj_info_id = res[1]
+        c.execute('DELETE FROM GENERATED_BASELINE_TRAJECTORY WHERE TRAJECTORY_INFO_ID='+str(traj_info_id))
+        conn.commit()
     else:
         c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?)',i_string_data)
         conn.commit()
@@ -1199,6 +1295,25 @@ def calc_traj_diff(traj1,traj2):
     _t1,_t2 = [(x[1],x[2]) for x in traj1[:slice_len]], [(x[1],x[2]) for x in traj2[:slice_len]]
     residual = sum([math.hypot(x[1][0]-x[0][0], x[1][1]-x[0][1]) for x in zip(_t1,_t2)])
     return residual
+
+def split_into_strict_order(pt_l):
+    split_l,inc,temp_l = [],None,[]
+    for i in np.arange(1,len(pt_l)):
+        if inc is None:
+            inc = True if pt_l[i][0] > pt_l[i-1][0] else False
+            temp_l = [pt_l[i-1],pt_l[i]]
+            continue
+        elif (inc and pt_l[i][0] > pt_l[i-1][0]) or (not inc and pt_l[i][0] <= pt_l[i-1][0]):
+            if len(temp_l) >= constants.MAX_FP:
+                split_l.append(temp_l)
+                temp_l = [pt_l[i-1]]
+            temp_l.append(pt_l[i])
+        else:
+            split_l.append(temp_l)
+            temp_l = [pt_l[i-1],pt_l[i]]
+            inc = True if pt_l[i][0] > pt_l[i-1][0] else False
+    split_l.append(temp_l)
+    return split_l
     
 def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,acc):
     dist_from_origin = [0] + [math.hypot(p2[0]-p1[0], p2[1]-p1[1]) for p1,p2 in list(zip(path[:-1],path[1:]))]
@@ -1337,7 +1452,11 @@ def generate_trajectory_from_vel_profile(time,ref_path,vel_profile):
 def get_relevant_crosswalks(veh_state):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    q_string = "select * from RELEVANT_CROSSWALK_MAP WHERE RELEVANT_CROSSWALK_MAP.VEH_PATH='"+veh_state.direction+"'"
+    if isinstance(veh_state, planning_objects.VehicleState):
+        q_string = "select * from RELEVANT_CROSSWALK_MAP WHERE RELEVANT_CROSSWALK_MAP.VEH_PATH='"+veh_state.direction+"'"
+    elif isinstance(veh_state, int):
+        veh_id = veh_state
+        q_string = "SELECT * FROM RELEVANT_CROSSWALK_MAP WHERE VEH_PATH = (select DISTINCT 'L_' || UPPER(SUBSTR(TRAFFIC_SEGMENT_SEQ,6,1)) || '_' ||UPPER(SUBSTR(TRAFFIC_SEGMENT_SEQ,LENGTH(TRAFFIC_SEGMENT_SEQ)-5,1)) FROM TRAJECTORY_MOVEMENTS  WHERE TRACK_ID="+str(veh_id)+")"
     c.execute(q_string)
     res = c.fetchone()
     if res is None:
@@ -1514,7 +1633,7 @@ def get_relevant_pedestrians(veh_state, pedestrian_info):
                         relev_pedestrians.append(ped_state)
                     elif ped_state.crosswalks[xwalk]['location'] == constants.BEFORE_CROSSWALK and ped_state.crosswalks[xwalk]['dist_to_entry'] < constants.PEDESTRIAN_CROSSWALK_DIST_THRESH:
                         relev_pedestrians.append(ped_state)
-    return relev_pedestrians
+    return relev_pedestrians if len(relev_pedestrians) > 0 else None
                         
             
                                
@@ -1582,7 +1701,7 @@ def clip_trajectory_to_viewport(res):
 def get_agents_for_task(task_str):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    q_string = "SELECT TRACK_ID FROM TRAJECTORY_MOVEMENTS,SEGMENT_SEQ_MAP WHERE TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ=SEGMENT_SEQ_MAP.SEGMENT_SEQ AND SEGMENT_SEQ_MAP.DIRECTION='"+task_str+"'"
+    q_string = "SELECT DISTINCT TRACK_ID FROM TRAJECTORY_MOVEMENTS,SEGMENT_SEQ_MAP WHERE TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ=SEGMENT_SEQ_MAP.SEGMENT_SEQ AND SEGMENT_SEQ_MAP.DIRECTION='"+task_str+"' ORDER BY TRACK_ID"
     c.execute(q_string)
     res = c.fetchall()       
     agents = [int(x[0]) for x in res]

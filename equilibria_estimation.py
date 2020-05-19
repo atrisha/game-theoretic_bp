@@ -219,11 +219,10 @@ def get_equil_action_in_db(param_str):
     return eq_acts
          
 
-def add_eq_state_contexts():
-    param_str = 'l2_Nash|l3_baseline_only'
+def add_eq_state_contexts(param_str,direction):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    q_string = "SELECT TRACK_ID,TIME FROM EQUILIBRIUM_ACTIONS WHERE EQ_CONFIG_PARMS = '"+param_str+"'"
+    q_string = "SELECT TRACK_ID,TIME FROM EQUILIBRIUM_ACTIONS WHERE EQ_CONFIG_PARMS = '"+param_str+"' and task='"+str(direction)+"'"
     c.execute(q_string)                 
     res = c.fetchall()
     N_tot = len(res)
@@ -295,26 +294,26 @@ def split_by_distinct_actions(eq_info_rows):
     eq_dict = dict()
     for row in eq_info_rows:
         all_acts = []
-        for a in [utils.print_readable(x)[8:] for x in ast.literal_eval(row[15])]:
+        for a in [utils.print_readable(x)[8:] for x in ast.literal_eval(row[16])]:
             if a not in all_acts:
                 all_acts.append(a)
         all_acts_l = all_acts
         all_acts = str(all_acts_l)
         if all_acts not in eq_dict:
             eq_dict[all_acts] = dict()
-            eq_dict[all_acts]['emp_act'] = [[x[8:] for x in ast.literal_eval(row[13])]]
-            eq_dict[all_acts]['eq_acts'] = [[utils.print_readable(x)[8:] for x  in ast.literal_eval(row[12])]]
-            all_act_payoffs = ast.literal_eval(row[16]) #np.mean(np.vstack(ast.literal_eval(row[16])), axis=0)
+            eq_dict[all_acts]['emp_act'] = [[utils.print_readable(x)[8:] for x in ast.literal_eval(row[14])]]
+            eq_dict[all_acts]['eq_acts'] = [[utils.print_readable(x)[8:] for x  in ast.literal_eval(row[13])]]
+            all_act_payoffs = ast.literal_eval(row[17]) #np.mean(np.vstack(ast.literal_eval(row[16])), axis=0)
             eq_dict[all_acts]['all_payoffs'] = [all_act_payoffs]
-            for idx,eq_a in enumerate([utils.print_readable(x)[8:] for x  in ast.literal_eval(row[12])]):
+            for idx,eq_a in enumerate([utils.print_readable(x)[8:] for x  in ast.literal_eval(row[13])]):
                 if max(all_act_payoffs[idx]) != all_act_payoffs[idx][all_acts_l.index(eq_a)]:
                     brk=1
         else:
-            eq_dict[all_acts]['emp_act'].append([x[8:] for x in ast.literal_eval(row[13])])
-            eq_dict[all_acts]['eq_acts'].append([utils.print_readable(x)[8:] for x  in ast.literal_eval(row[12])])
-            all_act_payoffs = ast.literal_eval(row[16]) #np.mean(np.vstack(ast.literal_eval(row[16])), axis=0)
+            eq_dict[all_acts]['emp_act'].append([utils.print_readable(x)[8:] for x in ast.literal_eval(row[14])])
+            eq_dict[all_acts]['eq_acts'].append([utils.print_readable(x)[8:] for x  in ast.literal_eval(row[13])])
+            all_act_payoffs = ast.literal_eval(row[17]) #np.mean(np.vstack(ast.literal_eval(row[16])), axis=0)
             eq_dict[all_acts]['all_payoffs'].append(all_act_payoffs)
-            for idx,eq_a in enumerate([utils.print_readable(x)[8:] for x  in ast.literal_eval(row[12])]):
+            for idx,eq_a in enumerate([utils.print_readable(x)[8:] for x  in ast.literal_eval(row[13])]):
                 max_p = max(all_act_payoffs[idx])
                 eq_p = all_act_payoffs[idx][all_acts_l.index(eq_a)]
                 if max_p != eq_p:
@@ -325,18 +324,20 @@ def analyse_equilibrium_data():
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
     all_segs = ['prep-turn%','exec-turn%','ln\__\__']
-    for seg in ['ln\__\__']:
+    for seg in ['prep-turn%','exec-turn%']:
         eq_dict_l = []
-        q_string = "select * from EQUILIBRIUM_ACTIONS where EQUILIBRIUM_ACTIONS.TRAFFIC_SIGNAL in ('G','Y') and EQ_CONFIG_PARMS= 'l2_Nash|l3_baseline_only' and EQUILIBRIUM_ACTIONS.SEGMENT like '"+seg+"' ESCAPE '\\' "
+        q_string = "select * from EQUILIBRIUM_ACTIONS where EQUILIBRIUM_ACTIONS.TRAFFIC_SIGNAL in ('G','Y') and EQ_CONFIG_PARMS= 'NASH|BASELINE_ONLY' and EQUILIBRIUM_ACTIONS.SEGMENT like '"+seg+"' ESCAPE '\\' "
         c.execute(q_string)                 
         res = c.fetchall()
         eq_dict = split_by_distinct_actions(res)
         eq_dict_l.append(eq_dict)
+        '''
         q_string = "select * from EQUILIBRIUM_ACTIONS where EQUILIBRIUM_ACTIONS.TRAFFIC_SIGNAL in ('G','Y') and EQ_CONFIG_PARMS= 'l2_BR_w_true_belief|l3_baseline_only' and EQUILIBRIUM_ACTIONS.SEGMENT like '"+seg+"' ESCAPE '\\' "
         c.execute(q_string)                 
         res = c.fetchall()
         eq_dict = split_by_distinct_actions(res)
         eq_dict_l.append(eq_dict)
+        '''
         for didx,eq_dict in enumerate(eq_dict_l):
             
             for act_k,act_info in eq_dict.items():
@@ -344,62 +345,69 @@ def analyse_equilibrium_data():
                 emp_act_distr = []
                 eq_act_distr = []            
                 all_acts = ast.literal_eval(act_k)
-                for k,v in act_info.items():
-                    if k == 'emp_act':
-                        for acts_idx,emp_acts in enumerate(v):
-                            for act_idx,e_a in enumerate(emp_acts):
-                                emp_act_idx = all_acts.index(e_a)
-                                emp_act_payoff = [x[all_acts.index(e_a)] for x in act_info['all_payoffs'][acts_idx]]
-                                max_payoff = [max(x) for x in act_info['all_payoffs'][acts_idx]]
-                                payoff_diff = np.subtract(max_payoff,emp_act_payoff)
-                                min_payoff_diff =min(payoff_diff)
-                                
-                                for i in np.arange(len(payoff_diff)):
-                                    eq_act = act_info['eq_acts'][acts_idx][i]
-                                    if eq_act == e_a:
-                                        min_payoff_diff = 0
-                                        break
-                                
-                                if min_payoff_diff > 0:
-                                    ''' find the eq act with minimum diff with emp payoff '''
+                if len(all_acts) > 0:
+                    for k,v in act_info.items():
+                        if k == 'emp_act':
+                            for acts_idx,emp_acts in enumerate(v):
+                                for act_idx,e_a in enumerate(emp_acts):
+                                    emp_act_idx = all_acts.index(e_a)
+                                    emp_act_payoff = [x[all_acts.index(e_a)] for x in act_info['all_payoffs'][acts_idx]]
+                                    max_payoff = [max(x) for x in act_info['all_payoffs'][acts_idx]]
+                                    payoff_diff = np.subtract(max_payoff,emp_act_payoff)
+                                    min_payoff_diff =min(payoff_diff)
+                                    
                                     for i in np.arange(len(payoff_diff)):
-                                        eq_act = act_info['eq_acts'][acts_idx][i]
-                                        if payoff_diff[i] == min(payoff_diff):
-                                            diff_tup = str(eq_act)+'-'+str(e_a)
-                                            if diff_tup in act_delta_dict:
-                                                act_delta_dict[diff_tup].append(min(payoff_diff))
-                                            else:
-                                                act_delta_dict[diff_tup] = [min(payoff_diff)]
+                                        if i == len(act_info['eq_acts'][acts_idx]):
+                                            eq_act = act_info['eq_acts'][acts_idx][i-1]
+                                        else:
+                                            eq_act = act_info['eq_acts'][acts_idx][i]
                                         if eq_act == e_a:
-                                            brk=1
-                                emp_act_distr.append(min_payoff_diff)
-                    elif k == 'eq_acts':
-                        for acts_idx,eq_acts in enumerate(v):
-                            for act_idx,e_a in enumerate(eq_acts):
-                                eq_act_payoff = [x[all_acts.index(e_a)] for x in act_info['all_payoffs'][acts_idx]]
-                                max_payoff = [max(x) for x in act_info['all_payoffs'][acts_idx]]
-                                payoff_diff = np.subtract(max_payoff,eq_act_payoff)
-                                eq_act_distr.append(min(payoff_diff))
-                text_str = '\n'.join([t for t in all_acts])
-                fig, ax = plt.subplots()
-                _ = ax.hist(emp_act_distr, bins=np.arange(0,1.1,.1))
-                #_ = ax[1].hist(eq_act_distr, bins=np.arange(0,1.1,.1))
-                props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-                ax.text(0.5, 0.95, text_str, transform=ax.transAxes, fontsize=8,verticalalignment='top', bbox=props)
-                #ax[1].text(0.5, 0.95, text_str, transform=ax[1].transAxes, fontsize=8,verticalalignment='top', bbox=props)
-                title_str = 'Nash eq' if didx == 0 else 'Nash eq with prior beliefs'
-                plt.title(seg+' '+title_str)
-                '''
-                fig, ax = plt.subplots()
-                x = np.arange(len(act_delta_dict))
-                plt.bar(x, height=list([np.mean(y) for y in act_delta_dict.values()]))
-                plt.xticks(x, list(act_delta_dict.keys()), rotation='vertical')
-                #plt.tight_layout()
-                plt.subplots_adjust(bottom=.5)
-                title_str = 'Nash eq' if didx == 0 else 'Nash eq with prior beliefs'
-                plt.title('delta_dict'+' '+title_str)
-                '''
-        plt.show()
+                                            min_payoff_diff = 0
+                                            break
+                                    
+                                    if min_payoff_diff > 0:
+                                        ''' find the eq act with minimum diff with emp payoff '''
+                                        for i in np.arange(len(payoff_diff)):
+                                            if i == len(act_info['eq_acts'][acts_idx]):
+                                                eq_act = act_info['eq_acts'][acts_idx][i-1]
+                                            else:
+                                                eq_act = act_info['eq_acts'][acts_idx][i]
+                                            if payoff_diff[i] == min(payoff_diff):
+                                                diff_tup = str(eq_act)+'-'+str(e_a)
+                                                if diff_tup in act_delta_dict:
+                                                    act_delta_dict[diff_tup].append(min(payoff_diff))
+                                                else:
+                                                    act_delta_dict[diff_tup] = [min(payoff_diff)]
+                                            if eq_act == e_a:
+                                                brk=1
+                                    emp_act_distr.append(min_payoff_diff)
+                        elif k == 'eq_acts':
+                            for acts_idx,eq_acts in enumerate(v):
+                                for act_idx,e_a in enumerate(eq_acts):
+                                    eq_act_payoff = [x[all_acts.index(e_a)] for x in act_info['all_payoffs'][acts_idx]]
+                                    max_payoff = [max(x) for x in act_info['all_payoffs'][acts_idx]]
+                                    payoff_diff = np.subtract(max_payoff,eq_act_payoff)
+                                    eq_act_distr.append(min(payoff_diff))
+                    text_str = '\n'.join([t for t in all_acts])
+                    fig, ax = plt.subplots()
+                    _ = ax.hist(emp_act_distr, bins='auto')
+                    #_ = ax[1].hist(eq_act_distr, bins=np.arange(0,1.1,.1))
+                    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+                    ax.text(0.5, 0.95, text_str, transform=ax.transAxes, fontsize=8,verticalalignment='top', bbox=props)
+                    #ax[1].text(0.5, 0.95, text_str, transform=ax[1].transAxes, fontsize=8,verticalalignment='top', bbox=props)
+                    title_str = 'Nash eq' if didx == 0 else 'Nash eq with prior beliefs'
+                    plt.title(seg+' '+title_str)
+                    '''
+                    fig, ax = plt.subplots()
+                    x = np.arange(len(act_delta_dict))
+                    plt.bar(x, height=list([np.mean(y) for y in act_delta_dict.values()]))
+                    plt.xticks(x, list(act_delta_dict.keys()), rotation='vertical')
+                    #plt.tight_layout()
+                    plt.subplots_adjust(bottom=.5)
+                    title_str = 'Nash eq' if didx == 0 else 'Nash eq with prior beliefs'
+                    plt.title('delta_dict'+' '+title_str)
+                    '''
+    plt.show()
             
                 
     
@@ -412,7 +420,8 @@ def calc_eqs_for_hopping_trajectories():
     if update_only:
         eq_acts_in_db = get_equil_action_in_db(param_str)
     eval_config = EvalConfig()
-    task_list = ['S_W','W_N']
+    d = ['S_W','N_E']
+    task_list = ['W_N','E_S']
     for direction in task_list:
         logging.info('setting parameters')
         eval_config.setup_parameters(direction)
@@ -422,6 +431,10 @@ def calc_eqs_for_hopping_trajectories():
         logging.info('setting empirical actions')
         eq.calc_empirical_actions()
         equilibria_dict = eq.calc_equilibrium()
+        eq.set_equilibria_dict(equilibria_dict)
+        eq.insert_to_db()
+        param_str = eq.eval_config.l1_eq +'|'+ eq.eval_config.l3_eq if eq.eval_config.l3_eq is not None else eq.eval_config.l1_eq +'|BASELINE_ONLY'
+        add_eq_state_contexts(param_str,direction)
         f=1
         '''
         step_size_secs = PLAN_FREQ
@@ -476,4 +489,4 @@ def calc_eqs_for_hopping_trajectories():
 
         '''        
 
-calc_eqs_for_hopping_trajectories()
+#calc_eqs_for_hopping_trajectories()

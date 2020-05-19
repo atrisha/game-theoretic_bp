@@ -13,6 +13,7 @@ import itertools
 import ast
 from cost_evaluation import CostEvaluation
 import equilibria_core as eq_core
+import sys
 import logging
 logging.basicConfig(format='%(levelname)-8s %(filename)s: %(message)s',level=logging.INFO)
 
@@ -21,7 +22,7 @@ class Equilibria:
     class L1L2Equilibrium:
         
         def __init__(self):
-            self.equilibria_actions = dict()            
+            self.equilibria_actions = dict()      
             
             
     class L3Equilibria:
@@ -36,39 +37,6 @@ class Equilibria:
     def __init__(self,eval_config):
         self.eval_config = eval_config
     
-    def setup_parameters(self,eq_list,sub_all_actions,sub_all_payoffs,emp_act,curr_time,traj_det,task,param_str):
-        self.param_str = param_str
-        self.eq_list = eq_list
-        self.sub_all_actions = sub_all_actions
-        eq_act_list = set()
-        _eq_dict = dict()
-        
-        for i,eq in enumerate(eq_list):
-            for sv_act in sub_all_actions:
-                if sv_act in eq:
-                    if sv_act in _eq_dict:
-                        _eq_dict[sv_act].append(sub_all_payoffs[i])
-                    else:
-                        _eq_dict[sv_act] = [sub_all_payoffs[i]]
-        
-        for k,v in _eq_dict.items():
-            _payoffs = np.vstack(v)
-            _mean_payoffs = np.mean(_payoffs,axis=0)
-            _eq_dict[k] = _mean_payoffs.tolist()
-        self.sub_empirical_act = emp_act
-        self.sub_eq_acts = list(_eq_dict.keys())
-        self.sub_all_action_payoffs_at_eq = list(_eq_dict.values())
-        self.num_eqs = len(eq_list)
-        self.num_agents = len(eq_list[0])
-        self.curr_time = curr_time
-        self.task = task
-        self.relev_agents = None
-        self.trajectory_cache = dict()
-        for k,v in traj_det.items():
-            if not isinstance(k, str):
-                self.track_id = k
-            elif k == 'relev_agents':
-                self.relev_agents = list(v.keys())
         
                 
     
@@ -90,7 +58,7 @@ class Equilibria:
         for time_ts,ag_act_dict in self.eval_config.traj_metadata.items():
             self.empirical_actions[time_ts] = dict()
             ct += 1
-            logging.info(str(ct)+'/'+str(N))
+            logging.info(self.eval_config.direction+'    '+str(ct)+'/'+str(N))
             for ag_id,act_dict in ag_act_dict.items():
                 agent_acts = dict()
                 agent_id = None
@@ -203,90 +171,130 @@ class Equilibria:
                     acts = [self.to_actstring(str(r[2])+'|'+str(r[3])+'|'+r[4]+'|'+r[5])+'-'+str(r[1]) for r in ag_act_row]
                     emp_dict_key = (int(ag_id_str.split('-')[0]), int(ag_id_str.split('-')[1]))
                     #if emp_dict_key in self.empirical_actions:
-                    emp_acts = self.empirical_actions[time_ts][emp_dict_key]
-                    beliefs = [1/len(emp_acts) if r.split('-')[0] in emp_acts else 0 for r in acts]
                     all_acts.append(acts)
-                    all_beliefs.append(beliefs)
+                    if 'BELIEF' in self.eval_config.l1_eq:
+                        emp_acts = self.empirical_actions[time_ts][emp_dict_key]
+                        beliefs = [1/len(emp_acts) if r.split('-')[0] in emp_acts else 0 for r in acts]
+                        all_beliefs.append(beliefs)
                     for r in ag_act_row:
                         if r[3] == 0:
                             sv_actions = [r.split('-')[0] for r in acts]
                         all_baseline_ids.append(str(r[1]))
         all_action_combinations = list(itertools.product(*[v for v in all_acts]))
-        all_belief_combinations = list(itertools.product(*[v for v in all_beliefs]))
-        belief_dict = {tuple(x.split('-')[0] for x in k):v for k,v in zip(all_action_combinations,all_belief_combinations)}
+        if 'BELIEF' in self.eval_config.l1_eq:
+            all_belief_combinations = list(itertools.product(*[v for v in all_beliefs]))
+            belief_dict = {tuple(x.split('-')[0] for x in k):v for k,v in zip(all_action_combinations,all_belief_combinations)}
         utility_dict = {k:np.zeros(shape=len(k)) for k in all_action_combinations}
         self.trajectory_cache = utils.load_trajs_for_traj_info_id(all_baseline_ids)
-        return utility_dict,sv_actions,belief_dict
+        if 'BELIEF' in self.eval_config.l1_eq:
+            return utility_dict,sv_actions,belief_dict
+        else:
+            return utility_dict,sv_actions,None
     
     def calc_l1l2_equilibrium(self):
         equilibra_dict = dict()
         ct,N = 0,len(self.eval_config.traj_metadata)
         for time_ts,m_data in self.eval_config.traj_metadata.items():
             ct += 1
+            self.curr_time = time_ts
+            pedestrian_info = utils.setup_pedestrian_info(time_ts)
+            self.eval_config.set_pedestrian_info(pedestrian_info)
             equilibra_dict[time_ts] = dict()
             for sv_id,sv_det in m_data.items():
-                logging.info(str(time_ts)+"-"+str(sv_id)+":"+str(ct)+'/'+str(N))
+                
                 equilibra_dict[time_ts][sv_id] = dict()
                 l1l2_utility_dict,sv_actions,belief_dict = self.build_l1l2_utility_table(sv_det,time_ts)
                 payoffdict = dict()
                 for l1l2_strat,l1l2_utility in l1l2_utility_dict.items():
-                    cost_ev = CostEvaluation()
+                    cost_ev = CostEvaluation(self)
                     l3_payoff = cost_ev.calc_l3_payoffs(self,l1l2_strat)
                     assert(len(l3_payoff)==1)
                     ''' the l1l2 payoff table is constructed with the payoffs from lower levels '''
                     payoffdict[tuple([k.split('-')[0] for k in l1l2_strat])] = next(iter(l3_payoff.values()))
                 ''' release this '''    
                 l1l2_utility_dict = None
+                N_payoff_table = len(payoffdict)
+                logging.info(self.eval_config.direction+" "+str(time_ts)+"-"+str(sv_id)+":"+str(ct)+'/'+str(N)+":"+str(N_payoff_table))
                 all_eq = []
                 if self.eval_config.l1_eq == 'NASH':
                     eq = eq_core.calc_pure_strategy_nash_equilibrium_exhaustive(payoffdict,True)
                     for e,p in eq.items():
                         l1l2_eq = self.L1L2Equilibrium()
                         l1l2_eq.equilibria_actions = {(int(k[0][3:6]), int(k[0][6:9])):(k[0],k[1]) for k in zip(e,p)}
+                        eq_act_tuple = [x if x[6:9]!='000' else None for x in list(e)]
+                        sv_act_payoffs = []
+                        for sv_act in sv_actions:
+                            _act_tup = tuple([x if x is not None else sv_act for x in eq_act_tuple])
+                            sv_index = _act_tup.index(sv_act)
+                            sv_payoff = round(payoffdict[_act_tup][sv_index],6)
+                            sv_act_payoffs.append(sv_payoff)
                         readable_eq = utils.print_readable(e)
+                        l1l2_eq.all_act_payoffs = sv_act_payoffs
                         all_eq.append(l1l2_eq)
+                        
                 elif self.eval_config.l1_eq == 'BR_TRUE_BELIEF':
                     eq_strats,all_acts,act_payoffs = eq_core.calc_best_response_with_beliefs(payoffdict, belief_dict)
                     for e in eq_strats:
                         l1l2_eq = self.L1L2Equilibrium()
-                        l1l2_eq.all_actions = dict()
                         for aa_idx,a_a in enumerate(all_acts):
                             for _a_idx,_act in enumerate(a_a):
                                 ag_key = (int(_act[3:6]), int(_act[6:9]))
-                                if ag_key not in l1l2_eq.all_actions:
-                                    l1l2_eq.all_actions[ag_key] = [(_act,act_payoffs[aa_idx][_a_idx])]
-                                else:
-                                    l1l2_eq.all_actions[ag_key].append((_act,act_payoffs[aa_idx][_a_idx]))
                                 if _act in e:
                                     l1l2_eq.equilibria_actions[ag_key] = (_act,act_payoffs[aa_idx][_a_idx])
-                        all_eq.append(l1l2_eq)       
-                equilibra_dict[time_ts][sv_id] = all_eq
+                        sv_act_payoffs = []
+                        for sv_act in sv_actions:
+                            for aa_idx,a_a in enumerate(all_acts):
+                                if len(a_a) > 0:
+                                    if int(a_a[0][6:9]) == 0:
+                                        for _a_idx,_act in enumerate(a_a):
+                                            if _act == sv_act:
+                                                sv_payoff = act_payoffs[aa_idx][_a_idx]
+                                                sv_act_payoffs.append(sv_payoff)
+                        l1l2_eq.all_act_payoffs = sv_act_payoffs
+                        all_eq.append(l1l2_eq)
+                                                
+                                                
+                               
+                else:
+                    sys.exit('equilibria type not implemented')
+                equilibra_dict[time_ts][sv_id]['eq_info'] = all_eq
+                equilibra_dict[time_ts][sv_id]['all_actions'] = sv_actions
                 if len(all_eq) > 1:
                     brk=1 
         return equilibra_dict
                 
                     
-                
+    def set_equilibria_dict(self,eq_dict):
+        self.equilibria_dict = eq_dict
         
     
     def calc_equilibrium(self):
         equilibra_dict = self.calc_l1l2_equilibrium()
+        return equilibra_dict
     
     
     def insert_to_db(self):
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
         c = conn.cursor()
-        q_string = "REPLACE INTO EQUILIBRIUM_ACTIONS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-        for eq_i in np.arange(len(self.sub_all_action_payoffs_at_eq)):
-            _z = list(zip(self.sub_all_actions,self.sub_all_action_payoffs_at_eq[eq_i]))
-            _z.sort()
-            self.sub_all_action_payoffs_at_eq[eq_i] = [x[1] for x in _z]
-            self.sub_all_actions = [x[0] for x in _z]
-        
-        ins_tuple = (769,self.task,self.track_id,self.curr_time,None,None,None,None,None,None,None,self.relev_agents,\
-                     self.sub_eq_acts,self.sub_empirical_act,self.param_str,self.sub_all_actions,self.sub_all_action_payoffs_at_eq,self.num_eqs)
-        ins_tuple = tuple(str(x) for x in ins_tuple)
-        c.execute(q_string,ins_tuple)
+        param_str = self.eval_config.l1_eq +'|'+ self.eval_config.l3_eq if self.eval_config.l3_eq is not None else self.eval_config.l1_eq +'|BASELINE_ONLY'
+        q_string = "REPLACE INTO EQUILIBRIUM_ACTIONS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        ins_list = []
+        for time_ts,eq_det in self.equilibria_dict.items():
+            for sv_id,sv_eq in eq_det.items():
+                track_id,curr_time,relev_agents,eq_act,emp_act,all_acts,all_act_payoffs,num_eq = sv_id,time_ts,[],[],self.empirical_actions[time_ts][(sv_id,0)],None,[],len(sv_eq['eq_info'])
+                all_acts = sv_eq['all_actions']
+                for eq_inst in sv_eq['eq_info']:
+                    for k,v in eq_inst.equilibria_actions.items():
+                        if k[1] != 0:
+                            relev_agents.append(k[1])
+                        else:
+                            eq_act.append(v[0])
+                    all_act_payoffs.append(eq_inst.all_act_payoffs)
+                ins_tuple = (int(constants.CURRENT_FILE_ID),self.eval_config.direction,track_id,curr_time,None,None,None,None,None,None,None,relev_agents,None,\
+                     eq_act,emp_act,param_str,all_acts,all_act_payoffs,num_eq)
+                ins_tuple = tuple(str(x) if x is not None else x for x in ins_tuple)
+                ins_list.append(ins_tuple)
+        c.executemany(q_string,ins_list)
         conn.commit()
         conn.close()
         
@@ -345,4 +353,8 @@ class EvalConfig:
         
     def set_l3_eq_type(self,l3_eq):
         self.l3_eq = l3_eq          
+        
+    def set_pedestrian_info(self, pedestrian_info):
+        self.pedestrian_info = pedestrian_info
+    
         

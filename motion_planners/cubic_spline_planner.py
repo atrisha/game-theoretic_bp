@@ -5,7 +5,7 @@ Created on Mar 11, 2020
 '''
 
 import numpy as np
-import utils
+from all_utils import utils
 import constants
 from scipy.interpolate import CubicSpline,interp1d,splev, splrep, BSpline, UnivariateSpline
 import math
@@ -553,7 +553,7 @@ def cubic_spline_planner(veh_state,knot_grids):
         rx = [x[0] for x in P]
         rx_time = [x[0] for x in utils.split_in_n((rx[0],0), (rx[-1],0), len(tx))]
         traj = [(x,float(CS(x))) for x in rx_time]
-        #traj = utils.generate_trajectory_from_vel_profile(tx, P, rv)
+        #traj = all_utils.generate_trajectory_from_vel_profile(tx, P, rv)
         ra = [abs(x[1]-x[0])/.1 for x in zip(rv[:-1],rv[1:])]
         ra = ra + [ra[-1]]
         rj = [abs(x[1]-x[0])/.1 for x in zip(ra[:-1],ra[1:])]

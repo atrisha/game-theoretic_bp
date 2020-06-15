@@ -5,31 +5,125 @@ Created on Feb 11, 2020
 '''
 import numpy as np
 import itertools
+from all_utils import utils
 import operator
+import datetime
+import os
+import constants
+import logging
+logging.basicConfig(format='%(levelname)-8s %(filename)s: %(message)s',level=logging.INFO)
 
-def calc_pure_strategy_nash_equilibrium_exhaustive1(pay_off_dict):
-    num_players = len(list(pay_off_dict.values())[0])
-    strat_sets,eq_strats = [],[]
-    for i in np.arange(num_players):
-        strat_set = set([x[i] for x in list(pay_off_dict.keys())])
-        strat_sets.append(strat_set)
-    for i in np.arange(num_players):
-        ag_eq_strats = []
-        all_other_strats = list(itertools.product(*[strat_sets[j] for j in np.arange(num_players) if j!=i]))
-        for oth_strat in all_other_strats:
-            curr_agent_strats = [] 
+class EquilibriaCore:
+    
+    def __init__(self,num_players,pay_off_dict,N):
+        self.num_players = num_players
+        self.pay_off_dict = pay_off_dict
+        self.N = N
+        #self.bidirec_payoff_dict = bidict(pay_off_dict).inverse
+
+    def calc_pure_strategy_nash_equilibrium_exhaustive(self):
+        num_players = self.num_players
+        pay_off_dict = self.pay_off_dict
+        strat_sets,eq_strats = [],[]
+        for i in np.arange(num_players):
+            strat_set = set([x[i] for x in list(pay_off_dict.keys())])
+            strat_sets.append(strat_set)
+        start_time = datetime.datetime.now()
+        for i in np.arange(num_players):
+            ag_eq_strats = []
+            all_other_strats = list(itertools.product(*[strat_sets[j] for j in np.arange(num_players) if j!=i]))
+            for oth_strat in all_other_strats:
+                curr_agent_strats = [] 
+                for strat in strat_sets[i]:
+                    _s = list(oth_strat)
+                    _s.insert(i,strat)
+                    curr_agent_strats.append(_s)
+                try:
+                    max_strat_payoffs = max([v[i] for k,v in pay_off_dict.items() if k in [tuple(strat) for strat in curr_agent_strats]])
+                except IndexError:
+                    brk=1
+                max_strat = [k for k,v in pay_off_dict.items() if v[i]==max_strat_payoffs and k in [tuple(strat) for strat in curr_agent_strats] ]
+                for m in max_strat:
+                    if m not in ag_eq_strats:
+                        ag_eq_strats.append(m)
+            eq_strats.append(ag_eq_strats)
+        result = list(pay_off_dict.keys())
+        for i in np.arange(len(eq_strats)):
+            result = list(set(result).intersection(eq_strats[i]))
+            if len(result) == 0:
+                break
+        end_time = datetime.datetime.now()
+        self.exec_time = str((end_time-start_time).microseconds/1000)
+        return {k:v for k,v in pay_off_dict.items() if k in result}
+    
+    def calc_max_min_response_deprecated(self,all=False):
+        num_players = self.num_players
+        pay_off_dict = self.pay_off_dict
+        strat_sets,eq_strats = [],[]
+        for i in np.arange(num_players):
+            strat_set = set([x[i] for x in list(pay_off_dict.keys())])
+            strat_sets.append(strat_set)
+        
+        max_min_strats = [list()]*num_players
+        for i in np.arange(num_players):
+            ag_eq_strats = []
             for strat in strat_sets[i]:
-                _s = list(oth_strat)
-                _s.insert(i,strat)
-                curr_agent_strats.append(_s)
-            max_strat_payoffs = max([v[i] for k,v in pay_off_dict.items() if k in [tuple(strat) for strat in curr_agent_strats]])
-            max_strat = [k for k,v in pay_off_dict.items() if v[i]==max_strat_payoffs and k in [tuple(strat) for strat in curr_agent_strats] ]
-            for m in max_strat:
-                if m not in ag_eq_strats:
-                    ag_eq_strats.append(m)
-        eq_strats.append(ag_eq_strats)
-    result = list(set(eq_strats[0]).intersection(*eq_strats[:1]))    
-    return result
+                all_other_strats = list(itertools.product(*[strat_sets[j] for j in np.arange(num_players) if j!=i]))
+                curr_agent_strats = []
+                for oth_strat in all_other_strats:
+                    _s = list(oth_strat)
+                    _s.insert(i,strat)
+                    curr_agent_strats.append(_s)
+                min_strat_payoffs = min([v[i] for k,v in pay_off_dict.items() if k in [tuple(this_strat) for this_strat in curr_agent_strats]])
+                ag_eq_strats.append((strat,min_strat_payoffs))
+            ag_eq_strats.sort(key=lambda tup: tup[1], reverse = True)
+            ag_eq_strats = [x[0] for x in ag_eq_strats if x[1]==ag_eq_strats[0][1]]
+            max_min_strats[i] = ag_eq_strats
+        eq_strats = list(itertools.product(*[v for v in max_min_strats]))
+        if not all and len(eq_strats) > 1:
+            cumul_payoffs_sorted = sorted([(k,sum(pay_off_dict[k])) for k in eq_strats], key=lambda tup: tup[1], reverse = True)
+            result = {cumul_payoffs_sorted[0][0]:pay_off_dict[cumul_payoffs_sorted[0][0]]}
+        else:
+            result = {k:pay_off_dict[k] for k in eq_strats}
+        return result
+    
+    def calc_max_min_response(self):
+        payoff_dict = self.pay_off_dict
+        num_players = self.num_players
+        res_dict = {n:{} for n in np.arange(self.num_players)}
+        for s,p in payoff_dict.items():
+            for i in np.arange(num_players):  
+                if s[i] not in res_dict[i]:
+                    res_dict[i][s[i]] = np.inf
+                else:
+                    if p[i] < res_dict[i][s[i]]:
+                        res_dict[i][s[i]] = p[i]
+        eq_strat = [None]*num_players
+        for k,v in res_dict.items():
+            eq_strat[k] = max(v.items(), key=operator.itemgetter(1))[0]
+        eq_strat = tuple(eq_strat)
+        eq_res = {eq_strat:payoff_dict[eq_strat]}
+        return eq_res
+    
+    def calc_best_response(self):
+        num_players = len(list(self.pay_off_dict.values())[0]) 
+        br_strats = tuple([max(self.pay_off_dict.keys(), key=(lambda k: self.pay_off_dict[k][i]))[i] for i in np.arange(num_players)])
+        br_payoffs = self.pay_off_dict[br_strats]
+        eq_dict = dict()
+        for i in np.arange(num_players):
+            for k,v in self.pay_off_dict.items():
+                if v[i]==br_payoffs[i]:
+                    eq_dict[k] = v
+        return eq_dict
+        
+        
+
+def calc_pure_strategy_nash_equilibrium_exhaustive2(pay_off_dict,all_eqs=False):
+    num_players = 2
+    for k,v in pay_off_dict.items():
+        for i in np.arange(num_players):
+            p_k = i
+        
                 
 
 def calc_best_response(pay_off_dict):
@@ -74,6 +168,7 @@ def calc_best_response_with_beliefs(pay_off_dict,belief_dict):
 
 def calc_pure_strategy_nash_equilibrium_exhaustive(pay_off_dict,all_eqs=False):
     num_players = len(list(pay_off_dict.values())[0])
+    start_time = datetime.datetime.now()
     eq = list(pay_off_dict.keys())
     N = len(pay_off_dict)
     ct = 0
@@ -102,6 +197,8 @@ def calc_pure_strategy_nash_equilibrium_exhaustive(pay_off_dict,all_eqs=False):
                     if k1 in eq and oth_strategy_same:
                         eq.remove(k1)
     eq_dict =  {k:pay_off_dict[k] for k in eq}
+    end_time = datetime.datetime.now()
+    print((end_time-start_time).microseconds)
     if not all_eqs:
         ''' if multiple nash equilibria found, then select the one that has highest cumulative payoff '''
         if len(eq_dict) > 1:
@@ -271,11 +368,21 @@ toy_merge = {(('wait', 'cancel'), ('slow', 'cont. speed')): [10, 20],
 '''
 br_b = calc_best_response_with_beliefs(toy_merge,dict())
 br = calc_best_response(toy_merge)
-ne_all = calc_pure_strategy_nash_equilibrium_exhaustive(toy_merge,True)
+'''
+'''
+ne_all = calc_pure_strategy_nash_equilibrium_exhaustive1(pay_off_dict,True)
 #ne = calc_pure_strategy_nash_equilibrium_exhaustive(game_of_chicken)
-print(br)
+#print(br)
 print()
-print('all')
+print('all toy1')
+for k,v in ne_all.items():
+    print(k,v)
+
+ne_all = calc_pure_strategy_nash_equilibrium_exhaustive(pay_off_dict,True)
+#ne = calc_pure_strategy_nash_equilibrium_exhaustive(game_of_chicken)
+#print(br)
+print()
+print('all toy')
 for k,v in ne_all.items():
     print(k,v)
 #print(ne)
@@ -296,4 +403,26 @@ eq = calc_pure_strategy_nash_equilibrium_exhaustive1(pay_off_dict)
 print(len(eq))
 end_t = timer()
 print('time taken',end_t - start_t)
+'''
+'''
+l3_payoff = all_utils.pickle_load(os.path.join(constants.ROOT_DIR,constants.TEMP_TRAJ_CACHE,'l3_payoff'))
+
+eq_core = EquilibriaCore(4,l3_payoff,len(l3_payoff))
+start_time = datetime.datetime.now()
+eq = eq_core.calc_max_min_response_eff()
+end_time = datetime.datetime.now()
+exec_time = str((end_time-start_time).microseconds/1000)
+print(eq)
+print(exec_time+'ms')
+
+eq_core = EquilibriaCore(4,l3_payoff,len(l3_payoff))
+start_time = datetime.datetime.now()
+eq = eq_core.calc_max_min_response()
+end_time = datetime.datetime.now()
+exec_time = str((end_time-start_time).microseconds/1000)
+print(eq)
+print(exec_time+'ms')
+
+
+f=1
 '''

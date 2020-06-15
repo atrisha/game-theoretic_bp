@@ -6,18 +6,24 @@ Created on Jan 15, 2020
 import csv
 import numpy as np
 import sqlite3
-import utils
+
 import sys
 import constants
-from planning_objects import VehicleState
+from motion_planners.planning_objects import VehicleState
 import ast
 import matplotlib.pyplot as plt
-from utils import get_leading_vehicles
+#import all_utils
+from all_utils import utils
+from all_utils.utils import reduce_relev_agents
 import os
 from os import listdir
 from collections import OrderedDict
-import pandas as pd
-from utils import get_agents_for_task
+import itertools
+from _functools import reduce
+log = constants.common_logger
+
+
+
 
 
 
@@ -423,7 +429,7 @@ def assign_curent_segment():
             veh_track_region = None
             '''
             if track_pt[8] is None or len(track_pt[8]) == 0:
-                veh_track_region = utils.guess_track_info(veh_state)[8,]
+                veh_track_region = all_utils.guess_track_info(veh_state)[8,]
                 if veh_track_region is None:
                     print(agent_id,track_pt[6])
                     sys.exit('need to guess traffic region for agent')
@@ -764,7 +770,8 @@ def insert_trajectory_complexity():
             if id in already_in:
                 continue
             try:
-                compl = eval_complexity(traj,file_str)
+                g=1
+                #compl = eval_complexity(traj,file_str)
             except:
                 compl = None
             
@@ -782,7 +789,7 @@ def insert_trajectory_complexity():
 def get_traj_metadata(task):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
     c = conn.cursor()
-    q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE GENERATED_TRAJECTORY_INFO.TRAJ_ID IN (SELECT DISTINCT GENERATED_BASELINE_TRAJECTORY.TRAJECTORY_INFO_ID FROM GENERATED_BASELINE_TRAJECTORY) AND GENERATED_TRAJECTORY_INFO.AGENT_ID IN "+str(tuple(get_agents_for_task(task)))+" ORDER BY GENERATED_TRAJECTORY_INFO.AGENT_ID"
+    q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE GENERATED_TRAJECTORY_INFO.TRAJ_ID IN (SELECT DISTINCT GENERATED_BASELINE_TRAJECTORY.TRAJECTORY_INFO_ID FROM GENERATED_BASELINE_TRAJECTORY UNION SELECT DISTINCT GENERATED_BOUNDARY_TRAJECTORY.TRAJECTORY_INFO_ID FROM GENERATED_BOUNDARY_TRAJECTORY) AND GENERATED_TRAJECTORY_INFO.AGENT_ID IN "+str(tuple(utils.get_agents_for_task(task)))+" ORDER BY GENERATED_TRAJECTORY_INFO.AGENT_ID"
     c.execute(q_string)
     res = c.fetchall()
     state_dict = OrderedDict()
@@ -823,4 +830,112 @@ def get_traj_metadata(task):
     return state_dict
 
 
-#insert_segment_gate_events()
+def reduce_relev_agents():
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    c = conn.cursor()
+    q_string = "select TRAJECTORY_INFO_ID,count(distinct TRAJECTORY_ID) from GENERATED_BOUNDARY_TRAJECTORY GROUP BY TRAJECTORY_INFO_ID ORDER BY TRAJECTORY_INFO_ID"
+    c.execute(q_string)
+    res = c.fetchall()
+    traj_dict = {row[0]:row[1] for row in res}
+    q_string = "select TRAJECTORY_INFO_ID,count(distinct TRAJECTORY_ID) from GENERATED_BASELINE_TRAJECTORY GROUP BY TRAJECTORY_INFO_ID ORDER BY TRAJECTORY_INFO_ID"
+    c.execute(q_string)
+    res = c.fetchall()
+    for row in res:
+        if row[0] in traj_dict:
+            traj_dict[row[0]] = traj_dict[row[0]] + row[1]
+        else:
+            traj_dict[row[0]] = row[1]
+    q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO" 
+    c.execute(q_string)
+    res = c.fetchall()
+    state_dict = OrderedDict()
+    zero_traj_info_ids = []
+    for row in res:
+        time_ts = row[6]
+        agent_id = int(row[2])
+        relev_agent = int(row[3])
+        l1_action = row[4]
+        l2_action = row[5]
+        if str((agent_id,time_ts)) not in state_dict:
+            state_dict[str((agent_id,time_ts))] = dict()
+            if row[1] in traj_dict:
+                state_dict[str((agent_id,time_ts))][str(relev_agent)] = ([1],[traj_dict[row[1]]])
+        else:
+            if str(relev_agent) not in state_dict[str((agent_id,time_ts))]:
+                if row[1] in traj_dict:
+                    state_dict[str((agent_id,time_ts))][str(relev_agent)] = ([1],[traj_dict[row[1]]])
+            else:
+                if row[1] in traj_dict:
+                    l1_ct,l3_ct =state_dict[str((agent_id,time_ts))][str(relev_agent)]
+                    state_dict[str((agent_id,time_ts))][str(relev_agent)] = (l1_ct+[1],l3_ct+[traj_dict[row[1]]])
+        if row[1] not in traj_dict:
+            if row[1] not in zero_traj_info_ids:
+                zero_traj_info_ids.append(row[1])
+    
+    for k,v in state_dict.items():
+        n_l1,n_l3 = 1,1
+        if k == str((53, 47.5475)):
+            brk=1
+        l1 = list(itertools.product(*[x[0] for x in v.values()]))
+        l3 = list(itertools.product(*[x[1] for x in v.values()]))
+        size_dict = (len(l1),[np.prod(np.array(x)) for x in l3],[x for x in v.keys()])
+        state_dict[k] = size_dict
+        
+        #print(k,str([x for x in v.keys()]),str([x[1] for x in v.values()]),n_l3)
+    relev_agents_to_reduce = []
+    N = len(state_dict)
+    ct = 0
+    for k,v in state_dict.items():
+        ct += 1
+        
+        max_l3 = max([x for x in v[1]])
+        #log.info(str(v[0])+'/'+str(max_l3))
+        if max_l3 > 10000:
+            #print(k,v[0],max_l3,str(v[2]))
+            log.info(str(v[0])+'/'+str(max_l3))
+            ag_id,ts = ast.literal_eval(k)
+            r_agents = [int(x) for x in v[2] if int(x) != 0]
+            reduced_list = reduce_relev_agents(ag_id,ts,r_agents)
+            for ag in r_agents:
+                if ag not in reduced_list:
+                    if (ag_id,ts,ag) not in relev_agents_to_reduce:
+                        relev_agents_to_reduce.append((ag_id,ts,ag))
+    
+    if len(relev_agents_to_reduce) > 0: 
+        traj_info_ids_to_del = []
+        for ag in relev_agents_to_reduce:
+            print(ag)
+            q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE AGENT_ID="+str(ag[0])+" AND RELEV_AGENT_ID="+str(ag[2])+" AND TIME="+str(ag[1])
+            c.execute(q_string)
+            res = c.fetchall()
+            for row in res:
+                if row[1] not in traj_info_ids_to_del:
+                    traj_info_ids_to_del.append(row[1])
+        for traj_info_id in traj_info_ids_to_del:
+            print(traj_info_id)
+        print(len(traj_info_ids_to_del))
+        '''
+        q_string = "DELETE FROM GENERATED_BASELINE_TRAJECTORY WHERE TRAJECTORY_INFO_ID IN"+str(tuple(traj_info_ids_to_del))
+        c.execute(q_string)
+        q_string = "DELETE FROM GENERATED_BOUNDARY_TRAJECTORY WHERE TRAJECTORY_INFO_ID IN"+str(tuple(traj_info_ids_to_del))
+        c.execute(q_string)
+        q_string = "DELETE FROM GENERATED_TRAJECTORY_INFO WHERE TRAJ_ID IN"+str(tuple(traj_info_ids_to_del))
+        c.execute(q_string)
+        conn.commit()
+        conn.close()
+        '''
+        '''
+        plt.figure()
+        plt.title('l1')
+        plt.hist(n_l1,density=True)
+        plt.figure()
+        plt.title('l3')
+        plt.hist(n_l3,bins=[0,1000,2000,4000,8000,16000,32000,100000,500000,1000000,10000000,np.inf])
+        plt.show()
+        '''
+        
+        
+        #print(max(n_l1), max(n_l3))
+
+if __name__ == '__main__':
+    reduce_relev_agents()

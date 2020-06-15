@@ -7,8 +7,12 @@ import csv
 import matplotlib.pyplot as plt
 import numpy as np
 import sqlite3
-from utils import kph_to_mps
 import constants
+from all_utils import utils
+from all_utils.utils import kph_to_mps
+import matplotlib.animation as animation
+log = constants.common_logger
+from collections import OrderedDict
 
 def show_qre_plot_toy_example():
     x_lambdas,x_ax = [],[]
@@ -170,11 +174,13 @@ def plot_baselines():
     c = conn.cursor()
     conn1 = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c1 = conn1.cursor()
-    ag_id = 53
+    ag_id = 44
     q_string = "select distinct l1_action from GENERATED_TRAJECTORY_INFO where agent_id="+str(ag_id)
     c.execute(q_string)
     res = c.fetchall()
-    all_l1_actions = ['proceed-turn']        
+    all_l1_actions = [row[0] for row in res]        
+    emp_path = utils.get_path(ag_id)
+    plt.plot([x[0] for x in emp_path],[x[1] for x in emp_path],'blue')
     for l1_act in all_l1_actions:
         q_string = "SELECT DISTINCT TRAJ_ID FROM GENERATED_TRAJECTORY_INFO where l1_action='"+l1_act+"' and agent_id="+str(ag_id)
         c.execute(q_string)
@@ -210,6 +216,115 @@ def plot_baselines():
         plt.show()
     conn.close()
     
+def plot_boundaries():
+    import ast
+    
+    all_l1_actions = []
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    c = conn.cursor()
+    conn1 = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c1 = conn1.cursor()
+    ag_id = 43
+    q_string = "select distinct l1_action from GENERATED_TRAJECTORY_INFO where agent_id="+str(ag_id)
+    c.execute(q_string)
+    res = c.fetchall()
+    all_l1_actions = [row[0] for row in res]        
+    emp_path = utils.get_path(ag_id)
+    plt.plot([x[0] for x in emp_path],[x[1] for x in emp_path],'blue')
+    for l1_act in all_l1_actions:
+        q_string = "SELECT DISTINCT TRAJ_ID FROM GENERATED_TRAJECTORY_INFO where l1_action='"+l1_act+"' and agent_id="+str(ag_id)
+        c.execute(q_string)
+        res = tuple(row[0] for row in c.fetchall())
+        
+        q_string = "select * from GENERATED_BOUNDARY_TRAJECTORY where TRAJECTORY_INFO_ID in "+str(tuple(res)) + ' UNION ' + \
+                     "select * from GENERATED_BASELINE_TRAJECTORY where TRAJECTORY_INFO_ID in "+str(tuple(res))+" order by trajectory_id,time"
+        print(q_string)
+        c.execute(q_string)
+        traj_dict = dict()
+        res = c.fetchall()
+        ct = 0
+        for row in res:
+            ct += 1
+            if row[0] not in traj_dict:
+                traj_dict[row[0]] = [ [ row[3] ], [ row[4] ] ]
+            else:
+                traj_dict[row[0]][0].append(row[3])
+                traj_dict[row[0]][1].append(row[4])
+        for k,v in traj_dict.items():
+            print(k)
+            plt.plot(v[0],v[1],'--',color='black')
+            
+        ax = plt.gca()
+        #ax.set_facecolor('black')
+        plt.title(l1_act)
+        plt.axis('equaL')
+        q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point' and region_property <> 'left_boundary'"
+        c1.execute(q_string)
+        q_res = c1.fetchall()
+        plt.axis("equal")
+        for row in q_res:
+            plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
+        plt.show()
+    conn.close()    
+    
+
+def plot_baseline_velocities():
+    import ast
+    
+    all_l1_actions = []
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    c = conn.cursor()
+    conn1 = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c1 = conn1.cursor()
+    ag_id = 44
+    q_string = "select distinct l1_action from GENERATED_TRAJECTORY_INFO"
+    c.execute(q_string)
+    res = c.fetchall()
+    all_l1_actions = [row[0] for row in res]        
+    emp_path = utils.get_path(ag_id)
+    plt.plot([x[0] for x in emp_path],[x[1] for x in emp_path],'blue')
+    for l1_act in all_l1_actions:
+        q_string = "SELECT DISTINCT TRAJ_ID FROM GENERATED_TRAJECTORY_INFO where l1_action='"+l1_act+"'"
+        c.execute(q_string)
+        res = tuple(row[0] for row in c.fetchall())
+        
+        q_string = "select * from GENERATED_BOUNDARY_TRAJECTORY where TRAJECTORY_INFO_ID in "+str(tuple(res)) + ' UNION ' + \
+                     "select * from GENERATED_BASELINE_TRAJECTORY where TRAJECTORY_INFO_ID in "+str(tuple(res))+" order by trajectory_id,time"
+        print(q_string)
+        c.execute(q_string)
+        traj_dict = dict()
+        res = c.fetchall()
+        ct = 0
+        for row in res:
+            ct += 1
+            if row[0] not in traj_dict:
+                traj_dict[row[0]] = [ [ row[3] ], [ row[4] ], [ row[6] ]]
+            else:
+                traj_dict[row[0]][0].append(row[3])
+                traj_dict[row[0]][1].append(row[4])
+                traj_dict[row[0]][2].append(row[6])
+        for k,v in traj_dict.items():
+            print(k)
+            plt.plot(v[0],v[1],'--',color='black')
+            
+        ax = plt.gca()
+        #ax.set_facecolor('black')
+        plt.title(l1_act)
+        plt.axis('equaL')
+        q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point' and region_property <> 'left_boundary' and region_property <> 'center_line'"
+        c1.execute(q_string)
+        q_res = c1.fetchall()
+        plt.axis("equal")
+        for row in q_res:
+            plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
+        plt.show()
+        for k,v in traj_dict.items():
+            print(k)
+            plt.plot(np.arange(len(v[2])),v[2],color='black',linewidth=0.25)
+        plt.title(l1_act+'-velocity')
+        plt.show()
+    conn.close()
+
 
 def plot_all_trajectories(traj,ax1,ax2,ax3):
     
@@ -233,7 +348,16 @@ def plot_traffic_regions():
     q_res = c.fetchall()
     plt.axis("equal")
     for row in q_res:
-        plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
+        #plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
+        X,Y = ast.literal_eval(row[4]),ast.literal_eval(row[5])
+        if len(X) == 2:
+            plt.arrow(X[0], Y[0], X[1]-X[0], Y[1]-Y[0], head_width=0.5, head_length=0.5)
+            f=1
+        else:
+            for i,j in zip(np.arange(len(X)-1), np.arange(1,len(Y))):
+                plt.arrow(X[i], Y[i], X[j]-X[i], Y[j]-Y[i], head_width=0.5, head_length=0.5)
+                f=1
+        #plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
     '''
     q_string = "SELECT X_POSITION,Y_POSITION FROM CONFLICT_POINTS"
     c.execute(q_string)
@@ -241,6 +365,8 @@ def plot_traffic_regions():
     plt.plot([x[0] for x in q_res], [x[1] for x in q_res], 'x')
     plt.show()   
     '''
+    #plt.ylim(4813961, 4814065)
+    #plt.xlim(538776, 538897)
     #plt.show()
         
 def verify_traffic_regions():
@@ -270,7 +396,7 @@ def verify_traffic_regions():
         
 def plot_exit_yaws():
     import ast
-    import utils
+    from all_utils import utils
     import math
     import statistics
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
@@ -291,7 +417,77 @@ def plot_exit_yaws():
     plt.show()
     
       
+def show_baseline_animation():
+    
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    c = conn.cursor()
+    q_string = "select * from GENERATED_TRAJECTORY_INFO order by time"
+    c.execute(q_string)
+    res = c.fetchall()
+    traj_info_dict = OrderedDict()
+    ct,N = 0,len(res)
+    for row in res:
+        ct += 1
+        log.info("loading "+str(ct)+'/'+str(N))
+        if row[6] not in traj_info_dict:
+            traj_info_dict[row[6]] = dict()
+            traj_info_dict[row[6]][(row[2],row[3])] = row[1]
+        else:
+            if (row[2],row[3]) not in traj_info_dict[row[6]]:
+                traj_info_dict[row[6]][(row[2],row[3])] = row[1]
+    ct,N = 0,len(traj_info_dict)    
+    for k,v in traj_info_dict.items():
+        ct += 1
+        log.info("loading "+str(ct)+'/'+str(N))
+        for ag,traj_info_id in v.items():
+            q_string = "select * from GENERATED_GAUSSIAN_TRAJECTORY where GENERATED_GAUSSIAN_TRAJECTORY.TRAJECTORY_INFO_ID="+str(traj_info_id)+" order by TRAJECTORY_ID,TIME"
+            print(traj_info_id)
+            c.execute(q_string)
+            res = c.fetchall()
+            selected_traj_id = res[0][0]
+            traj_info_dict[k][ag] = [(row[3],row[4]) for row in res if row[0]==selected_traj_id]
     
     
-     
-#plot_baselines()
+    #plt.xlim(538777, 538900)
+    #plt.ylim(483960, 4814070)
+    fig, ax = plt.subplots()
+    plot_traffic_regions()
+    plt.xlim(538777, 538900)
+    plt.ylim(4813960, 4814065)
+    title = ax.text(0.5,0.85, "", bbox={'facecolor':'w', 'alpha':0.5, 'pad':5},
+                transform=ax.transAxes, ha="center")
+    
+    #line1, = ax.plot([], [], "ro-")
+    #line2, = ax.plot([], [], "ro-")
+    
+    def connect(p):
+        i,time_ts = p[0],p[1]
+        lines = dict()
+        #start=max((i-5,0))
+        curr_line = []
+        for ag,traj in traj_info_dict[time_ts].items():
+            if ag not in lines:
+                col = 'red' if ag[1] == 0 else 'blue'
+                lines[ag], = ax.plot([], [], "o-", c=col)
+            start_i = max(0,i-5)
+            #line1.set_data(sample_path1[start:i,0],sample_path1[start:i,1])
+            #line2.set_data(sample_path2[start:i,0],sample_path2[start:i,1])
+            if i+1 <= len(traj):
+                lines[ag].set_data([x[0] for x in traj[start_i:i+1]],[x[1] for x in traj[start_i:i+1]])
+                curr_line.append(lines[ag])
+        title.set_text(str((time_ts,i)))
+        return tuple(curr_line+[title])
+    frame_list = []
+    for k,v in traj_info_dict.items():
+        max_len = max([len(t) for _,t in v.items()])
+        this_frame_list = [(x,k)for x in np.arange(max_len)]
+        frame_list.extend(this_frame_list)
+    frame_list.sort(key=lambda tup: tup[1])
+    ani = animation.FuncAnimation(fig, connect, frames=frame_list, interval=100, blit=True, repeat=False)
+    plt.show()
+    
+
+      
+    
+if __name__ == '__main__':     
+    show_baseline_animation()

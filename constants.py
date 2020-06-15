@@ -4,13 +4,20 @@
 Values derived from https://www.mdpi.com/2079-9292/8/9/943
 '''
 import numpy as np
-MAX_LONG_ACC_NORMAL = 1.5
+import os
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_DIR = os.path.join(ROOT_DIR,'logs')
+
+MAX_LONG_ACC_NORMAL = 2
 MAX_LONG_ACC_AGGR = 3.6
 MAX_LONG_ACC_EMG = 5
 
 MAX_TURN_ACC_AGGR = 5
 MAX_TURN_ACC_NORMAL = 3.6
+
 MAX_TURN_JERK = 3
+MAX_TURN_JERK_NORMAL = 1.5
+MAX_TURN_JERK_AGGR = 2.5
 
 MAX_LAT_ACC_NORMAL = 4
 MAX_LAT_ACC_AGGR = 5.6
@@ -39,7 +46,7 @@ PROCEED_VEL_AGGRESSIVE_ADDITIVE = 1
 PROCEED_VEL_MEAN_PREP_TURN = 7
 PROCEED_VEL_SD_PREP_TURN = 1
 
-PROCEED_VEL_MEAN_EXIT = 11
+PROCEED_VEL_MEAN_EXIT = 12
 PROCEED_VEL_SD_EXIT = 2
 
 CURVATURE_LIMIT_FOR_CV = 0.06
@@ -156,6 +163,22 @@ SEGMENT_MAP = {
                'l_w_e_r':'through-lane',
                }
 
+STOP_SEGMENT = {'wait-for-oncoming':['exec-left-turn','exec-right-turn'],
+                'decelerate-to-stop':['prep-right-turn','prep-left-turn','through-lane'],
+                'wait-on-red':['prep-right-turn','prep-left-turn','through-lane'],
+                'wait-for-pedestrian':['prep-right-turn','exec-left-turn','through-lane']}
+
+ENTRY_LANES = ['left-turn-lane', 'right-turn-lane', 'through-lane-entry']
+
+''' direction:[(relev_agent_segment, relev_agent_direction, number of relev agents to consider, maximum distance of the relev agent)] P.S: exit_lane is the exit lane in the current subject vehicle's direction'''
+RELEV_REDUCTION_MAP = {'LEFT_TURN':[('through-lane','l',2,None),('through-lane','r',2,None), ('through-lane-entry','2',1,None), ('through-lane-entry','3',1,None)],
+                       'RIGHT_TURN':[('through-lane','l',2,None),('through-lane','r',2,None), ('through-lane-entry','3',1,None),
+                                     ('exec-left-turn',None,1,None),('prep-left-turn',None,1,None)]}
+
+PATH_COLLISION_MAP = {'L_S_W':['ln_w_1','prep-turn_w'],
+                      'L_N_E':['ln_e_1','prep-turn_e'],
+                      'L_E_S':['ln_s_1','prep-turn_s'],
+                      'L_W_N':['ln_n_1','prep-turn_n']}
 
 LP_FREQ = 0.1
 PLAN_FREQ = 1
@@ -178,6 +201,8 @@ L1_ACTION_CODES = {'wait-for-oncoming':1,
                    'cut-in':9,
                    'yield-to-merging':10,
                    'wait-for-pedestrian':11}
+
+WAIT_ACTIONS = ['wait-for-oncoming','decelerate-to-stop','wait_for_lead_to_cross','wait-on-red','yield-to-merging','wait-for-pedestrian']
 
 L1_ACTION_CODES_2_NAME = {1:'wait',
                    2:'proceed-turn',
@@ -202,6 +227,13 @@ VEH_ARRIVAL_HORIZON = 3
 PEDESTRIAN_CROSSWALK_DIST_THRESH = 10
 PEDESTRIAN_CROSSWALK_TIME_THRESH = 3
 
+LATERAL_LATTICE_TOLERANCE = {'DEFAULT':1.16,
+                             'exec-left-turn':2.5,
+                             'prep-left-turn':1.9,
+                             'exit-lane':2.8}
+NUM_LATERAL_LATTICE_POINTS = 10
+
+COLLISION_CHECK_TOLERANCE = 1.5
 
 L2_ACTION_CODES = {'AGGRESSIVE':1,
                    'NORMAL':2} 
@@ -211,7 +243,9 @@ L2_ACTION_CODES_2_NAME = {1:'AGGRESSIVE',
 
 MAX_L3_ACTIONS = 10
 
-L3_ACTION_CACHE = 'l3_action_trajectories/'
+L3_ACTION_CACHE = 'l3_action_trajectories'
+TEMP_TRAJ_CACHE = 'temp_traj_cache'
+RESULTS = 'results'
 
 DIST_COST_MEAN = 3
 DIST_COST_SD = 0.5
@@ -236,12 +270,32 @@ CROSSWALK_SIGNAL_MAP = {'P_20_21':'L_W_E',
                         'P_66_67':'L_N_S'}
 
 ''' equilibrium analysis configurations '''
-BASELINE_TRAJECTORIES_ONLY = True
+BASELINE_TRAJECTORIES_ONLY = False
+TRAJECTORY_TYPE = 'GAUSSIAN'
 INHIBITORY = True
 EXCITATORY = True
 INHIBITORY_PEDESTRIAN = True
-L1_EQ_TYPE = 'NASH'
-L3_EQ_TYPE = None
+L1_EQ_TYPE = 'MAXMIN'
+L3_EQ_TYPE = 'BR'
 
 
 CURRENT_FILE_ID = '769'
+import logging
+import logging.handlers
+format='%(levelname)-8s %(funcName)s : %(message)s'
+logging.basicConfig(format=format,level=logging.INFO)
+logger = logging.getLogger("pylog")
+logger.setLevel(logging.INFO)
+eq_logger = logging.getLogger("pylog")
+eq_logger.setLevel(logging.INFO)
+fh = logging.handlers.RotatingFileHandler(os.path.join(LOG_DIR,'run.log'),maxBytes=50000000,backupCount=20)
+fh.setLevel(logging.INFO)
+fh.setFormatter(logging.Formatter(format))
+fheq = logging.handlers.RotatingFileHandler(os.path.join(LOG_DIR,'run-eq.log'),maxBytes=50000000,backupCount=20)
+fheq.setLevel(logging.INFO)
+fheq.setFormatter(logging.Formatter(format))
+logger.addHandler(fh)
+eq_logger.addHandler(fheq)
+common_logger = logger
+
+import os

@@ -6,10 +6,9 @@ Created on Feb 6, 2020
 import csv
 import numpy as np
 import sqlite3
-import utils
+from all_utils import utils
 import sys
 import constants
-import motion_planner
 import ast
 import math
 import pickle
@@ -22,11 +21,17 @@ import itertools
 import pandas as pd
 import scipy.special,scipy.stats
 import visualizer
-import equilibria_core
+from equilibria import equilibria_core
+from motion_planners import motion_planner
 from scipy.interpolate import CubicSpline
-from planning_objects import TrajectoryDef
+from motion_planners.planning_objects import TrajectoryDef
 from collections import OrderedDict
-import db_utils
+from all_utils import db_utils
+import concurrent.futures
+import threading
+
+import logging
+logging.basicConfig(format='%(levelname)-8s %(funcName)s-2s  %(module)s: %(message)s',level=logging.INFO)
 
 
 
@@ -115,6 +120,9 @@ class CostEvaluation():
                         #slice_len = min(s_y.shape[0],r_y.shape[0])
                         slice_len = int(min(5*constants.PLAN_FREQ/constants.LP_FREQ,s_y.shape[0],r_y.shape[0]))
                         s_y,r_y = s_y[:slice_len],r_y[:slice_len]
+                        ''' original trajectory is at 10hz. sample at 1hz for speedup'''
+                        if len(s_x) > 3:
+                            s_x,r_x,s_y,r_y = s_x[0::9],r_x[0::9],s_y[0::9],r_y[0::9]
                         _d = np.hypot(s_x-r_x,s_y-r_y)
                         dist_among_agents[i,j] = min(_d)
             ''' to be safe, make the matrix symmetric '''
@@ -142,50 +150,66 @@ class CostEvaluation():
                 payoffs[i] = progress_payoffs_dist(traj_len)
             all_possible_payoffs_exc[traj_idx_tuple] = payoffs
         return all_possible_payoffs_exc
-        
+    
+    
+    def eval_pedestrian_inh_by_action(self,action):
+        sv_id = int(action[3:6])
+        ra_id = int(action[6:9])
+        l1_act_code = int(action[9:11])
+        l1_act_code = int(action[11:13])
+        v_id = sv_id if ra_id==0 else ra_id
+        relev_xwalk = utils.get_relevant_crosswalks(v_id)
+        payoff = 1
+        if relev_xwalk is not None:
+            crosswalk_ids,near_gate = relev_xwalk[0], relev_xwalk[1]
+            #current_segment = all_utils.get_current_segment_by_veh_id(v_id,self.eq_context.curr_time)
+            pedestrian_info = self.eq_context.eval_config.pedestrian_info
+            for xwalk in crosswalk_ids:
+                for ped_state in pedestrian_info:
+                    if xwalk in ped_state.crosswalks:
+                        if ped_state.crosswalks[xwalk]['location'] == constants.ON_CROSSWALK:
+                            payoff = payoff*1 if l1_act_code == 11 else payoff*0
+                        elif ped_state.crosswalks[xwalk]['location'] == constants.BEFORE_CROSSWALK \
+                                and ped_state.crosswalks[xwalk]['dist_to_entry'] < constants.PEDESTRIAN_CROSSWALK_DIST_THRESH \
+                                    and ((ped_state.crosswalks[xwalk]['next_change'][1] == 'G' and ped_state.crosswalks[xwalk]['next_change'][0] <= constants.PEDESTRIAN_CROSSWALK_TIME_THRESH) \
+                                             or ped_state.crosswalks[xwalk]['next_change'][1] == 'R'):
+                            ''' before the crosswalk, within the distance threshold, and the signal is green or about to change to green'''
+                            payoff = payoff*1 if l1_act_code == 11 else payoff*0
+                        else:
+                            payoff = payoff*1
+        return payoff
        
     def eval_pedestrian_inhibitory(self,traj_dict_list, all_possible_payoffs, strategy_tuple):
         payoff_vect = np.full(shape=(len(strategy_tuple),),fill_value=0)
         all_possible_payoffs_inh_ped = dict(all_possible_payoffs)
         for idx,action in enumerate(strategy_tuple):
-            sv_id = int(action[3:6])
-            ra_id = int(action[6:9])
-            l1_act_code = int(action[9:11])
-            l1_act_code = int(action[11:13])
-            v_id = sv_id if ra_id==0 else ra_id
-            relev_xwalk = utils.get_relevant_crosswalks(v_id)
-            payoff = 1
-            if relev_xwalk is not None:
-                crosswalk_ids,near_gate = relev_xwalk[0], relev_xwalk[1]
-                current_segment = utils.get_current_segment_by_veh_id(v_id,self.eq_context.curr_time)
-                pedestrian_info = self.eq_context.eval_config.pedestrian_info
-                for xwalk in crosswalk_ids:
-                    for ped_state in pedestrian_info:
-                        if xwalk in ped_state.crosswalks:
-                            if ped_state.crosswalks[xwalk]['location'] == constants.ON_CROSSWALK:
-                                payoff = payoff*1 if l1_act_code == 11 else payoff*0
-                            elif ped_state.crosswalks[xwalk]['location'] == constants.BEFORE_CROSSWALK \
-                                    and ped_state.crosswalks[xwalk]['dist_to_entry'] < constants.PEDESTRIAN_CROSSWALK_DIST_THRESH \
-                                        and ((ped_state.crosswalks[xwalk]['next_change'][1] == 'G' and ped_state.crosswalks[xwalk]['next_change'][0] <= constants.PEDESTRIAN_CROSSWALK_TIME_THRESH) \
-                                                 or ped_state.crosswalks[xwalk]['next_change'][1] == 'R'):
-                                ''' before the crosswalk, within the distance threshold, and the signal is green or about to change to green'''
-                                payoff = payoff*1 if l1_act_code == 11 else payoff*0
-                            else:
-                                payoff = payoff*1
+            payoff = self.eval_pedestrian_inh_by_action(action)
             payoff_vect[idx] = payoff
         for traj_idx_tuple in all_possible_payoffs.keys():
             all_possible_payoffs_inh_ped[traj_idx_tuple] = payoff_vect
         return all_possible_payoffs_inh_ped
        
-    def calc_l3_payoffs(self,eq,strategy_tuple):
+    def calc_l3_payoffs(self,eq,strategy_tuple,l3_utility_dict=None):
+        if eq.eval_config.l3_eq is not None and l3_utility_dict is None:
+            raise ValueError('L3 utility dict cannot be None when L3 Equilibria is set to None')
+    
         if eq.eval_config.l3_eq is None:
             ''' payoffs will be calculated just from the baselines '''
             baseline_ids = [[int(x.split('-')[1])] for x in strategy_tuple]
             all_possible_payoffs = {k:np.zeros(shape=len(k)) for k in list(itertools.product(*[v for v in baseline_ids]))}
-            traj_dict_list = [{t:eq.trajectory_cache[k[0]] for t in k} for k in baseline_ids]
+            traj_dict_list = [{t:eq.l1l2_trajectory_cache[k[0]] for t in k} for k in baseline_ids]
         else:
-            ''' payoffs will be calculated based on some equilibrium'''
-            all_possible_payoffs = eq.l3_utility_dict
+            all_possible_payoffs = l3_utility_dict
+            traj_ids = list(all_possible_payoffs.keys())
+            traj_dict_list = [dict() for n in np.arange(eq.eval_config.num_agents)]
+            for k in traj_ids:
+                for ag_idx,t in enumerate(k):
+                    t_id = int(t.split('-')[1])
+                    try:
+                        traj_dict_list[ag_idx].update({t:eq.l3_trajectory_cache[int(strategy_tuple[ag_idx].split('-')[1])][t_id]})
+                    except KeyError:
+                        brk=1
+            
         all_possible_payoffs_inh,all_possible_payoffs_exc = 0,0
         
         
@@ -193,14 +217,28 @@ class CostEvaluation():
         if len(eval_config.traj_dict) > 0:
             traj_dict_list = [{t:np.vstack(eval_config.traj_dict[k[0]]) for t in k} for k in eval_config.strat_traj_ids]
         else:
-            traj_dict_list = utils.load_traj_from_db(chosen_trajectory_ids,baseline_only)
+            traj_dict_list = all_utils.load_traj_from_db(chosen_trajectory_ids,baseline_only)
         '''
+        
+        
         if constants.INHIBITORY:
+            #if N_size > 300:
+            #    logging.info(str(u_ct)+'/'+str(N_size)+' evaluating inhibitory')
+            #future_inh = executor.submit(self.eval_inhibitory, traj_dict_list, all_possible_payoffs, strategy_tuple)
             all_possible_payoffs_inh = self.eval_inhibitory(traj_dict_list, all_possible_payoffs, strategy_tuple)
         if constants.EXCITATORY:
+            #if N_size > 300:
+            #    logging.info(str(u_ct)+'/'+str(N_size)+' evaluating excitatory')
+            #future_exc = executor.submit(self.eval_excitatory, traj_dict_list, all_possible_payoffs, strategy_tuple)
             all_possible_payoffs_exc = self.eval_excitatory(traj_dict_list, all_possible_payoffs, strategy_tuple)
         if constants.INHIBITORY_PEDESTRIAN:
+            #if N_size > 300:
+            #    logging.info(str(u_ct)+'/'+str(N_size)+' evaluating pedestrian_inhibitory')
+            #future_pedinh = executor.submit(self.eval_pedestrian_inhibitory, traj_dict_list, all_possible_payoffs, strategy_tuple)
             all_possible_payoffs_inh_ped = self.eval_pedestrian_inhibitory(traj_dict_list, all_possible_payoffs, strategy_tuple)
+        #all_possible_payoffs_inh = future_inh.result()
+        #all_possible_payoffs_exc = future_exc.result()
+        #all_possible_payoffs_inh_ped = future_pedinh.result()
         for k,v in all_possible_payoffs.items():
             if constants.INHIBITORY and constants.EXCITATORY:
                 all_possible_payoffs[k] = all_possible_payoffs[k] + (constants.INHIBITORY_PAYOFF_WEIGHT * all_possible_payoffs_inh[k])
@@ -213,7 +251,27 @@ class CostEvaluation():
                     all_possible_payoffs[k] = all_possible_payoffs[k] + all_possible_payoffs_inh[k]
         
         return all_possible_payoffs
-
+    
+    def calc_maxmin_payoff(self,s_traj,r_traj,s_act_key,r_act_key):
+        if constants.INHIBITORY and r_traj is not None:
+            slice_len = int(min(5*constants.PLAN_FREQ/constants.LP_FREQ,s_traj.shape[0],r_traj.shape[0]))
+            s_traj,r_traj = s_traj[:slice_len],r_traj[:slice_len]
+            s_x,s_y = s_traj[:,1], s_traj[:,2]
+            r_x,r_y = r_traj[:,1], r_traj[:,2]
+            _d = np.hypot(s_x-r_x,s_y-r_y)
+            min_dist = np.amin(_d)
+            inh_payoff = dist_payoffs(min_dist)
+        else:
+            inh_payoff = 1
+        if constants.EXCITATORY:
+            traj_len = utils.calc_traj_len(s_traj)
+            ''' for now calculate the plan payoffs '''
+            exc_payoff = progress_payoffs_dist(traj_len)
+        if constants.INHIBITORY_PEDESTRIAN:
+            ped_inh_payoff = self.eval_pedestrian_inh_by_action(s_act_key)
+        final_payoff = ( (1-constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT) * ((constants.INHIBITORY_PAYOFF_WEIGHT*inh_payoff) + (constants.EXCITATORY_PAYOFF_WEIGHT*exc_payoff)) ) + \
+                            (constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT*ped_inh_payoff)
+        return final_payoff
 
 def eval_trajectory_viability(traj_id_list):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')

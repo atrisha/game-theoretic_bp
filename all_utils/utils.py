@@ -8,24 +8,26 @@ import math
 import numpy as np
 from numpy import arccos, array, dot, pi, cross
 from numpy.linalg import det, norm
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import ast
 import sys
 import constants
-from matplotlib import cm
+#from matplotlib import cm
 import pickle
-from planning_objects import VehicleState,PedestrianState
+from motion_planners.planning_objects import VehicleState,PedestrianState,TrajectoryDef
 import os,shutil
 from matplotlib import path
 from decimal import Decimal
 from collections import OrderedDict
 import pandas as pd
 from builtins import isinstance
-import planning_objects
 import statistics
 from scipy.interpolate import CubicSpline
+from itertools import islice
 import logging
+import planning_objects
 logging.basicConfig(format='%(levelname)-8s %(filename)s: %(message)s',level=logging.INFO)
+log = constants.common_logger
 
 
 
@@ -47,7 +49,28 @@ def distance_numpy(A, B, P):
     #return norm(cross(A-B, A-P))/norm(B-A),
     return cross(A-B, A-P)/norm(B-A)
 
+#from https://stackoverflow.com/questions/3318625/how-to-implement-an-efficient-bidirectional-hash-table
+class bidict(dict):
+    def __init__(self, *args, **kwargs):
+        super(bidict, self).__init__(*args, **kwargs)
+        self.inverse = {}
+        for key, value in self.items():
+            if isinstance(value, np.ndarray):
+                self.inverse.setdefault(tuple(value.tolist()),[]).append(key)
+            else:
+                self.inverse.setdefault(tuple(value),[]).append(key)
 
+    def __setitem__(self, key, value):
+        if key in self:
+            self.inverse[self[key]].remove(key) 
+        super(bidict, self).__setitem__(key, value)
+        self.inverse.setdefault(value,[]).append(key)        
+
+    def __delitem__(self, key):
+        self.inverse.setdefault(self[key],[]).remove(key)
+        if self[key] in self.inverse and not self.inverse[self[key]]: 
+            del self.inverse[self[key]]
+        super(bidict, self).__delitem__(key)
 
 def truncate(number, digits) -> float:
     stepper = 10.0 ** digits
@@ -100,12 +123,12 @@ def eval_complexity(traj,strat_str):
         assert(traj.shape[1]==9)
         rv,rx,ry,ra,time = traj[:,6],traj[:,3],traj[:,4],traj[:,7],traj[:,2]
     dt = constants.LP_FREQ
-    traj_def = planning_objects.TrajectoryDef(strat_str)
+    traj_def = TrajectoryDef(strat_str)
     '''
     plt.plot(time,rv,'g')
     plt.plot(time,ra,'r')
     plt.show()
-    #linear_plan_x = utils.linear_planner(sx, vxs, axs, gx, vxg, axg, max_accel, max_jerk, dt)
+    #linear_plan_x = all_utils.linear_planner(sx, vxs, axs, gx, vxg, axg, max_accel, max_jerk, dt)
     '''
     hpx = [rx[0],rx[len(rx)//3],rx[2*len(rx)//3],rx[-1]]
     hpy = [ry[0],ry[len(ry)//3],ry[2*len(ry)//3],ry[-1]]
@@ -148,6 +171,16 @@ def angle_between_lines_2pi(line_1,line_2):
     line_2_angle = line_2_angle if line_2_angle > 0 else (2*math.pi)-abs(line_2_angle)
     diff = abs(line_1_angle-line_2_angle)
     return diff
+
+def get_target_velocity(veh_state):
+    action = veh_state.l1_action
+    q_string = "select * from TARGET_VELOCITIES where action='"+str(action)+"'"
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    c.execute(q_string)
+    res = c.fetchall()
+    target_vels = {row[0]:(row[3],row[4]) if row[3] != -1 else (veh_state.leading_vehicle.speed,1) for row in res}
+    return target_vels
 
 def get_centerline(lane_segment):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
@@ -270,8 +303,8 @@ def pickle_load(file_key):
     l3_actions = pickle.load( open( file_key, "rb" ) )
     return l3_actions
 
-def pickle_dump(file_key,l3_actions):
-    file_key = constants.L3_ACTION_CACHE+file_key
+def pickle_dump(cache,file_key,l3_actions):
+    file_key = os.path.join(constants.ROOT_DIR,cache,file_key)
     directory = os.path.dirname(file_key)
     if not os.path.exists(directory):
         os.makedirs(directory)
@@ -356,7 +389,16 @@ def map_to_fresnet(o_x,o_y,X,Y,yaw):
     return F_X,F_Y
     
         
+def remove_files(cache_dir):
+    path = os.path.join(constants.ROOT_DIR,cache_dir)
+    filelist = [ f for f in os.listdir(path)]
+    for f in filelist:
+        os.remove(os.path.join(path, f))      
         
+def get_processed_files(cache_dir):
+    path = os.path.join(constants.ROOT_DIR,cache_dir)
+    filelist = [ f for f in os.listdir(path)]
+    return filelist
 
 def split_in_n(pt1,pt2,N):
     step = (pt2[0] - pt1[0])/N
@@ -382,31 +424,97 @@ def construct_state_grid(pt1,pt2,N,tol,grid_type):
         grid.append([(x[0]-(r*math.cos(slope_comp)),x[1]+(r*math.sin(slope_comp))) for x in central_coords])
     return np.asarray(grid)
 
+
+def reduce_relev_agents(agent_id,time_ts,relev_agents):
+    ag_file_key = os.path.join(constants.ROOT_DIR,constants.L3_ACTION_CACHE,str(agent_id)+'-0_'+str(time_ts).replace('.', ','))
+    found = False
+    if os.path.exists(ag_file_key):
+        veh_state = pickle_load(ag_file_key)
+        found = True
+    else:
+        veh_state = setup_vehicle_state(agent_id, time_ts)
+    veh_state.set_dist_to_sub_agent(0.0)
+    ra_states = []
+    for r_a_id in relev_agents:
+        found = False
+        ag_file_key = os.path.join(constants.ROOT_DIR,constants.L3_ACTION_CACHE,str(veh_state.id)+'-'+str(r_a_id)+'_'+str(time_ts).replace('.', ','))
+        if os.path.exists(ag_file_key):
+            r_a_state = pickle_load(ag_file_key)
+            found = True
+        else:
+            r_a_state = setup_vehicle_state(r_a_id, time_ts)
+        #log.info('trying to reduce'+str(r_a_id)+' '+str(found))
+        dist_to_sv = math.hypot(veh_state.x-r_a_state.x,veh_state.y-r_a_state.y)
+        r_a_state.set_dist_to_sub_agent(dist_to_sv)
+        ra_states.append(r_a_state)
+    ra_map = dict()
+    for k,v in constants.RELEV_REDUCTION_MAP.items():
+        for relev_agent in ra_states:
+            if constants.TASK_MAP[veh_state.direction] != k:
+                break
+            else:
+                if k not in ra_map:
+                    ra_map[k] = dict()
+                for incl_desc in v:
+                    if constants.SEGMENT_MAP[relev_agent.current_segment] == incl_desc[0]:
+                        if incl_desc[1] is not None:
+                            if relev_agent.current_segment[-1] == incl_desc[1]:
+                                if incl_desc not in ra_map[k]:
+                                    ra_map[k][incl_desc] = [relev_agent]
+                                else:
+                                    ra_map[k][incl_desc].append(relev_agent)
+                        else:
+                            if incl_desc not in ra_map[k]:
+                                ra_map[k][incl_desc] = [relev_agent]
+                            else:
+                                ra_map[k][incl_desc].append(relev_agent)
+    incl_list = [veh_state.leading_vehicle.id] if veh_state.leading_vehicle is not None else []
+    for dir,v_dir in ra_map.items():
+        for incl_desc,ras in v_dir.items():
+            ras.sort(key=lambda x: x.dist_to_sv)
+            if incl_desc[3] is not None:
+                ras = [x for x in ras if x.dist_to_sv<=incl_desc[3]]
+            if len(ras) > 0:
+                if incl_desc[2] == 1:
+                    incl_list.append(ras[0].id)
+                else:
+                    incl_list.append(ras[0].id)
+                    if len(ras) > 1:
+                        incl_list.append(ras[-1].id)
+            ra_map[dir][incl_desc] = incl_list
+    return incl_list
+                    
+                                
+                      
+        
+    
+
 ''' add two parallel lines to line at a lateral distance on either side of line'''
 def add_parallel(line, dist):
-    if len(line) < 2:
-        logging.warn("attemped to add parallel to line size less than 2")
-    polyline = True if len(line) > 2 else False
-    
+    #if len(line) < 2:
+        #logging.warn("attemped to add parallel to line size less than 2")
+        
+    pointline = True if len(line) < 2 else False
     p_line_lat1, p_line_lat2 = [],[]
-    for l_idx in np.arange(1,len(line)):
-        pt1 = line[l_idx-1]
-        pt2 = line[l_idx]
-        cl_angle = math.atan2(pt2[1]-pt1[1], pt2[0]-pt1[0])
-        cl_angle = cl_angle if cl_angle > 0 else (2*math.pi) - abs(cl_angle)
-        cl_normal = (cl_angle + (math.pi/2))%(2*math.pi)
-        ''' add the point normal to pt1 and pt2 on both sides '''
-        pt1_lat1 = (pt1[0] + dist*np.cos(cl_normal), pt1[1] + dist*np.sin(cl_normal))
-        pt1_lat2 = (pt1[0] - dist*np.cos(cl_normal), pt1[1] - dist*np.sin(cl_normal))
-        
-        pt2_lat1 = (pt2[0] + dist*np.cos(cl_normal), pt2[1] + dist*np.sin(cl_normal))
-        pt2_lat2 = (pt2[0] - dist*np.cos(cl_normal), pt2[1] - dist*np.sin(cl_normal))
-        if l_idx == 1:
-            p_line_lat1.append(pt1_lat1)
-            p_line_lat2.append(pt1_lat2)
-        p_line_lat1.append(pt2_lat1)
-        p_line_lat2.append(pt2_lat2)
-        
+    if not pointline:
+        for l_idx in np.arange(1,len(line)):
+            pt1 = line[l_idx-1]
+            pt2 = line[l_idx]
+            cl_angle = math.atan2(pt2[1]-pt1[1], pt2[0]-pt1[0])
+            cl_angle = cl_angle if cl_angle > 0 else (2*math.pi) - abs(cl_angle)
+            cl_normal = (cl_angle + (math.pi/2))%(2*math.pi)
+            ''' add the point normal to pt1 and pt2 on both sides '''
+            pt1_lat1 = (pt1[0] + dist*np.cos(cl_normal), pt1[1] + dist*np.sin(cl_normal))
+            pt1_lat2 = (pt1[0] - dist*np.cos(cl_normal), pt1[1] - dist*np.sin(cl_normal))
+            
+            pt2_lat1 = (pt2[0] + dist*np.cos(cl_normal), pt2[1] + dist*np.sin(cl_normal))
+            pt2_lat2 = (pt2[0] - dist*np.cos(cl_normal), pt2[1] - dist*np.sin(cl_normal))
+            if l_idx == 1:
+                p_line_lat1.append(pt1_lat1)
+                p_line_lat2.append(pt1_lat2)
+            p_line_lat1.append(pt2_lat1)
+            p_line_lat2.append(pt2_lat2)
+            
     return p_line_lat1, p_line_lat2
         
          
@@ -500,6 +608,12 @@ def load_traj_ids_for_traj_info_id(traj_info_id,baseline_only):
     traj_ids = [row[0] for row in res]
     return traj_ids
 
+
+def dict_chunks(data,SIZE):
+    it = iter(data)
+    for i in range(0, len(data), SIZE):
+        yield {k:data[k] for k in islice(it, SIZE)}
+
 def load_trajs_for_traj_info_id(traj_info_id,baseline_only=True):
     traj_info_id = [int(e) for e in traj_info_id]
     import struct
@@ -507,21 +621,59 @@ def load_trajs_for_traj_info_id(traj_info_id,baseline_only=True):
     c = conn.cursor()
     traj_dict = dict()
     if not baseline_only:
-        q_string = "SELECT * FROM GENERATED_TRAJECTORY WHERE TRAJECTORY_INFO_ID IN "+str(tuple(traj_info_id))
+        if len(traj_info_id) > 1:        
+            q_string = "select * from GENERATED_BOUNDARY_TRAJECTORY where TRAJECTORY_INFO_ID in "+str(tuple(traj_info_id)) + ' UNION ' + \
+                     "select * from GENERATED_BASELINE_TRAJECTORY where TRAJECTORY_INFO_ID in "+str(tuple(traj_info_id))+" order by trajectory_id,time"
+        else:
+            q_string = "select * from GENERATED_BOUNDARY_TRAJECTORY where TRAJECTORY_INFO_ID = "+str(traj_info_id[0]) + ' UNION ' + \
+                     "select * from GENERATED_BASELINE_TRAJECTORY where TRAJECTORY_INFO_ID = "+str(traj_info_id[0])+" order by trajectory_id,time"
+        c.execute(q_string)
+        res = c.fetchall()
+        for row in res:
+            if row[1] not in traj_dict:
+                traj_dict[row[1]] = dict()
+                traj_dict[row[1]][row[0]] = [list(row[1:])]
+            else:
+                if row[0] not in traj_dict[row[1]]:
+                    traj_dict[row[1]][row[0]] = [list(row[1:])]
+                else:
+                    traj_dict[row[1]][row[0]].append(list(row[1:]))
+        for k,v in traj_dict.items():
+            for k1,v1 in v.items():
+                traj_dict[k][k1] = np.vstack(v1)
+        return traj_dict
     else:
+        info_id_dict = dict()
         if len(traj_info_id) > 1:
-            q_string = "SELECT * FROM GENERATED_BASELINE_TRAJECTORY WHERE TRAJECTORY_INFO_ID IN "+str(tuple(traj_info_id))
+            q_string = "select distinct(TRAJECTORY_ID),TRAJECTORY_INFO_ID FROM GENERATED_BASELINE_TRAJECTORY where GENERATED_BASELINE_TRAJECTORY.TRAJECTORY_INFO_ID in "+str(tuple(traj_info_id))+" ORDER BY TRAJECTORY_INFO_ID,TRAJECTORY_ID"
         else:
-            q_string = "SELECT * FROM GENERATED_BASELINE_TRAJECTORY WHERE TRAJECTORY_INFO_ID = "+str(traj_info_id[0])
-    c.execute(q_string)
-    res = c.fetchall()
-    for row in res:
-        if row[1] not in traj_dict:
-            traj_dict[row[1]] = [[struct.unpack('f', x)[0] if isinstance(x,bytes) else x for x in list(row[1:])]]
+            q_string = "select distinct(TRAJECTORY_ID),TRAJECTORY_INFO_ID FROM GENERATED_BASELINE_TRAJECTORY where GENERATED_BASELINE_TRAJECTORY.TRAJECTORY_INFO_ID = "+str(traj_info_id[0])+" ORDER BY TRAJECTORY_ID"
+        c.execute(q_string)
+        res = c.fetchall()
+        for row in res:
+            if row[1] in info_id_dict:
+                info_id_dict[row[1]].append(row[0])
+            else:
+                info_id_dict[row[1]] = [row[0]]
+        selected_traj_ids = []
+        for info_id,traj_ids in info_id_dict.items():
+            if len(traj_ids) > 3:
+                selected_traj_ids.append(traj_ids[1])
+            else:
+                selected_traj_ids.append(traj_ids[0])
+        if len(selected_traj_ids) > 1:        
+            q_string = "SELECT * FROM GENERATED_BASELINE_TRAJECTORY WHERE TRAJECTORY_ID IN "+str(tuple(selected_traj_ids))
         else:
-            traj_dict[row[1]].append([struct.unpack('f', x)[0] if isinstance(x,bytes) else x for x in list(row[1:])])
-    for k,v in traj_dict.items():
-        traj_dict[k] = np.vstack(v)
+            q_string = "SELECT * FROM GENERATED_BASELINE_TRAJECTORY WHERE TRAJECTORY_ID = "+str(selected_traj_ids[0])
+        c.execute(q_string)
+        res = c.fetchall()
+        for row in res:
+            if row[1] not in traj_dict:
+                traj_dict[row[1]] = [[struct.unpack('f', x)[0] if isinstance(x,bytes) else x for x in list(row[1:])]]
+            else:
+                traj_dict[row[1]].append([struct.unpack('f', x)[0] if isinstance(x,bytes) else x for x in list(row[1:])])
+        for k,v in traj_dict.items():
+            traj_dict[k] = np.vstack(v)
     return traj_dict
 
 
@@ -529,7 +681,7 @@ def get_merging_vehicle(veh_state):
     return None
 
 def setup_vehicle_state(veh_id,time_ts):
-    r_a_state = planning_objects.VehicleState()
+    r_a_state = VehicleState()
     r_a_state.set_id(veh_id)
     r_a_state.set_current_time(time_ts)
     r_a_track = get_track(r_a_state,time_ts)
@@ -571,6 +723,8 @@ def setup_vehicle_state(veh_id,time_ts):
     merging_vehicle = get_merging_vehicle(r_a_state)
     r_a_state.set_merging_vehicle(merging_vehicle)
     r_a_direction = 'L_'+r_a_track_segment_seq[0][3].upper()+'_'+r_a_track_segment_seq[-1][3].upper()
+    r_a_task = constants.TASK_MAP[r_a_direction]
+    r_a_state.set_task(r_a_task)
     r_a_traffic_light = get_traffic_signal(time_ts, r_a_direction)
     r_a_state.set_traffic_light(r_a_traffic_light)
     r_a_state.set_direction(r_a_direction)
@@ -579,7 +733,11 @@ def setup_vehicle_state(veh_id,time_ts):
     return r_a_state
 
 def calc_traj_len(traj):
-    return sum([math.hypot(x2[0]-x1[0], x2[1]-x1[1]) for x1,x2 in zip(traj[:-1],traj[1:])])
+    if len(traj) > 3:
+        traj_s = [traj[i] for i in np.arange(0,len(traj),3)]
+    else:
+        traj_s = traj
+    return sum([math.hypot(x2[0]-x1[0], x2[1]-x1[1]) for x1,x2 in zip(traj_s[:-1],traj_s[1:])])
 
 def load_traj_from_db(all_traj_id_list,baseline_only):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
@@ -674,11 +832,30 @@ def get_pedestrian_track(p_state,q_time):
     return res
     
     
+def get_path(veh_id):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "select X,Y from TRAJECTORIES_0769 WHERE TRAJECTORIES_0769.TRACK_ID="+str(veh_id)+" ORDER BY TIME"
+    c.execute(q_string)
+    res = c.fetchall()
+    path = [(row[0],row[1]) for row in res]
+    return path
     
     
     
-    
-    
+def get_vehicles_info(time_ts):
+    vehicles_info = dict()
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    c = conn.cursor()
+    q_string = "select TRAJECTORIES_0769.TRACK_ID,TRAJECTORIES_0769.TIME,TRAJECTORIES_0769.X,TRAJECTORIES_0769.Y,TRAJECTORIES_0769_EXT.ASSIGNED_SEGMENT \
+                     from TRAJECTORIES_0769 LEFT JOIN TRAJECTORIES_0769_EXT ON TRAJECTORIES_0769.TRACK_ID=TRAJECTORIES_0769_EXT.TRACK_ID AND TRAJECTORIES_0769.TIME=TRAJECTORIES_0769_EXT.TIME \
+                          WHERE TRAJECTORIES_0769.TIME="+str(time_ts)
+    c.execute(q_string)
+    res = c.fetchall()
+    for row in res:
+        if row[0] not in vehicles_info:
+            vehicles_info[row[0]] = ((row[2],row[3]), row[4])
+    return vehicles_info
     
     
 def gate_crossing_times(veh_state):
@@ -915,8 +1092,10 @@ def is_out_of_view(pos):
         
 ''' True if relevant agent r_a_state can be excluded from the relevant vehicle list of vehicle veh_state '''    
 def can_exclude(veh_state,r_a_state):
+    if r_a_state.dist_to_sv > 150:
+        return True
     ra_segment_type = constants.SEGMENT_MAP[r_a_state.current_segment]
-    if veh_state.task == 'LEFT_TURN' and ra_segment_type == 'exit-lane':
+    if veh_state.task == 'LEFT_TURN' and ra_segment_type == 'exit-lane' and r_a_state.direction != veh_state.direction:
         return True
     elif veh_state.task == 'LEFT_TURN' and (r_a_state.task=='RIGHT_TURN' and (r_a_state.leading_vehicle is not None and r_a_state.leading_vehicle.current_segment == r_a_state.current_segment) and constants.SEGMENT_MAP[r_a_state.current_segment] == 'right-turn-lane'):
         ''' exclude vehicles that are turning right from oncoming lane to the common lane but are behind a more relevant vehicle '''
@@ -1045,14 +1224,17 @@ def get_traffic_signal(time,direction,file_id='769'):
 def get_time_to_next_signal(time_ts,direction,curr_signal):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    q_string = "SELECT * FROM TRAFFIC_LIGHTS WHERE TIME - 0 > 0 AND "+direction+" <> '"+curr_signal+"' order by time"
+    q_string = "SELECT * FROM TRAFFIC_LIGHTS WHERE TIME - "+str(time_ts)+" > 0 AND "+direction+" <> '"+curr_signal+"' order by time"
     curr = c.execute(q_string)
     res = c.fetchone()
     all_directions = [description[0] for description in curr.description]
     dir_idx = all_directions.index(direction)
-    next_signal = res[dir_idx]
-    time_to_change = float(res[-1]) - time_ts
-    return (time_to_change,next_signal)
+    if res is None:
+        return (None,None)
+    else:
+        next_signal = res[dir_idx]
+        time_to_change = float(res[-1]) - time_ts
+        return (time_to_change,next_signal)
     
     
 def get_actions(veh_state):
@@ -1321,7 +1503,7 @@ def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,acc):
     dist,vels,accs = [],[],[]
     new_path = [(path[0][0],path[0][1])]
     v,a = v_s,a_s
-    time = np.arange(dt,time[-1],dt)
+    #time = np.arange(dt,time[-1],dt)
     s_sum = 0
     new_time = []
     for i in time:
@@ -1361,7 +1543,7 @@ def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,acc):
     if not acc and vels[-1] == 0 and len(vels) < len(time):
         ''' pad the trajectory'''
         vels = vels + [0]*(len(time)-len(vels))
-    return np.asarray(vels),new_path
+    return time,np.asarray(vels),new_path
      
         
 def get_exit_boundary(segment):
@@ -1418,6 +1600,8 @@ def get_baseline_trajectories_in_db():
         trajs_in_db.append(file_str)
     return trajs_in_db
     
+
+
     
 def generate_trajectory_from_vel_profile(time,ref_path,vel_profile):
     dist_from_origin = [0] + [math.hypot(p2[0]-p1[0], p2[1]-p1[1]) for p1,p2 in list(zip(ref_path[:-1],ref_path[1:]))]
@@ -1452,7 +1636,7 @@ def generate_trajectory_from_vel_profile(time,ref_path,vel_profile):
 def get_relevant_crosswalks(veh_state):
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
     c = conn.cursor()
-    if isinstance(veh_state, planning_objects.VehicleState):
+    if isinstance(veh_state, VehicleState) or isinstance(veh_state, planning_objects.VehicleState):
         q_string = "select * from RELEVANT_CROSSWALK_MAP WHERE RELEVANT_CROSSWALK_MAP.VEH_PATH='"+veh_state.direction+"'"
     elif isinstance(veh_state, int):
         veh_id = veh_state
@@ -1466,7 +1650,15 @@ def get_relevant_crosswalks(veh_state):
         return relev_crosswalks
     
 
-                 
+def unreadable(act_str):
+    tokens = act_str.split('|')
+    assert(len(tokens)==4)
+    l1_action = str(constants.L1_ACTION_CODES[tokens[2]]).zfill(2)
+    l2_action = str(constants.L2_ACTION_CODES[tokens[3]]).zfill(2)
+    agent = str(tokens[0]).zfill(3)
+    relev_agent = str(tokens[1]).zfill(3)
+    unreadable_str = '769'+agent+relev_agent+l1_action+l2_action
+    return unreadable_str    
 
 def setup_pedestrian_info(curr_time):
     pedestrian_list = []
@@ -1929,4 +2121,3 @@ def dist_to_line(A,B,pt):
     return d  
     
 
-    

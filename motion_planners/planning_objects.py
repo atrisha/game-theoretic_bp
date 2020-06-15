@@ -102,10 +102,9 @@ class VehicleState:
         
     def set_scene_state(self,scene_state):
         self.scene_state = scene_state
-        
+    
     def set_dist_to_sub_agent(self,dist):
         self.dist_to_sv = dist
-    
 
 def kph_to_mps(kph):
     return kph/3.6

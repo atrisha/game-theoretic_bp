@@ -6,27 +6,32 @@ Created on Jan 29, 2020
 import csv
 import numpy as np
 import sqlite3
-import utils
+import all_utils
+
 import sys
 import constants
-import motion_planner
+import motion_planners
+from motion_planners import motion_planner
 import ast
 import math
-import cost_evaluation
+import equilibria
+from equilibria import cost_evaluation
 import pickle
 import os.path
-from planning_objects import VehicleState
+from motion_planners.planning_objects import VehicleState,SceneState
 import matplotlib.pyplot as plt
 import visualizer
 from os import listdir
 from collections import OrderedDict
-from numba.roc.hsadrv.driver import Agent
+from all_utils.thread_utils import CustomMPS,CustomThreaExs,ThreadSafeObject
+log = constants.common_logger
 
 
 
 
 
 def setup_lead_vehicle(v_state,from_ra):
+    from all_utils import utils
     if not from_ra:
         l_v_state = VehicleState()
         l_v_state.x = v_state.x
@@ -91,19 +96,61 @@ def save_get_l3_action_file(file_id,agent_id,relev_agent_id, time_ts, l1_action,
     file_key = file_id+agent_id+relev_agent_id+l1_action+l2_action+'_'+str(time_ts)
     return file_key
 
+
+def push_trajectories_to_db():
+    from all_utils import utils
+    all_files = os.listdir(os.path.join(constants.ROOT_DIR, constants.TEMP_TRAJ_CACHE))
+    all_files.sort()
+    N = len(all_files)
+    for idx,file in enumerate(all_files):
+        log.info(str(idx)+'/'+str(N))
+        filename = os.path.join(constants.ROOT_DIR,constants.TEMP_TRAJ_CACHE,file)
+        traj_plan = utils.pickle_load(filename)
+        if not constants.TRAJECTORY_TYPE == 'GAUSSIAN':
+            print(traj_plan.veh_state.l1_action,len(traj_plan.trajectories['baseline']), len(traj_plan.trajectories['boundary']))
+            traj_plan.insert_baseline_trajectory('GENERATED_BOUNDARY_TRAJECTORY')
+            traj_plan.insert_baseline_trajectory('GENERATED_BASELINE_TRAJECTORY')
+        else:
+            if 'gaussian' in traj_plan.trajectories:
+                print(traj_plan.veh_state.l1_action,len(traj_plan.trajectories['gaussian']))
+                traj_plan.insert_baseline_trajectory('GENERATED_GAUSSIAN_TRAJECTORY')
+        if file == '7690530000201_47,5475':
+            brk=1
+        f=1
+        
+        
+
+
+
     
-def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=None):
+def generate_action_plans(param_list):
+    from all_utils import utils
+    import copy
+    veh_state,track_info,selected_action,trajs_in_db = param_list[0], param_list[1], param_list[2], param_list[3] 
+    veh_state = copy.deepcopy(veh_state)
     agent_track = veh_state.track
     agent_id = veh_state.id
     time_ts = float(track_info[6,])
+    if time_ts > 75:
+        brk=1
     pedestrian_info = utils.setup_pedestrian_info(time_ts)
-    ag_file_key = constants.L3_ACTION_CACHE + str(veh_state.id)+'-0_'+str(time_ts).replace('.', ',')
+    vehicles_info = utils.get_vehicles_info(time_ts)
+    scene_state = SceneState(pedestrian_info,vehicles_info)
+    ag_file_key = os.path.join(constants.ROOT_DIR,constants.L3_ACTION_CACHE,str(veh_state.id)+'-0_'+str(time_ts).replace('.', ','))
     if os.path.exists(ag_file_key):
         veh_state = utils.pickle_load(ag_file_key)
+        veh_state = copy.deepcopy(veh_state)
         task = veh_state.task
         sub_v_lead_vehicle = veh_state.leading_vehicle
+        
     else:
         veh_state.set_current_time(time_ts)
+        try:
+            #file_key.split('_')[-1].replace(',','.')
+            assert str(time_ts)==str(veh_state.current_time), str(time_ts)+ '!=' + str(veh_state.current_time)
+        except AssertionError:
+            brk=1
+            raise
         track_region_seq = veh_state.segment_seq
         veh_state.set_track_info(track_info)
         current_segment = track_info[11,]
@@ -125,6 +172,13 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
             sys.exit('no current segment found')
         agent_loc = (track_info[1,],track_info[2,])
         veh_state.set_current_time(time_ts)
+        try:
+            #file_key.split('_')[-1].replace(',','.')
+            assert str(time_ts)==str(veh_state.current_time), str(time_ts)+ '!=' + str(veh_state.current_time)
+        except AssertionError:
+            brk=1
+            raise
+        
         veh_state.set_current_segment(current_segment)
         
         if current_segment[0:2] == 'ln':
@@ -144,35 +198,79 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
         veh_state.set_merging_vehicle(merging_vehicle)
         relev_pedestrians = utils.get_relevant_pedestrians(veh_state, pedestrian_info)
         veh_state.set_relev_pedestrians(relev_pedestrians)
-        utils.pickle_dump(str(veh_state.id)+'-0_'+str(time_ts).replace('.', ','), veh_state)
+        utils.pickle_dump(constants.L3_ACTION_CACHE,str(veh_state.id)+'-0_'+str(time_ts).replace('.', ','), veh_state)
+        try:
+            #file_key.split('_')[-1].replace(',','.')
+            assert str(time_ts)==str(veh_state.current_time), str(time_ts)+ '!=' + str(veh_state.current_time)
+        except AssertionError:
+            brk=1
+            raise
+        
     if selected_action is None:
         actions = utils.get_actions(veh_state)
     else:
         actions = selected_action[0]
     actions_l1 = list(actions.keys())
+    veh_state.set_scene_state(scene_state)
     print('time_ts',time_ts,'subject veh:',agent_id,'leading vehicle:',sub_v_lead_vehicle.id if sub_v_lead_vehicle is not None else 'None')
     l3_acts_for_plot = []
     for l1 in actions_l1:
         actions_l2 = actions[l1]
         for l2 in actions_l2:
             print('time',time_ts,'agent',agent_id,l1,l2)
+            try:
+                #file_key.split('_')[-1].replace(',','.')
+                assert str(time_ts)==str(veh_state.current_time), str(time_ts)+ '!=' + str(veh_state.current_time)
+            except AssertionError:
+                brk=1
+                raise
+            
             if l1 not in veh_state.action_plans[time_ts]:
                 veh_state.action_plans[time_ts][l1] = dict()
             veh_state.action_plans[time_ts][l1][l2] = None
-            trajectory_plan = motion_planner.TrajectoryPlan(l1,l2,task,constants.BASELINE_TRAJECTORIES_ONLY)
+            generate_boundary = False if constants.BASELINE_TRAJECTORIES_ONLY else True
+            veh_state.set_current_l1_action(l1)
+            veh_state.set_current_l2_action(l2)
+            file_key = get_l3_action_file(None, agent_id, 0, time_ts, l1, l2)
+            try:
+                #file_key.split('_')[-1].replace(',','.')
+                assert str(time_ts)==str(veh_state.current_time), str(time_ts)+ '!=' + str(veh_state.current_time)
+            except AssertionError:
+                brk=1
+                raise
+             
+            try:
+                #file_key.split('_')[-1].replace(',','.')
+                assert file_key.split('_')[-1].replace(',','.')==str(veh_state.current_time), file_key.split('_')[-1].replace(',','.')+ '!=' + str(veh_state.current_time)
+            except AssertionError:
+                brk=1
+                raise
+                
+            trajectory_plan = motion_planner.TrajectoryPlan(l1,l2,task,constants.TRAJECTORY_TYPE,veh_state,agent_id,0)
             trajectory_plan.set_lead_vehicle(sub_v_lead_vehicle)
             ''' l3_action_trajectory file id: file_id(3),agent_id(3),relev_agent_id(3),l1_action(2),l2_action(2)'''
             file_key = get_l3_action_file(None, agent_id, 0, time_ts, l1, l2)
             if file_key not in trajs_in_db:# and (l1=='decelerate-to-stop' or l1=='wait_for_lead_to_cross'):
                 print('loaded from cache: False')
+                trajectory_plan.generate()
+                try:
+                    #file_key.split('_')[-1].replace(',','.')
+                    assert file_key.split('_')[-1].replace(',','.')==str(veh_state.current_time), file_key.split('_')[-1].replace(',','.')+ '!=' + str(veh_state.current_time)
+                except AssertionError:
+                    brk=1
+                    raise
+                try:
+                    #file_key.split('_')[-1].replace(',','.')
+                    assert file_key.split('_')[-1].replace(',','.')==str(trajectory_plan.veh_state.current_time), file_key.split('_')[-1].replace(',','.')+ '!=' + str(trajectory_plan.veh_state.current_time)
+                except AssertionError:
+                    brk=1
+                    raise
                 
-                if not constants.BASELINE_TRAJECTORIES_ONLY:
-                    l3_actions = trajectory_plan.generate_trajectory(veh_state)
-                    utils.insert_generated_trajectory(l3_actions, file_key)
-                else:
-                    l3_actions = trajectory_plan.generate_baseline(veh_state)
-                    if l3_actions is not None and len(l3_actions) > 0:
-                        utils.insert_baseline_trajectory(l3_actions, file_key)
+                utils.pickle_dump(constants.TEMP_TRAJ_CACHE,file_key,trajectory_plan)
+                #trajectory_plan.insert_baseline_trajectory()
+                f=1
+                #utils.insert_generated_trajectory(l3_actions, file_key)
+                
             else:
                 print('loaded from cache: True')   
             #veh_state.action_plans[time_ts][l1][l2] = np.copy(l3_actions)
@@ -264,8 +362,12 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
             r_a_state.set_task(r_a_task)
             relev_pedestrians = utils.get_relevant_pedestrians(r_a_state, pedestrian_info)
             r_a_state.set_relev_pedestrians(relev_pedestrians)
-            utils.pickle_dump(str(veh_state.id)+'-'+str(r_a_state.id)+'_'+str(time_ts).replace('.', ','),r_a_state)
+            utils.pickle_dump(constants.L3_ACTION_CACHE,str(veh_state.id)+'-'+str(r_a_state.id)+'_'+str(time_ts).replace('.', ','),r_a_state)
         ''' check if this relevant vehicle can be excluded '''
+        dist_to_sv = math.hypot(veh_state.x-r_a_state.x,veh_state.y-r_a_state.y)
+        veh_state.set_dist_to_sub_agent(0.0)
+        r_a_state.set_dist_to_sub_agent(dist_to_sv)
+        
         if utils.can_exclude(veh_state,r_a_state):
             continue
         
@@ -274,6 +376,7 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
         else:
             r_a_actions = selected_action[1][r_a]
         r_a_actions_l1 = list(r_a_actions.keys())
+        r_a_state.set_scene_state(scene_state)
         for l1 in r_a_actions_l1:
             actions_l2 = r_a_actions[l1]
             for l2 in actions_l2:
@@ -282,19 +385,20 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
                 if l1 not in r_a_state.action_plans[time_ts]:
                     r_a_state.action_plans[time_ts][l1] = dict()
                     r_a_state.action_plans[time_ts][l1][l2] = None
-                trajectory_plan = motion_planner.TrajectoryPlan(l1,l2,r_a_task,constants.BASELINE_TRAJECTORIES_ONLY)
+                generate_boundary = False if constants.BASELINE_TRAJECTORIES_ONLY else True
+                r_a_state.set_current_l1_action(l1)
+                r_a_state.set_current_l2_action(l2)
+            
+                trajectory_plan = motion_planner.TrajectoryPlan(l1,l2,r_a_task,constants.TRAJECTORY_TYPE,r_a_state,agent_id,r_a_state.id)
                 trajectory_plan.set_lead_vehicle(lead_vehicle)
                 print('time',time_ts,'agent',agent_id,'relev agent',r_a_state.id,l1,l2)
                 if file_key not in trajs_in_db:# and (l1=='decelerate-to-stop' or l1=='wait_for_lead_to_cross'):
                     print('loaded from cache: False')
+                    trajectory_plan.generate()
+                    #trajectory_plan.insert_baseline_trajectory()
+                    utils.pickle_dump(constants.TEMP_TRAJ_CACHE,file_key,trajectory_plan)
+                    #utils.insert_generated_trajectory(l3_actions, file_key)
                     
-                    if not constants.BASELINE_TRAJECTORIES_ONLY:
-                        l3_actions = trajectory_plan.generate_trajectory(r_a_state)
-                        utils.insert_generated_trajectory(l3_actions, file_key)
-                    else:
-                        l3_actions = trajectory_plan.generate_baseline(r_a_state)
-                        if l3_actions is not None and len(l3_actions) > 0:
-                            utils.insert_baseline_trajectory(l3_actions, file_key)
                     '''
                     if len(l3_actions) > 0:
                         utils.insert_generated_trajectory(l3_actions, file_key)
@@ -322,21 +426,21 @@ def generate_action_plans(veh_state,track_info,selected_action=None,trajs_in_db=
 ''' this method generate plans for a vehicle from the start of its real trajectory time to the end of its trajectory
 and stores trajectory plans in L3_ACTION_CACHE. It's called hopping because at every time interval the state hops back
 to the real state in the real trajectory, and does not go on a counterfactual path. '''
-def generate_hopping_plans(state_dicts=None):
-    skip_existing = False
+def generate_hopping_plans():
+    from all_utils import utils
+    skip_existing = True
     task_list = ['S_E','S_W','N_E','W_S','W_N','E_S']
     agent_ids = []
     if skip_existing:
-        trajs_in_db = utils.get_trajectories_in_db() if not constants.BASELINE_TRAJECTORIES_ONLY else utils.get_baseline_trajectories_in_db()
+        #trajs_in_db = utils.get_trajectories_in_db() if not constants.BASELINE_TRAJECTORIES_ONLY else utils.get_baseline_trajectories_in_db()
+        trajs_in_db = utils.get_processed_files(constants.TEMP_TRAJ_CACHE)
     else:
         trajs_in_db = dict()
-    if state_dicts is not None:
-        agent_ids = state_dicts.keys()
-    else:
-        for t in task_list:
-            agent_ids = agent_ids + [int(x) for x in utils.get_agents_for_task(t)] 
+    for t in task_list:
+        agent_ids = agent_ids + [int(x) for x in utils.get_agents_for_task(t)] 
     agent_ids.sort()
-    for agent_id in [53]: 
+    all_params = []
+    for agent_id in [8]: 
         ''' veh_state object maintains details about an agent'''
         
         veh_state = VehicleState()
@@ -356,28 +460,79 @@ def generate_hopping_plans(state_dicts=None):
         
         ''' we will build the plans with actions @ 1Hz'''
         timestamp_l = []
-        if state_dicts is not None:
-            selected_time_ts = list(state_dicts[agent_id].keys())
-            for ts in selected_time_ts:
-                track_info = utils.get_track(veh_state,ts)[0,]
-                time_ts = ts
-                timestamp_l.append(time_ts)
-                selected_action = (state_dicts[agent_id][ts]['action'],state_dicts[agent_id][ts]['relev_agents'])
-                generate_action_plans(veh_state,track_info,selected_action,trajs_in_db)
+        selected_time_ts = np.arange(0,len(agent_track),constants.DATASET_FPS*constants.PLAN_FREQ)
+        for i in selected_time_ts:
+            track_info = agent_track[i]
+            time_ts = float(track_info[6,])
+            timestamp_l.append(time_ts)
+            all_params.append([veh_state,track_info,None,trajs_in_db])
+    
+    n=12
+    all_params.sort(key=lambda x: x[1][6])
+    chunks = [all_params[i:i+n] for i in range(0, len(all_params), n)]
+    '''
+    cmp = CustomThreaExs()
+    import time
+    N = len(chunks)
+    for d_idx,chunk in enumerate(chunks):
+        done = False
+        done = cmp.execute_no_return(generate_action_plans, chunk)
+        print('DONE',d_idx,N,done)
+    
+    '''
+    for p in all_params:
+        generate_action_plans(p)
+    
+
+def generate_lattice_boundary_trajectories():
+    from all_utils import utils
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    c = conn.cursor()
+    q_string = "select count(*) from GENERATED_BASELINE_TRAJECTORY"
+    c.execute(q_string)
+    res = c.fetchone()
+    if res[0]==0:
+        sys.exit('baseline trajectory not generated')
+    q_string = "select * from GENERATED_TRAJECTORY_INFO ORDER BY AGENT_ID,TIME,RELEV_AGENT_ID"
+    c.execute(q_string)
+    res = c.fetchall()
+    N_traj_info = len(res)
+    for inf_row_idx,row in enumerate(res):
+        traj_info_det = {'file_id':row[0],'traj_info_id':row[1],'ag_id':row[2],'ra_id':row[3],'l1_action':row[4],'l2_action':row[5],'time_ts':row[6]}
+        log.info(str(inf_row_idx)+'/'+str(N_traj_info)+' running with ' + str(list(traj_info_det.values())))
+        curr_ag_id = traj_info_det['ag_id'] if traj_info_det['ra_id']==0 else traj_info_det['ra_id']
+        time_ts = traj_info_det['time_ts'] 
+        if traj_info_det['time_ts']==0:
+            ag_file_key = os.path.join(constants.ROOT_DIR,constants.L3_ACTION_CACHE,str(curr_ag_id)+'-0_'+str(traj_info_det['time_ts'])+',0')
         else:
-            selected_time_ts = np.arange(0,len(agent_track),constants.DATASET_FPS*constants.PLAN_FREQ)
-            for i in selected_time_ts:
-                track_info = agent_track[i]
-                time_ts = float(track_info[6,])
-                timestamp_l.append(time_ts)
-                generate_action_plans(veh_state,track_info,None,trajs_in_db)
-
-
+            ag_file_key = os.path.join(constants.ROOT_DIR,constants.L3_ACTION_CACHE,str(curr_ag_id)+'-0_'+str(traj_info_det['time_ts']).replace('.', ','))
+        if curr_ag_id==2 and time_ts==12.012:
+            brk=1
+        if os.path.exists(ag_file_key):
+            log.info('loaded')
+            veh_state = utils.pickle_load(ag_file_key)
+        else:
+            log.info('constructed')
+            veh_state = utils.setup_vehicle_state(curr_ag_id, time_ts)
+            utils.pickle_dump(str(veh_state.id)+'-0_'+str(time_ts).replace('.', ','), veh_state)
+        q_string = "select * from GENERATED_BASELINE_TRAJECTORY WHERE TRAJECTORY_INFO_ID="+str(traj_info_det['traj_info_id'])+' ORDER BY TIME'
+        c.execute(q_string)
+        baseline_t = c.fetchall()
+        trajectory_plan = motion_planner.TrajectoryPlan(traj_info_det['li_action'],traj_info_det['l2_action'],veh_state.task,False,veh_state)
+        
+        
+          
+            
+        
+    
 
     
 
 
     
 
-
-generate_hopping_plans()
+if __name__ == '__main__':
+    from all_utils import utils
+    #generate_hopping_plans()
+    push_trajectories_to_db()
+    #utils.remove_files(constants.TEMP_TRAJ_CACHE)

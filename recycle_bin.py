@@ -5,6 +5,203 @@ Created on Mar 19, 2020
 '''
 
 
+def generate_velocity_profile_deprecated(self,all_params):
+        if self.veh_state.l1_action in constants.WAIT_ACTIONS:
+            brk=1
+        tagged_waypts,path_g,path_info,p_type = all_params[0], all_params[1], all_params[2], all_params[3]
+        hpx = [x[0][0] for x in tagged_waypts]
+        hpy = [x[0][1] for x in tagged_waypts]
+        ''' insert a point between the first two waypoints to make it consistent in length with path'''
+        #tagged_waypts = [tagged_waypts[0]] + [(((tagged_waypts[0][0][0]+tagged_waypts[1][0][0])/2, (tagged_waypts[1][0][1]+tagged_waypts[1][0][1])/2), tagged_waypts[0][1])] + tagged_waypts[1:]
+        segment_tags = [(x[1],None,None) for x in tagged_waypts]
+        target_vel_map_in_db = all_utils.get_target_velocity(self.veh_state)
+        target_vel_map_for_path = dict()
+        assign_val = None
+        ''' get the target velocity for the waypoint segments '''
+        for s in self.veh_state.segment_seq:
+            if constants.SEGMENT_MAP[s] in target_vel_map_in_db:
+                target_vel_map_for_path[s] = target_vel_map_in_db[constants.SEGMENT_MAP[s]]
+                assign_val = target_vel_map_in_db[constants.SEGMENT_MAP[s]]
+            else:
+                target_vel_map_for_path[s] = assign_val
+        ''' set the velocity at the starting point '''
+        segment_tags[0] = (segment_tags[0][0],(self.veh_state.speed,0),self.veh_state.long_acc)
+        ''' assign the target velocity to the last waypoint in each segment'''
+        prev_val = self.veh_state.speed
+        vel_inc = 1
+        for idx,sp in enumerate(zip(segment_tags[:-1],segment_tags[1:])):
+            if idx == 0:
+                continue
+            s1 = sp[0][0]
+            s2 = sp[1][0]
+            if s1 != s2:
+                if prev_val == target_vel_map_for_path[s1][0]:
+                    acc = 0
+                elif prev_val <= target_vel_map_for_path[s1][0]:
+                    acc = 1
+                else:
+                    acc = -1
+                segment_tags[idx] = (segment_tags[idx][0],target_vel_map_for_path[s1],acc)
+        exit_vel = None
+        for s in reversed(segment_tags):
+            if s[1] != None:
+                exit_vel = s
+                break
+        exit_vel = (segment_tags[-1][0],exit_vel[1],0) if (s[0] == segment_tags[-1][0] or constants.SEGMENT_MAP[segment_tags[-1][0]] != 'exit-lane' or self.veh_state.l1_action in constants.WAIT_ACTIONS) \
+                     else (segment_tags[-1][0], (exit_vel[1][0]+1,exit_vel[1][1]), 1)
+        if self.veh_state.l1_action in constants.WAIT_ACTIONS:
+            exit_vel = (segment_tags[-1][0],(0,0),-1) 
+            if constants.SEGMENT_MAP[self.veh_state.current_segment] in constants.ENTRY_LANES:
+                segment_tags[-2] = (segment_tags[-1][0],(min(self.veh_state.speed,0.5 * np.random.random_sample() + .5),0),-1)
+        segment_tags[-1] = exit_vel
+        ''' if the action is in wait action, assign 0 velocity to all segments after which the vehicle is already stopped '''
+        if self.veh_state.l1_action in constants.WAIT_ACTIONS:
+            assign_zero = False
+            for idx,s in enumerate(segment_tags):
+                if s[1]!= None and s[1][0] == 0:
+                    assign_zero = True
+                if assign_zero:
+                    segment_tags[idx] = (segment_tags[idx][0],(0.0,0.0),0)
+        indx = [idx for idx,s in enumerate(segment_tags) if s[1]!= None]
+        num_tries = 4
+        acc_lim = constants.MAX_LONG_ACC_NORMAL if self.veh_state.l2_action == 'NORMAL' else constants.MAX_LONG_ACC_AGGR
+        jerk_lim = constants.MAX_TURN_JERK_NORMAL if self.veh_state.l2_action == 'NORMAL' else constants.MAX_TURN_JERK_AGGR
+        all_velocity_profiles = dict()
+        ''' increment the target velocty by +/- 1 if we are to generate boundary velocity profiles for each path '''
+        if not self.generate_boundary:
+            inc_list = [0]
+        else:
+            inc_list = [-vel_inc,0,vel_inc] if self.veh_state.l1_action not in constants.WAIT_ACTIONS else [0]*3
+        for inc in inc_list:
+            candidate_profiles = []
+            for tr_i in np.arange(num_tries):
+                #if self.veh_state.l1_action in constants.WAIT_ACTIONS and not (constants.SEGMENT_MAP[self.veh_state.current_segment] == 'left-turn-lane' and self.veh_state.l1_action=='wait-for-oncoming'):
+                #    continue
+                v_x = []
+                for idx,s in enumerate(segment_tags):
+                    if s[1]!= None:
+                        if s[1][0] == 0:
+                            v_x.append(0)
+                        else:
+                            v_x.append(np.random.normal(max(s[1][0]+inc,0),s[1][1]/2))
+                cs_v = CubicSpline(indx,v_x)
+                regen_vx = [max(float(cs_v(x)),0.0) if float(cs_v(x)) > .05 else 0.0 for x in np.arange(len(segment_tags))]
+                self.regenerate_path(hpx, hpy, regen_vx)
+                #X = np.arange(0,float('%.1f'%(len(path_g)/10)),.1)
+                X = [(x/len(path_g))*len(segment_tags) for x in np.arange(0,len(path_g),1)]
+                Y = [max(float(cs_v(x)),0.0) if float(cs_v(x)) > .05 else 0.0 for x in X]
+                if self.veh_state.l1_action in constants.WAIT_ACTIONS:
+                    zero_index = False
+                    for y_val_idx,y_val in enumerate(Y):
+                        if y_val == 0:
+                            zero_index = True
+                        else:
+                            if zero_index:
+                                Y[y_val_idx] = 0.0 
+                cs_d_a = cs_v.derivative()
+                Y_prime = [float(cs_d_a(x)) for x in X]
+                cs_d2_a = cs_d_a.derivative()
+                Y_2prime = [float(cs_d2_a(x)) for x in X]
+                if max(Y_prime) < acc_lim+inc and min(Y_prime) > -acc_lim-inc and max(Y_2prime) < jerk_lim+inc and min(Y_2prime) > -jerk_lim-inc:
+                    max_coeff = np.max(np.abs(cs_v.c[-1,:]))
+                    candidate_profiles.append((list(zip(X,Y)), list(zip(X,Y_prime)), list(zip(X,Y_2prime)), max_coeff))
+                    #log.info('velocity profile generation candidate found: '+str(tr_i))
+                
+            if len(candidate_profiles) > 0:
+                candidate_profiles.sort(key=lambda tup: tup[3])
+                all_velocity_profiles[inc] = candidate_profiles
+                ''' REMOVE THIS'''
+                all_velocity_profiles[inc] = None
+            else:
+                all_velocity_profiles[inc] = None
+        '''
+        plt.plot(X, [y[1] for y in candidate_profiles[0][0]],'blue')
+        plt.plot(X, [y[1] for y in candidate_profiles[-1][0]],'red')
+        plt.show()
+        plt.plot(X,[y[1] for y in candidate_profiles[0][1]],'blue')
+        plt.plot(X,[y[1] for y in candidate_profiles[-1][1]],'red')
+        plt.show()
+        plt.plot(X,[y[1] for y in candidate_profiles[0][2]],'blue')
+        plt.plot(X,[y[1] for y in candidate_profiles[-1][2]],'red')
+        plt.show()
+        '''
+        
+        ''' generate the trajectories and set them in path_info'''
+        all_trajs = []
+        for inc_step,candidate_profiles in all_velocity_profiles.items():
+            if candidate_profiles is None:
+                path_f = path_g
+                path_X,path_Y = all_utils.fresnet_to_map(self.veh_state.x, self.veh_state.y, [x[0] for x in path_f], [x[1] for x in path_f], self.veh_state.yaw)
+                path_m = list(zip(path_X,path_Y))
+                res = self.generate_baseline_trajectory(self.veh_state, path_m, inc_step)
+                time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr = res[0], res[1], res[2], res[3], res[4], res[5], res[6]
+                #log.info('falling back to baseline trajectory generation')
+            else:
+                velocity_profile = [y[1] for y in candidate_profiles[0][0]]
+                acc_profile = [y[1] for y in candidate_profiles[0][1]]
+                jerk_profile = [y[1] for y in candidate_profiles[0][2]]
+                traj = OrderedDict({0:(path_g[0], velocity_profile[0], 0, acc_profile[0], jerk_profile[0])})
+                for k in np.arange(1,len(path_g),1):
+                    u,v,a,s = round(velocity_profile[k-1],2),round(velocity_profile[k],2),round(acc_profile[k-1],2),math.hypot(path_g[k][0]-path_g[k-1][0], path_g[k][1]-path_g[k-1][1])
+                    if (u == 0 and abs(a) == 0) or (u==0 and v==0):
+                        t = constants.LP_FREQ
+                        traj[k] = (traj[k-1][0], 0.0, traj[k-1][2]+t, acc_profile[k], jerk_profile[k])
+                    else:
+                        t = abs(v - u)/abs(a) if a !=0 else s/u
+                        traj[k] = (path_g[k], velocity_profile[k], traj[k-1][2]+t, acc_profile[k], jerk_profile[k])
+                ''' linear interpolator works fine now since we already have the reference points in cubic spline'''
+                points = np.asarray([[x[0][0],x[0][1],x[1],x[3],x[4]] for x in traj.values()]).reshape(len(path_g),5)
+                values = np.asarray([x[2] for x in traj.values()]).reshape(len(path_g),)
+                '''
+                plt.plot(values,points[:,2].tolist())
+                plt.show()
+                plt.plot(points[:,0].tolist(), points[:,1].tolist())
+                plt.show()
+                '''
+                x_intp = interp1d(values, points[:,0], kind='linear')
+                y_intp = interp1d(values, points[:,1], kind='linear')
+                v_intp = interp1d(values, points[:,2], kind='linear')
+                a_intp = interp1d(values, points[:,3], kind='linear')
+                j_intp = interp1d(values, points[:,4], kind='linear')
+                #print(values[-1])
+                TX = np.arange(0,min(constants.OTH_AGENT_L3_ACT_HORIZON,values[-1]) ,constants.LP_FREQ)
+                #TX = np.arange(0,values[-1],.1) 
+                x_arr,y_arr,v_arr,a_arr,j_arr = [float(x_intp(x)) for x in TX],[float(y_intp(x)) for x in TX],[float(v_intp(x)) for x in TX],[float(a_intp(x)) for x in TX],[float(j_intp(x)) for x in TX]
+                yaw_profile = [self.veh_state.yaw]
+                path = list(zip(x_arr,y_arr))
+                for e in zip(path[:-1],path[1:]):
+                    _y = math.atan2(e[1][1]-e[0][1], e[1][0]-e[0][0])
+                    _y = _y if _y > 0 else (2*math.pi)-abs(_y)
+                    yaw_profile.append(_y)
+                time_arr = [self.veh_state.current_time+x for x in TX]
+                x_arr,y_arr = all_utils.fresnet_to_map(self.veh_state.x, self.veh_state.y, x_arr, y_arr, self.veh_state.yaw)
+                f=1
+            all_trajs.append([time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr])
+        
+        '''
+        if self.veh_state.l1_action in constants.WAIT_ACTIONS:
+            for res in all_trajs:
+                plt.title(self.veh_state.l1_action + 'traj')
+                #_x,_y = all_utils.fresnet_to_map(self.veh_state.x, self.veh_state.y, res[1], res[2], self.veh_state.yaw)
+                _x,_y = res[1], res[2]
+                visualizer.plot_traffic_regions()
+                plt.plot(_x,_y,'black')
+            plt.show()
+            for res in all_trajs:
+                plt.title(self.veh_state.l1_action + 'vel')
+                plt.plot(res[0],res[4])
+            plt.show()
+        '''
+        if 'proceed' in self.veh_state.l1_action:
+            brk = 1
+        
+        for res in all_trajs:
+            if p_type not in self.trajectories:
+                self.trajectories[p_type] = [res]
+            else:
+                self.trajectories[p_type].append(res)
+        return all_trajs,p_type
+
 def calc_max_num_relev_agents():
     ''' calc max num of relev agents start'''
         max_vals = [None,None,-np.inf]
@@ -64,22 +261,22 @@ def get_traj_metadata():
                 v.set_current_time(time_ts)
                 '''
                 if l1_action == 'track_speed':
-                    track_region_seq = utils.get_track_segment_seq(v.id)
+                    track_region_seq = all_utils.get_track_segment_seq(v.id)
                     v.set_segment_seq(track_region_seq)
                     if real_ts == -1:
-                        track = utils.get_track(v, time_ts)
+                        track = all_utils.get_track(v, time_ts)
                     else:
-                        track = utils.get_track(v, real_ts)
+                        track = all_utils.get_track(v, real_ts)
                     if len(track) > 0:
                         v.set_track_info(track[0,])
                         current_segment = track[0,][11,]
                     else:
-                        r_a_track_info = utils.guess_track_info(v,None)
+                        r_a_track_info = all_utils.guess_track_info(v,None)
                         v.set_track_info(r_a_track_info)
                         r_a_track_region = r_a_track_info[8,]
                         if r_a_track_region is None:
                             sys.exit('need to guess traffic region for relev agent')
-                        current_segment = utils.get_current_segment(v,r_a_track_region,track_region_seq,time_ts)
+                        current_segment = all_utils.get_current_segment(v,r_a_track_region,track_region_seq,time_ts)
                     
                     v.set_current_segment(current_segment)
                     v.set_current_time(time_ts)
@@ -167,7 +364,7 @@ def generate_equilibrium_trajectories():
                 ''' we will work with only the mean payoff equilibria_core for now'''
                 #traj_type = traj[int(traj_idx[i])][1]
                 plan_horizon_slice = int(constants.PLAN_FREQ / constants.LP_FREQ)
-                #utils.plot_velocity(traj[int(traj_idx[i])][0][4,:plan_horizon_slice],11,(0,30))
+                #all_utils.plot_velocity(traj[int(traj_idx[i])][0][4,:plan_horizon_slice],11,(0,30))
                 traj = traj[int(traj_idx[i])][0][:,plan_horizon_slice]
                 ''' get the subject and relevant vehicle info into a dict
                 to be used for constructing the vehicle states for planning '''
@@ -194,7 +391,7 @@ def generate_equilibrium_trajectories():
             strategies = equilibria_t_plus_one[0]
             traj_idx = equilibria_t_plus_one[1]
             eq_dict[dict_key] = equilibria_t_plus_one
-            #utils.clear_cache(os.path.join(constants.L3_ACTION_CACHE, cache_dir))
+            #all_utils.clear_cache(os.path.join(constants.L3_ACTION_CACHE, cache_dir))
             curr_eq_ts = curr_eq_ts + 1
             '''
 
@@ -482,3 +679,34 @@ def finalize_hopping_plans():
     else:
         state_dict = utils.pickle_load(constants.L3_ACTION_CACHE+'zero_len_trajectories.dict')
         generate_hopping_plans(state_dict)
+        
+        
+        
+        
+'''   
+        for ch in all_chunks:
+            res = pool.map(self.func_to_exec, ch)
+            f=1
+        '''
+        '''    
+        for res_dict in pool.map(self.func_to_exec, self.dict_to_process):
+            for k,v in res_dict.items():
+                processed_dict[k] = v
+            f=1
+        '''
+        '''
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(all_chunks)) as executor:
+            future_to_dict = {executor.submit(self.func_to_exec, chunk): chunk for chunk in all_chunks}
+        '''    
+        '''
+        #ct = 0
+        #N = len(self.dict_to_process)
+        for future in concurrent.futures.as_completed(future_to_dict):
+            #for f_idx,futr in enumerate(all_futures):
+            res_dict = future.result()
+            for k,v in res_dict.items():
+                processed_dict[k] = v
+                #logging.info(str(ct)+'/'+str(N))
+            #processed_dict.update({k:v for k,v in res_dict.items()})
+        '''
+        

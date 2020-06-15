@@ -7,3 +7,5 @@ logs/*
 logs/
 temp_traj_cache/*
 temp_traj_cache/
+results/
+results/*

@@ -195,7 +195,7 @@ class TrajectoryUtils:
                 else:
                     proceed_actions.append(action)
             horizon_end_ts = float(time_ts) + constants.PLAN_FREQ + constants.LP_FREQ
-            q_string = "select TIME,speed from TRAJECTORIES_0769 where TRAJECTORIES_0769.TRACK_ID="+str(agent_id)+" AND TIME >= "+str(time_ts)+" ORDER BY TIME"
+            q_string = "select TIME,speed from TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" where TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TRACK_ID="+str(agent_id)+" AND TIME >= "+str(time_ts)+" ORDER BY TIME"
             c.execute(q_string)
             res = c.fetchall()
             vel_profile = [(row[0],row[1]) for row in res]

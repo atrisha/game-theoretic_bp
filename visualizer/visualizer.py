@@ -90,7 +90,7 @@ def plot_payoff_grid(payoff_arr):
     
 def plot_velocity(vel_list,agent_id,horizon,ag_idx,ax4):
     if agent_id is not None:
-        q_string = "select SPEED,TIME from trajectories_0769 where track_id="+str(agent_id)+" and (TIME BETWEEN "+str(horizon[0])+" AND "+str(horizon[1])+") order by time"
+        q_string = "select SPEED,TIME from trajectories_0"+constants.CURRENT_FILE_ID+" where track_id="+str(agent_id)+" and (TIME BETWEEN "+str(horizon[0])+" AND "+str(horizon[1])+") order by time"
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
         c = conn.cursor()
         c.execute(q_string)

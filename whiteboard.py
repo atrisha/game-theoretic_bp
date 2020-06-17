@@ -324,14 +324,7 @@ print(z)
 print(z1)
 print(z2)
 '''
-input,n = np.arange(100),12
-l = [input[i:i+n] for i in range(0, len(input), n)]
-for e in l:
-    print(e)
-l = []
-print(l[:-1])
-
-print(' '.join(['processing','jobs']))
+print(str(None))
     
     
     

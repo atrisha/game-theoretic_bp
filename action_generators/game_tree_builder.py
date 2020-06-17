@@ -75,7 +75,7 @@ def get_l3_action_file(file_id,agent_id,relev_agent_id, time_ts, l1_action,l2_ac
     _t1 = _t * 1000
     _t2 = round(_t1)
     #time_ts = round(float(time_ts)*1000)
-    file_id = '769'
+    file_id = constants.CURRENT_FILE_ID
     agent_id = str(agent_id).zfill(3)
     relev_agent_id = str(relev_agent_id).zfill(3)
     l1_action = str(constants.L1_ACTION_CODES[l1_action]).zfill(2)
@@ -88,7 +88,7 @@ def save_get_l3_action_file(file_id,agent_id,relev_agent_id, time_ts, l1_action,
     _t1 = _t * 1000
     _t2 = round(_t1)
     time_ts = str(time_ts).replace('.', ',')
-    file_id = '769'
+    file_id = constants.CURRENT_FILE_ID
     agent_id = str(agent_id).zfill(3)
     relev_agent_id = str(relev_agent_id).zfill(3)
     l1_action = str(constants.L1_ACTION_CODES[l1_action]).zfill(2)

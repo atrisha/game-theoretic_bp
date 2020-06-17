@@ -271,15 +271,16 @@ CROSSWALK_SIGNAL_MAP = {'P_20_21':'L_W_E',
 
 ''' equilibrium analysis configurations '''
 BASELINE_TRAJECTORIES_ONLY = False
-TRAJECTORY_TYPE = 'GAUSSIAN'
+
 INHIBITORY = True
 EXCITATORY = True
 INHIBITORY_PEDESTRIAN = True
-L1_EQ_TYPE = 'MAXMIN'
+L1_EQ_TYPE = 'NASH'
 L3_EQ_TYPE = 'BR'
+TRAJECTORY_TYPE = 'GAUSSIAN'
 
 
-CURRENT_FILE_ID = '769'
+CURRENT_FILE_ID = '770'
 import logging
 import logging.handlers
 format='%(levelname)-8s %(funcName)s : %(message)s'

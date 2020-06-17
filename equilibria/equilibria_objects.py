@@ -126,7 +126,7 @@ class L1L2UtilityProcessor:
                 else:
                     ids_to_fetch_from_db.append((ag_key,traj_info_id))
             if len(ids_to_fetch_from_db) > 0:
-                self.eq_context.l3_trajectory_cache.update(utils.load_trajs_for_traj_info_id([x[1] for x in ids_to_fetch_from_db],False))
+                self.eq_context.l3_trajectory_cache.update(utils.load_trajs_for_traj_info_id([x[1] for x in ids_to_fetch_from_db],False,self.eq_context.eval_config.traj_type))
             for ag_key,traj_info_id in ids_to_fetch_from_db:
                 all_traj_acts.append([ag_key+'-'+str(x) for x in list(self.eq_context.l3_trajectory_cache[traj_info_id].keys())])
             sv_traj_actions = []
@@ -160,7 +160,7 @@ class L1L2UtilityProcessor:
                     ids_to_fetch_from_db.append((ag_key,traj_info_id))
                 l3_traj_action_dict[k][ag_key+'-'+str(traj_info_id)] = dict()
             if len(ids_to_fetch_from_db) > 0:
-                self.eq_context.l3_trajectory_cache.update(utils.load_trajs_for_traj_info_id([x[1] for x in ids_to_fetch_from_db],False))
+                self.eq_context.l3_trajectory_cache.update(utils.load_trajs_for_traj_info_id([x[1] for x in ids_to_fetch_from_db],False,self.eq_context.eval_config.traj_type))
             for ag_key,traj_info_id in ids_to_fetch_from_db:
                 all_traj_acts.append([ag_key+'-'+str(x) for x in list(self.eq_context.l3_trajectory_cache[traj_info_id].keys())])
             sv_traj_actions = []
@@ -319,7 +319,7 @@ class Equilibria:
     def calc_empirical_actions(self):
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
         c = conn.cursor()
-        q_string = "SELECT * FROM TRAJECTORIES_0769_EXT WHERE L1_ACTION IS NOT NULL"
+        q_string = "SELECT * FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+"_EXT WHERE L1_ACTION IS NOT NULL"
         c.execute(q_string)
         res = c.fetchall()
         emp_act_in_db = dict()
@@ -445,7 +445,7 @@ class Equilibria:
         l2_action = str(constants.L2_ACTION_CODES[tokens[3]]).zfill(2)
         agent = str(tokens[0]).zfill(3)
         relev_agent = str(tokens[1]).zfill(3)
-        unreadable_str = '769'+agent+relev_agent+l1_action+l2_action
+        unreadable_str = constants.CURRENT_FILE_ID+agent+relev_agent+l1_action+l2_action
         return unreadable_str
     
     def build_l3_utility_table(self,sv_det,time_ts,l1l2_utility_dict_chunk):
@@ -468,7 +468,7 @@ class Equilibria:
                 else:
                     ids_to_fetch_from_db.append((ag_key,traj_info_id))
             if len(ids_to_fetch_from_db) > 0:
-                self.l3_trajectory_cache.update(utils.load_trajs_for_traj_info_id([x[1] for x in ids_to_fetch_from_db],False))
+                self.l3_trajectory_cache.update(utils.load_trajs_for_traj_info_id([x[1] for x in ids_to_fetch_from_db],False,self.eval_config.traj_type))
             for ag_key,traj_info_id in ids_to_fetch_from_db:
                 all_traj_acts.append([ag_key+'-'+str(x) for x in list(self.l3_trajectory_cache[traj_info_id].keys())])
             sv_traj_actions = []
@@ -511,7 +511,7 @@ class Equilibria:
             belief_dict = {tuple(x.split('-')[0] for x in k):v for k,v in zip(all_action_combinations,all_belief_combinations)}
         utility_dict = {k:np.zeros(shape=len(k)) for k in all_action_combinations}
         self.eval_config.set_num_agents(len(all_action_combinations[0]))
-        self.l1l2_trajectory_cache = utils.load_trajs_for_traj_info_id(all_baseline_ids)
+        self.l1l2_trajectory_cache = utils.load_trajs_for_traj_info_id(all_baseline_ids,True,self.eval_config.traj_type)
         logging.info('building payoff dict...DONE')
         if 'BELIEF' in self.eval_config.l1_eq:
             return utility_dict,sv_actions,belief_dict
@@ -695,7 +695,7 @@ class Equilibria:
             max_id = int(res[0]) + 1 
         else:
             max_id = 1
-        param_str = self.eval_config.l1_eq +'|'+ self.eval_config.l3_eq +'|'+ 'BOUNDARY' if self.eval_config.l3_eq is not None else self.eval_config.l1_eq +'|BASELINE_ONLY'
+        param_str = self.eval_config.l1_eq +'|'+ self.eval_config.l3_eq +'|'+ self.eval_config.traj_type if self.eval_config.l3_eq is not None else self.eval_config.l1_eq +'|BASELINE_ONLY'
         q_string = "REPLACE INTO EQUILIBRIUM_ACTIONS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         ins_list = []
         l3_ins_list = []
@@ -786,7 +786,10 @@ class EvalConfig:
         self.l1_eq = l1_eq
         
     def set_l3_eq_type(self,l3_eq):
-        self.l3_eq = l3_eq          
+        self.l3_eq = l3_eq     
+        
+    def set_traj_type(self,traj_type):
+        self.traj_type = traj_type     
         
     def set_pedestrian_info(self, pedestrian_info):
         self.pedestrian_info = pedestrian_info

@@ -175,7 +175,7 @@ def angle_between_lines_2pi(line_1,line_2):
 def get_target_velocity(veh_state):
     action = veh_state.l1_action
     q_string = "select * from TARGET_VELOCITIES where action='"+str(action)+"'"
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     c.execute(q_string)
     res = c.fetchall()
@@ -183,7 +183,7 @@ def get_target_velocity(veh_state):
     return target_vels
 
 def get_centerline(lane_segment):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "SELECT X_POSITIONS,Y_POSITIONS FROM TRAFFIC_REGIONS_DEF WHERE NAME = '"+lane_segment+"' and REGION_PROPERTY='center_line'"
     c.execute(q_string)
@@ -199,7 +199,7 @@ def get_centerline(lane_segment):
     return center_coordinates
 
 def get_mean_yaws_for_segments(segments):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     if isinstance(segments, str):
         segments = "('"+segments+"')"
@@ -221,7 +221,7 @@ def get_leading_vehicles(veh_state):
     veh_id = veh_state.id
     veh_pos_x = float(veh_state.x)
     veh_pos_y = float(veh_state.y)
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     ''' find the exit boundaries of the current and next segment. This will help calculate which vehicles are ahead.'''
     q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF WHERE (NAME like '"+current_segment+"%' OR NAME like '"+next_segment+"') and REGION_PROPERTY = 'exit_boundary'"
@@ -247,12 +247,12 @@ def get_leading_vehicles(veh_state):
         for row in res:
             leading_vehicle_id = row[0]
             ''' find the position of the potential lead vehicle in the current time '''
-            q_string = "select * from trajectories_0769,trajectories_0769_ext where trajectories_0769.track_id=trajectories_0769_ext.track_id and trajectories_0769.time=trajectories_0769_ext.time and trajectories_0769.track_id="+str(leading_vehicle_id)+" and trajectories_0769.time = "+str(time_ts)
+            q_string = "select * from trajectories_0"+constants.CURRENT_FILE_ID+",trajectories_0"+constants.CURRENT_FILE_ID+"_ext where trajectories_0"+constants.CURRENT_FILE_ID+".track_id=trajectories_0"+constants.CURRENT_FILE_ID+"_ext.track_id and trajectories_0"+constants.CURRENT_FILE_ID+".time=trajectories_0"+constants.CURRENT_FILE_ID+"_ext.time and trajectories_0"+constants.CURRENT_FILE_ID+".track_id="+str(leading_vehicle_id)+" and trajectories_0"+constants.CURRENT_FILE_ID+".time = "+str(time_ts)
             c.execute(q_string)
             pt_res = c.fetchone()
             l_v_state = VehicleState()
             if pt_res is None:
-                ''' this means that there is no entry for this vehicle in trajectories_0769_ext yet'''
+                ''' this means that there is no entry for this vehicle in trajectories_0"+constants.CURRENT_FILE_ID+"_ext yet'''
                 continue
             l_v_state.set_id(pt_res[0])
             l_v_state.set_current_time(time_ts)
@@ -536,9 +536,9 @@ def dist(x,y):
 
 
 def get_all_vehicles_on_lane(time,list_of_lanes):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
-    q_string = "SELECT DISTINCT TRACK_ID FROM TRAJECTORIES_0769 WHERE TIME = "+str(time)+" AND TRAFFIC_REGIONS LIKE '%l_n_s%';"
+    q_string = "SELECT DISTINCT TRACK_ID FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" WHERE TIME = "+str(time)+" AND TRAFFIC_REGIONS LIKE '%l_n_s%';"
     c.execute(q_string)
     res = c.fetchall()
     vehicles = []
@@ -548,9 +548,9 @@ def get_all_vehicles_on_lane(time,list_of_lanes):
     return vehicles
 
 def get_n_s_vehicles_on_intersection(time):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
-    q_string = "SELECT DISTINCT TRACK_ID FROM TRAJECTORIES_0769 WHERE TIME = "+str(time)+" AND TRAFFIC_REGIONS LIKE '%l_n_s%';"
+    q_string = "SELECT DISTINCT TRACK_ID FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" WHERE TIME = "+str(time)+" AND TRAFFIC_REGIONS LIKE '%l_n_s%';"
     c.execute(q_string)
     res = c.fetchall()
     vehicles = []
@@ -560,9 +560,9 @@ def get_n_s_vehicles_on_intersection(time):
     return vehicles
 
 def get_n_e_vehicles_before_intersection(time):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
-    q_string = "SELECT DISTINCT TRACK_ID FROM TRAJECTORIES_0769 WHERE TIME = "+str(time)+" AND TRAFFIC_REGIONS LIKE '%l_n_1%';"
+    q_string = "SELECT DISTINCT TRACK_ID FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" WHERE TIME = "+str(time)+" AND TRAFFIC_REGIONS LIKE '%l_n_1%';"
     c.execute(q_string)
     res = c.fetchall()
     vehicles = []
@@ -572,9 +572,9 @@ def get_n_e_vehicles_before_intersection(time):
     return vehicles
 
 def get_n_e_vehicles_on_intersection(time):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
-    q_string = "SELECT DISTINCT TRACK_ID FROM TRAJECTORIES_0769 WHERE TIME = "+str(time)+" AND TRAFFIC_REGIONS LIKE '%l_n_e%';"
+    q_string = "SELECT DISTINCT TRACK_ID FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" WHERE TIME = "+str(time)+" AND TRAFFIC_REGIONS LIKE '%l_n_e%';"
     c.execute(q_string)
     res = c.fetchall()
     vehicles = []
@@ -584,7 +584,7 @@ def get_n_e_vehicles_on_intersection(time):
     return vehicles
 
 def get_track_segment_seq(track_id):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "SELECT TRAFFIC_SEGMENT_SEQ FROM TRAJECTORY_MOVEMENTS WHERE TRACK_ID = "+str(track_id)
     c.execute(q_string)
@@ -614,19 +614,25 @@ def dict_chunks(data,SIZE):
     for i in range(0, len(data), SIZE):
         yield {k:data[k] for k in islice(it, SIZE)}
 
-def load_trajs_for_traj_info_id(traj_info_id,baseline_only=True):
+def load_trajs_for_traj_info_id(traj_info_id,baseline_only,traj_type):
     traj_info_id = [int(e) for e in traj_info_id]
     import struct
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
     c = conn.cursor()
     traj_dict = dict()
     if not baseline_only:
-        if len(traj_info_id) > 1:        
-            q_string = "select * from GENERATED_BOUNDARY_TRAJECTORY where TRAJECTORY_INFO_ID in "+str(tuple(traj_info_id)) + ' UNION ' + \
-                     "select * from GENERATED_BASELINE_TRAJECTORY where TRAJECTORY_INFO_ID in "+str(tuple(traj_info_id))+" order by trajectory_id,time"
+        if traj_type != 'GAUSSIAN':
+            if len(traj_info_id) > 1:        
+                q_string = "select * from GENERATED_BOUNDARY_TRAJECTORY where TRAJECTORY_INFO_ID in "+str(tuple(traj_info_id)) + ' UNION ' + \
+                         "select * from GENERATED_BASELINE_TRAJECTORY where TRAJECTORY_INFO_ID in "+str(tuple(traj_info_id))+" order by trajectory_id,time"
+            else:
+                q_string = "select * from GENERATED_BOUNDARY_TRAJECTORY where TRAJECTORY_INFO_ID = "+str(traj_info_id[0]) + ' UNION ' + \
+                         "select * from GENERATED_BASELINE_TRAJECTORY where TRAJECTORY_INFO_ID = "+str(traj_info_id[0])+" order by trajectory_id,time"
         else:
-            q_string = "select * from GENERATED_BOUNDARY_TRAJECTORY where TRAJECTORY_INFO_ID = "+str(traj_info_id[0]) + ' UNION ' + \
-                     "select * from GENERATED_BASELINE_TRAJECTORY where TRAJECTORY_INFO_ID = "+str(traj_info_id[0])+" order by trajectory_id,time"
+            if len(traj_info_id) > 1:        
+                q_string = "select * from GENERATED_GAUSSIAN_TRAJECTORY where TRAJECTORY_INFO_ID in "+str(tuple(traj_info_id))+" order by trajectory_id,time"
+            else:
+                q_string = "select * from GENERATED_GAUSSIAN_TRAJECTORY where TRAJECTORY_INFO_ID = "+str(traj_info_id[0])+" order by trajectory_id,time"
         c.execute(q_string)
         res = c.fetchall()
         for row in res:
@@ -639,8 +645,15 @@ def load_trajs_for_traj_info_id(traj_info_id,baseline_only=True):
                 else:
                     traj_dict[row[1]][row[0]].append(list(row[1:]))
         for k,v in traj_dict.items():
-            for k1,v1 in v.items():
-                traj_dict[k][k1] = np.vstack(v1)
+            if len(v) > 9:
+                chosen_traj_ids = np.random.choice(list(v.keys()), size=9, replace=False)
+            else:
+                chosen_traj_ids = list(v.keys())
+            for k1 in list(v.keys()):
+                if k1 in chosen_traj_ids:
+                    traj_dict[k][k1] = np.vstack(traj_dict[k][k1])
+                else:
+                    del traj_dict[k][k1]
         return traj_dict
     else:
         info_id_dict = dict()
@@ -674,7 +687,7 @@ def load_trajs_for_traj_info_id(traj_info_id,baseline_only=True):
                 traj_dict[row[1]].append([struct.unpack('f', x)[0] if isinstance(x,bytes) else x for x in list(row[1:])])
         for k,v in traj_dict.items():
             traj_dict[k] = np.vstack(v)
-    return traj_dict
+        return traj_dict
 
 
 def get_merging_vehicle(veh_state):
@@ -782,15 +795,15 @@ def load_traj_from_str(file_str):
 
 def get_track(veh_state,curr_time,from_current=None):
     agent_id = veh_state.id
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     if curr_time is not None:
         if from_current is None:
-            q_string = "select * from trajectories_0769,trajectories_0769_ext where trajectories_0769.track_id=trajectories_0769_ext.track_id and trajectories_0769.time=trajectories_0769_ext.time and trajectories_0769.track_id="+str(agent_id)+" and trajectories_0769.time="+str(curr_time)+" order by trajectories_0769.time"
+            q_string = "select * from trajectories_0"+constants.CURRENT_FILE_ID+",trajectories_0"+constants.CURRENT_FILE_ID+"_ext where trajectories_0"+constants.CURRENT_FILE_ID+".track_id=trajectories_0"+constants.CURRENT_FILE_ID+"_ext.track_id and trajectories_0"+constants.CURRENT_FILE_ID+".time=trajectories_0"+constants.CURRENT_FILE_ID+"_ext.time and trajectories_0"+constants.CURRENT_FILE_ID+".track_id="+str(agent_id)+" and trajectories_0"+constants.CURRENT_FILE_ID+".time="+str(curr_time)+" order by trajectories_0"+constants.CURRENT_FILE_ID+".time"
         else:
-            q_string = "select * from trajectories_0769,trajectories_0769_ext where trajectories_0769.track_id=trajectories_0769_ext.track_id and trajectories_0769.time=trajectories_0769_ext.time and trajectories_0769.track_id="+str(agent_id)+" and trajectories_0769.time >="+str(curr_time)+" order by trajectories_0769.time"
+            q_string = "select * from trajectories_0"+constants.CURRENT_FILE_ID+",trajectories_0"+constants.CURRENT_FILE_ID+"_ext where trajectories_0"+constants.CURRENT_FILE_ID+".track_id=trajectories_0"+constants.CURRENT_FILE_ID+"_ext.track_id and trajectories_0"+constants.CURRENT_FILE_ID+".time=trajectories_0"+constants.CURRENT_FILE_ID+"_ext.time and trajectories_0"+constants.CURRENT_FILE_ID+".track_id="+str(agent_id)+" and trajectories_0"+constants.CURRENT_FILE_ID+".time >="+str(curr_time)+" order by trajectories_0"+constants.CURRENT_FILE_ID+".time"
     else:
-        q_string = "select * from trajectories_0769,trajectories_0769_ext where trajectories_0769.track_id=trajectories_0769_ext.track_id and trajectories_0769.time=trajectories_0769_ext.time and trajectories_0769.track_id="+str(agent_id)+" order by trajectories_0769.time"
+        q_string = "select * from trajectories_0"+constants.CURRENT_FILE_ID+",trajectories_0"+constants.CURRENT_FILE_ID+"_ext where trajectories_0"+constants.CURRENT_FILE_ID+".track_id=trajectories_0"+constants.CURRENT_FILE_ID+"_ext.track_id and trajectories_0"+constants.CURRENT_FILE_ID+".time=trajectories_0"+constants.CURRENT_FILE_ID+"_ext.time and trajectories_0"+constants.CURRENT_FILE_ID+".track_id="+str(agent_id)+" order by trajectories_0"+constants.CURRENT_FILE_ID+".time"
     c.execute(q_string)
     res = c.fetchall()
     l = []
@@ -798,11 +811,11 @@ def get_track(veh_state,curr_time,from_current=None):
     if len(res) == 0:
         if time_ts is not None:
             if from_current is None:
-                q_string = "select * from trajectories_0769 where trajectories_0769.track_id="+str(agent_id)+" and trajectories_0769.time="+str(time_ts)+" order by trajectories_0769.time"
+                q_string = "select * from trajectories_0"+constants.CURRENT_FILE_ID+" where trajectories_0"+constants.CURRENT_FILE_ID+".track_id="+str(agent_id)+" and trajectories_0"+constants.CURRENT_FILE_ID+".time="+str(time_ts)+" order by trajectories_0"+constants.CURRENT_FILE_ID+".time"
             else:
-                q_string = "select * from trajectories_0769 where trajectories_0769.track_id="+str(agent_id)+" and trajectories_0769.time >="+str(time_ts)+" order by trajectories_0769.time"
+                q_string = "select * from trajectories_0"+constants.CURRENT_FILE_ID+" where trajectories_0"+constants.CURRENT_FILE_ID+".track_id="+str(agent_id)+" and trajectories_0"+constants.CURRENT_FILE_ID+".time >="+str(time_ts)+" order by trajectories_0"+constants.CURRENT_FILE_ID+".time"
         else:
-            q_string = "select * from trajectories_0769 where trajectories_0769.track_id="+str(agent_id)+" order by trajectories_0769.time"
+            q_string = "select * from trajectories_0"+constants.CURRENT_FILE_ID+" where trajectories_0"+constants.CURRENT_FILE_ID+".track_id="+str(agent_id)+" order by trajectories_0"+constants.CURRENT_FILE_ID+".time"
         c.execute(q_string)
         res = c.fetchall()
     '''    
@@ -812,9 +825,9 @@ def get_track(veh_state,curr_time,from_current=None):
     return np.asarray(l)
 
 def get_current_segment_by_veh_id(veh_id,time_ts):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
-    q_string = "SELECT ASSIGNED_SEGMENT FROM TRAJECTORIES_0769_EXT WHERE TRACK_ID="+str(veh_id)+" AND TIME="+str(time_ts)
+    q_string = "SELECT ASSIGNED_SEGMENT FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+"_EXT WHERE TRACK_ID="+str(veh_id)+" AND TIME="+str(time_ts)
     c.execute(q_string)
     res = c.fetchone()
     curr_segment = res[0]
@@ -824,18 +837,18 @@ def get_current_segment_by_veh_id(veh_id,time_ts):
 
 def get_pedestrian_track(p_state,q_time):
     p_id = p_state.p_id
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
-    q_string = "select * from TRAJECTORIES_0769 WHERE TRAJECTORIES_0769.TRACK_ID="+str(p_id)+" AND ROUND(TIME,2)=ROUND("+str(q_time)+",2) ORDER BY TIME"
+    q_string = "select * from TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" WHERE TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TRACK_ID="+str(p_id)+" AND ROUND(TIME,2)=ROUND("+str(q_time)+",2) ORDER BY TIME"
     c.execute(q_string)
     res = c.fetchone()
     return res
     
     
 def get_path(veh_id):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
-    q_string = "select X,Y from TRAJECTORIES_0769 WHERE TRAJECTORIES_0769.TRACK_ID="+str(veh_id)+" ORDER BY TIME"
+    q_string = "select X,Y from TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" WHERE TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TRACK_ID="+str(veh_id)+" ORDER BY TIME"
     c.execute(q_string)
     res = c.fetchall()
     path = [(row[0],row[1]) for row in res]
@@ -845,11 +858,11 @@ def get_path(veh_id):
     
 def get_vehicles_info(time_ts):
     vehicles_info = dict()
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
-    q_string = "select TRAJECTORIES_0769.TRACK_ID,TRAJECTORIES_0769.TIME,TRAJECTORIES_0769.X,TRAJECTORIES_0769.Y,TRAJECTORIES_0769_EXT.ASSIGNED_SEGMENT \
-                     from TRAJECTORIES_0769 LEFT JOIN TRAJECTORIES_0769_EXT ON TRAJECTORIES_0769.TRACK_ID=TRAJECTORIES_0769_EXT.TRACK_ID AND TRAJECTORIES_0769.TIME=TRAJECTORIES_0769_EXT.TIME \
-                          WHERE TRAJECTORIES_0769.TIME="+str(time_ts)
+    q_string = "select TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TRACK_ID,TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TIME,TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".X,TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".Y,TRAJECTORIES_0"+constants.CURRENT_FILE_ID+"_EXT.ASSIGNED_SEGMENT \
+                     from TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" LEFT JOIN TRAJECTORIES_0"+constants.CURRENT_FILE_ID+"_EXT ON TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TRACK_ID=TRAJECTORIES_0"+constants.CURRENT_FILE_ID+"_EXT.TRACK_ID AND TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TIME=TRAJECTORIES_0"+constants.CURRENT_FILE_ID+"_EXT.TIME \
+                          WHERE TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TIME="+str(time_ts)
     c.execute(q_string)
     res = c.fetchall()
     for row in res:
@@ -860,7 +873,7 @@ def get_vehicles_info(time_ts):
     
 def gate_crossing_times(veh_state):
     entry_gate,exit_gate = veh_state.gates[0],veh_state.gates[1]
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     entry_time,exit_time = None,None
     if entry_gate is not None:
@@ -964,7 +977,7 @@ def get_path_gates_direction(agent_track,agent_id):
         
     
     '''return the gates '''
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     gates = [None,None]
     o,d = None,None    
@@ -1006,8 +1019,11 @@ def get_path_gates_direction(agent_track,agent_id):
     else:
         direction = None
     return path,gates,direction
+
+
+
 def get_traffic_segment_from_gates(gates):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     segment_seq = []
     q_string = "SELECT SEGMENT_SEQ FROM SEGMENT_SEQ_MAP WHERE ENTRY_GATE = "+str(gates[0])+" AND EXIT_GATE = "+str(gates[1])
@@ -1042,7 +1058,7 @@ def print_readable(eq):
     
 def query_agent(conflict,subject_path,veh_state):
     vehicles = []
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     curr_time = float(veh_state.current_time)
     other_agent_gates,other_agent_path = [],[]
@@ -1061,14 +1077,14 @@ def query_agent(conflict,subject_path,veh_state):
         end_time = curr_time+constants.RELEV_VEHS_TIME_THRESH if veh_intersection_exit_time is None else veh_intersection_exit_time+constants.RELEV_VEHS_TIME_THRESH
     else:
         end_time = curr_time+constants.RELEV_VEHS_TIME_THRESH if veh_scene_exit_time is None else veh_scene_exit_time
-    q_string = "SELECT DISTINCT TRAJECTORIES_0769.TRACK_ID FROM TRAJECTORIES_0769,TRACKS WHERE TRAJECTORIES_0769.TRACK_ID=TRACKS.TRACK_ID AND (TIME BETWEEN "+str(curr_time)+" AND "+str(end_time)+") AND TRACKS.TYPE <> 'Pedestrian' AND TRACKS.TRACK_ID IN (SELECT DISTINCT TRACK_ID FROM TRAJECTORY_MOVEMENTS WHERE TRAFFIC_SEGMENT_SEQ LIKE '%"+path[0][:-1]+"%"+path[1][:-2]+"%' ORDER BY TRACK_ID)"
+    q_string = "SELECT DISTINCT TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TRACK_ID FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+",TRACKS WHERE TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TRACK_ID=TRACKS.TRACK_ID AND (TIME BETWEEN "+str(curr_time)+" AND "+str(end_time)+") AND TRACKS.TYPE <> 'Pedestrian' AND TRACKS.TRACK_ID IN (SELECT DISTINCT TRACK_ID FROM TRAJECTORY_MOVEMENTS WHERE TRAFFIC_SEGMENT_SEQ LIKE '%"+path[0][:-1]+"%"+path[1][:-2]+"%' ORDER BY TRACK_ID)"
     c.execute(q_string)
     res = c.fetchall()
     if len(res) < 1:
         print('no relevant agents for query:',q_string)
     elif len(res) > 7:
         ''' too many agents. we can reduce the number by restricting the time threshold without significant impact '''
-        q_string = "SELECT DISTINCT TRAJECTORIES_0769.TRACK_ID FROM TRAJECTORIES_0769,TRACKS WHERE TRAJECTORIES_0769.TRACK_ID=TRACKS.TRACK_ID AND TIME = "+str(curr_time)+" AND TRACKS.TYPE <> 'Pedestrian' AND TRACKS.TRACK_ID IN (SELECT DISTINCT TRACK_ID FROM TRAJECTORY_MOVEMENTS WHERE TRAFFIC_SEGMENT_SEQ LIKE '%"+path[0][:-1]+"%"+path[1][:-2]+"%' ORDER BY TRACK_ID)"
+        q_string = "SELECT DISTINCT TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TRACK_ID FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+",TRACKS WHERE TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TRACK_ID=TRACKS.TRACK_ID AND TIME = "+str(curr_time)+" AND TRACKS.TYPE <> 'Pedestrian' AND TRACKS.TRACK_ID IN (SELECT DISTINCT TRACK_ID FROM TRAJECTORY_MOVEMENTS WHERE TRAFFIC_SEGMENT_SEQ LIKE '%"+path[0][:-1]+"%"+path[1][:-2]+"%' ORDER BY TRACK_ID)"
         c.execute(q_string)
         res = c.fetchall()
     
@@ -1078,7 +1094,7 @@ def query_agent(conflict,subject_path,veh_state):
     return vehicles
         
 def is_out_of_view(pos):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "select * from traffic_regions_def where name='view_area'"
     c.execute(q_string)
@@ -1119,7 +1135,7 @@ def get_relevant_agents(veh_state):
     if veh_state.signal == 'R' and constants.SEGMENT_MAP[veh_state.current_segment] in ['through-lane-entry','left-turn-lane']:
         ''' only relevant agents is the leading vehicle if present, which will be determined later'''
         return relev_agents
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     path = veh_state.segment_seq
     signal = veh_state.signal
@@ -1191,8 +1207,8 @@ def dict_factory(cursor, row):
         d[col[0]] = row[idx]
     return d
 
-def get_entry_exit_time(track_id,file_id='769'):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+def get_entry_exit_time(track_id,file_id=constants.CURRENT_FILE_ID):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "select * from v_TIMES where track_id="+str(track_id)
     c.execute(q_string)
@@ -1202,8 +1218,8 @@ def get_entry_exit_time(track_id,file_id='769'):
     return time_tuple
 
     
-def get_traffic_signal(time,direction,file_id='769'):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+def get_traffic_signal(time,direction,file_id=constants.CURRENT_FILE_ID):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     if direction == 'ALL':
         conn.row_factory = dict_factory
         c = conn.cursor()
@@ -1222,7 +1238,7 @@ def get_traffic_signal(time,direction,file_id='769'):
         return signal
     
 def get_time_to_next_signal(time_ts,direction,curr_signal):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "SELECT * FROM TRAFFIC_LIGHTS WHERE TIME - "+str(time_ts)+" > 0 AND "+direction+" <> '"+curr_signal+"' order by time"
     curr = c.execute(q_string)
@@ -1239,7 +1255,7 @@ def get_time_to_next_signal(time_ts,direction,curr_signal):
     
 def get_actions(veh_state):
     
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     segment = constants.SEGMENT_MAP[veh_state.current_segment]
     if veh_state.leading_vehicle is not None:
@@ -1279,7 +1295,7 @@ def region_equivalence(track_region,track_segment):
         return False 
     
 def has_crossed(segment,veh_state):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     
     ''' for each segment loop and check if the vehicle has not yet crossed it'''
@@ -1382,7 +1398,7 @@ def insert_baseline_trajectory(l3_actions,f):
     relev_agent = int(f[6:9])
     l1_action = [k for k,v in constants.L1_ACTION_CODES.items() if v == int(f[9:11])][0]
     l2_action = [k for k,v in constants.L2_ACTION_CODES.items() if v == int(f[11:13])][0]
-    i_string_data = (769,agent_id,relev_agent,l1_action,l2_action,time_ts,1)
+    i_string_data = (int(constants.CURRENT_FILE_ID),agent_id,relev_agent,l1_action,l2_action,time_ts,1)
     #print('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?,?)',i_string_data)
     c.execute("SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE AGENT_ID="+str(i_string_data[1])+" AND RELEV_AGENT_ID="+str(i_string_data[2])+" AND L1_ACTION='"+str(i_string_data[3])+"' AND \
                     L2_ACTION='"+str(i_string_data[4])+"' AND TIME="+str(i_string_data[5]))
@@ -1423,7 +1439,7 @@ def insert_generated_trajectory(l3_actions,f):
     l1_action = [k for k,v in constants.L1_ACTION_CODES.items() if v == int(f[9:11])][0]
     l2_action = [k for k,v in constants.L2_ACTION_CODES.items() if v == int(f[11:13])][0]
     traj_len = l3_actions.shape[0] if len(l3_actions) > 0 else 0
-    i_string_data = (769,agent_id,relev_agent,l1_action,l2_action,time_ts,traj_len)
+    i_string_data = (int(constants.CURRENT_FILE_ID),agent_id,relev_agent,l1_action,l2_action,time_ts,traj_len)
     #print('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?,?)',i_string_data)
     c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?)',i_string_data)
     conn.commit()
@@ -1547,7 +1563,7 @@ def generate_baseline_trajectory(time,path,v_s,a_s,max_acc,max_jerk,v_g,dt,acc):
      
         
 def get_exit_boundary(segment):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF WHERE NAME = '"+segment+"' and REGION_PROPERTY = 'exit_boundary'"
     c.execute(q_string)
@@ -1634,7 +1650,7 @@ def generate_trajectory_from_vel_profile(time,ref_path,vel_profile):
     return new_path
    
 def get_relevant_crosswalks(veh_state):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     if isinstance(veh_state, VehicleState) or isinstance(veh_state, planning_objects.VehicleState):
         q_string = "select * from RELEVANT_CROSSWALK_MAP WHERE RELEVANT_CROSSWALK_MAP.VEH_PATH='"+veh_state.direction+"'"
@@ -1657,12 +1673,12 @@ def unreadable(act_str):
     l2_action = str(constants.L2_ACTION_CODES[tokens[3]]).zfill(2)
     agent = str(tokens[0]).zfill(3)
     relev_agent = str(tokens[1]).zfill(3)
-    unreadable_str = '769'+agent+relev_agent+l1_action+l2_action
+    unreadable_str = constants.CURRENT_FILE_ID+agent+relev_agent+l1_action+l2_action
     return unreadable_str    
 
 def setup_pedestrian_info(curr_time):
     pedestrian_list = []
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "select * from TRAFFIC_REGIONS_DEF WHERE TRAFFIC_REGIONS_DEF.REGION_PROPERTY='gate_line'"
     c.execute(q_string)
@@ -1677,7 +1693,7 @@ def setup_pedestrian_info(curr_time):
         for x in x_walk:
             if x not in all_relev_crosswalks:
                 all_relev_crosswalks.append(x)
-    q_string = "SELECT TRAJECTORY_MOVEMENTS.TRACK_ID,GATES_PASSED,entry_time,exit_time,TRAJECTORIES_0769.* FROM v_times,TRAJECTORY_MOVEMENTS,TRAJECTORIES_0769 WHERE v_times.track_id=TRAJECTORY_MOVEMENTS.track_id and TRAJECTORY_MOVEMENTS.TYPE='Pedestrian' and gates_passed is not NULL and entry_time<="+str(curr_time)+" and exit_time>="+str(curr_time)+" and TRAJECTORIES_0769.TRACK_ID = TRAJECTORY_MOVEMENTS.track_id AND TRAJECTORIES_0769.TIME="+str(curr_time)
+    q_string = "SELECT TRAJECTORY_MOVEMENTS.TRACK_ID,GATES_PASSED,entry_time,exit_time,TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".* FROM v_times,TRAJECTORY_MOVEMENTS,TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" WHERE v_times.track_id=TRAJECTORY_MOVEMENTS.track_id and TRAJECTORY_MOVEMENTS.TYPE='Pedestrian' and gates_passed is not NULL and entry_time<="+str(curr_time)+" and exit_time>="+str(curr_time)+" and TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TRACK_ID = TRAJECTORY_MOVEMENTS.track_id AND TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TIME="+str(curr_time)
     c.execute(q_string)
     res = c.fetchall()
     for row in res:
@@ -1851,7 +1867,7 @@ def get_current_segment(r_a_state,r_a_track_region,r_a_track_segment_seq,curr_ti
 
 
 def get_viewport():
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "select * from traffic_regions_def where name='view_area'"
     c.execute(q_string)
@@ -1866,7 +1882,7 @@ def clip_trajectory_to_viewport(res):
     else:
         time, x, y, yaw, v, a, j = res
     
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "select * from traffic_regions_def where name='view_area'"
     c.execute(q_string)
@@ -1891,7 +1907,7 @@ def clip_trajectory_to_viewport(res):
             
             
 def get_agents_for_task(task_str):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "SELECT DISTINCT TRACK_ID FROM TRAJECTORY_MOVEMENTS,SEGMENT_SEQ_MAP WHERE TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ=SEGMENT_SEQ_MAP.SEGMENT_SEQ AND SEGMENT_SEQ_MAP.DIRECTION='"+task_str+"' ORDER BY TRACK_ID"
     c.execute(q_string)
@@ -1910,8 +1926,8 @@ def interpolate_track_info(veh_state,forward,backward,partial_track=None):
     track_info[0],track_info[6] = veh_id,curr_time
     veh_entry_segment, veh_exit_segment = veh_state.segment_seq[0],veh_state.segment_seq[-1]
     if not hasattr(veh_state, 'track'):
-        q_string = "select TIME,TRAFFIC_REGIONS,X,Y,SPEED from trajectories_0769 where track_id="+str(veh_id)+" order by time"
-        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+        q_string = "select TIME,TRAFFIC_REGIONS,X,Y,SPEED from trajectories_0"+constants.CURRENT_FILE_ID+" where track_id="+str(veh_id)+" order by time"
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
         c = conn.cursor()
         c.execute(q_string)
         res = c.fetchall()
@@ -1950,7 +1966,7 @@ def interpolate_track_info(veh_state,forward,backward,partial_track=None):
                 track_info[8] = traffic_regions[for_idx][1]
     elif forward:
         ''' extrapolate forward in time '''
-        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
         c = conn.cursor()
         q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF WHERE NAME = '"+veh_exit_segment+"' AND REGION_PROPERTY = 'center_line'"
         c.execute(q_string)
@@ -1973,7 +1989,7 @@ def interpolate_track_info(veh_state,forward,backward,partial_track=None):
     elif backward:
         ''' extrapolate backward in time '''
         idx = 0
-        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
         c = conn.cursor()
         q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF WHERE NAME = '"+veh_entry_segment+"' AND REGION_PROPERTY = 'center_line'"
         c.execute(q_string)
@@ -2009,12 +2025,12 @@ def guess_track_info(veh_state,partial_track=None):
         track_info = interpolate_track_info(veh_state,False,True,partial_track)
     return np.asarray(track_info)
     
-
+'''
 def get_closest_east_vehicles_before_intersection(time,loc):
     vehicles = []
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
-    q_string = "SELECT DISTINCT TRACK_ID,X,Y FROM TRAJECTORIES_0769 WHERE TIME = "+str(time)+" AND  TRAFFIC_REGIONS LIKE '%ln_e_1%'"
+    q_string = "SELECT DISTINCT TRACK_ID,X,Y FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" WHERE TIME = "+str(time)+" AND  TRAFFIC_REGIONS LIKE '%ln_e_1%'"
     c.execute(q_string)
     res = c.fetchall()
     all_vehicles = []
@@ -2024,7 +2040,7 @@ def get_closest_east_vehicles_before_intersection(time,loc):
     closest_index = dist_list.index(min(dist_list))
     vehicles.append(all_vehicles[closest_index][0])
     
-    q_string = "SELECT DISTINCT TRACK_ID,X,Y FROM TRAJECTORIES_0769 WHERE TIME = "+str(time)+" AND  TRAFFIC_REGIONS LIKE '%ln_e_2%'"
+    q_string = "SELECT DISTINCT TRACK_ID,X,Y FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" WHERE TIME = "+str(time)+" AND  TRAFFIC_REGIONS LIKE '%ln_e_2%'"
     c.execute(q_string)
     res = c.fetchall()
     all_vehicles = []
@@ -2034,7 +2050,7 @@ def get_closest_east_vehicles_before_intersection(time,loc):
     closest_index = dist_list.index(min(dist_list))
     vehicles.append(all_vehicles[closest_index][0])
     
-    q_string = "SELECT DISTINCT TRACK_ID,X,Y FROM TRAJECTORIES_0769 WHERE TIME = "+str(time)+" AND  TRAFFIC_REGIONS LIKE '%ln_e_3%'"
+    q_string = "SELECT DISTINCT TRACK_ID,X,Y FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" WHERE TIME = "+str(time)+" AND  TRAFFIC_REGIONS LIKE '%ln_e_3%'"
     c.execute(q_string)
     res = c.fetchall()
     all_vehicles = []
@@ -2047,9 +2063,9 @@ def get_closest_east_vehicles_before_intersection(time,loc):
     return vehicles
 
 def get_n_w_vehicles(time):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
-    q_string = "SELECT DISTINCT TRACK_ID FROM TRAJECTORIES_0769 WHERE TIME = "+str(time)+" AND (TRAFFIC_REGIONS LIKE '%l_n_w%')"
+    q_string = "SELECT DISTINCT TRACK_ID FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" WHERE TIME = "+str(time)+" AND (TRAFFIC_REGIONS LIKE '%l_n_w%')"
     c.execute(q_string)
     res = c.fetchall()
     vehicles = []
@@ -2060,9 +2076,9 @@ def get_n_w_vehicles(time):
 
 def get_closest_west_vehicles_before_intersection(time,loc):
     vehicles = []
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
-    q_string = "SELECT DISTINCT TRACK_ID,X,Y FROM TRAJECTORIES_0769 WHERE TIME = "+str(time)+" AND  TRAFFIC_REGIONS LIKE '%ln_w_1%'"
+    q_string = "SELECT DISTINCT TRACK_ID,X,Y FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" WHERE TIME = "+str(time)+" AND  TRAFFIC_REGIONS LIKE '%ln_w_1%'"
     c.execute(q_string)
     res = c.fetchall()
     all_vehicles = []
@@ -2072,7 +2088,7 @@ def get_closest_west_vehicles_before_intersection(time,loc):
     closest_index = dist_list.index(min(dist_list))
     vehicles.append(all_vehicles[closest_index][0])
     
-    q_string = "SELECT DISTINCT TRACK_ID,X,Y FROM TRAJECTORIES_0769 WHERE TIME = "+str(time)+" AND  TRAFFIC_REGIONS LIKE '%ln_w_2%'"
+    q_string = "SELECT DISTINCT TRACK_ID,X,Y FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" WHERE TIME = "+str(time)+" AND  TRAFFIC_REGIONS LIKE '%ln_w_2%'"
     c.execute(q_string)
     res = c.fetchall()
     all_vehicles = []
@@ -2082,7 +2098,7 @@ def get_closest_west_vehicles_before_intersection(time,loc):
     closest_index = dist_list.index(min(dist_list))
     vehicles.append(all_vehicles[closest_index][0])
     
-    q_string = "SELECT DISTINCT TRACK_ID,X,Y FROM TRAJECTORIES_0769 WHERE TIME = "+str(time)+" AND  TRAFFIC_REGIONS LIKE '%ln_w_3%'"
+    q_string = "SELECT DISTINCT TRACK_ID,X,Y FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" WHERE TIME = "+str(time)+" AND  TRAFFIC_REGIONS LIKE '%ln_w_3%'"
     c.execute(q_string)
     res = c.fetchall()
     all_vehicles = []
@@ -2093,12 +2109,12 @@ def get_closest_west_vehicles_before_intersection(time,loc):
     vehicles.append(all_vehicles[closest_index][0])
     conn.close()
     return vehicles
-
-    
+'''
+'''    
 def get_n_s_vehicles_before_intersection(time):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
-    q_string = "SELECT DISTINCT TRACK_ID FROM TRAJECTORIES_0769 WHERE TIME = "+str(time)+" AND (TRAFFIC_REGIONS LIKE '%ln_n_2%' OR TRAFFIC_REGIONS LIKE '%ln_n_3%')"
+    q_string = "SELECT DISTINCT TRACK_ID FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+" WHERE TIME = "+str(time)+" AND (TRAFFIC_REGIONS LIKE '%ln_n_2%' OR TRAFFIC_REGIONS LIKE '%ln_n_3%')"
     c.execute(q_string)
     res = c.fetchall()
     vehicles = []
@@ -2109,7 +2125,7 @@ def get_n_s_vehicles_before_intersection(time):
 
 def oncoming_vehicles_on_intersection_cond():
     return entry_exit_gate_cond(60, 18)
-
+'''
 def entry_exit_gate_cond(entry_gate,exit_gate):
     return  "WHERE ((ENTRY_GATE = "+str(entry_gate)+" AND EXIT_GATE = "+str(exit_gate)+" )" + \
                         " OR (EXIT_GATE = "+str(exit_gate)+" AND ENTRY_GATE IS NULL))"

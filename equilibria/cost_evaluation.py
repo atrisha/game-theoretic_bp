@@ -347,6 +347,6 @@ def unreadable(act_str):
     l2_action = str(constants.L2_ACTION_CODES[tokens[3]]).zfill(2)
     agent = str(tokens[0]).zfill(3)
     relev_agent = str(tokens[1]).zfill(3)
-    unreadable_str = '769'+agent+relev_agent+l1_action+l2_action
+    unreadable_str = constants.CURRENT_FILE_ID+agent+relev_agent+l1_action+l2_action
     return unreadable_str
 

@@ -89,7 +89,7 @@ class TrajectoryPlan:
         relev_agent = self.relev_veh_id
         l1_action = self.l1_action
         l2_action = self.l2_action
-        i_string_data = (769,agent_id,relev_agent,l1_action,l2_action,time_ts,1)
+        i_string_data = (int(constants.CURRENT_FILE_ID),agent_id,relev_agent,l1_action,l2_action,time_ts,1)
         #print('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?,?)',i_string_data)
         c.execute("SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE AGENT_ID="+str(i_string_data[1])+" AND RELEV_AGENT_ID="+str(i_string_data[2])+" AND L1_ACTION='"+str(i_string_data[3])+"' AND \
                         L2_ACTION='"+str(i_string_data[4])+"' AND TIME="+str(i_string_data[5]))

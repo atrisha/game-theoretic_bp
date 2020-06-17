@@ -30,7 +30,7 @@ def _exp_w_scaling(u,l,a):
 
 def calc_equilibria(curr_time,traj_det,payoff_type,status_str,param_str,emp_action):
     calc_beliefs = False if param_str == 'l2_Nash|l3_baseline_only' else True
-    traffic_signal = utils.get_traffic_signal(curr_time, 'ALL','769')
+    traffic_signal = utils.get_traffic_signal(curr_time, 'ALL',constants.CURRENT_FILE_ID)
     sub_veh_actions = []
     agent_ids = []
     ag_ct = 0
@@ -333,7 +333,8 @@ def build_analysis_table(eq_non_eq,u_deltas):
     eval_config = EvalConfig()
     eval_config.set_l1_eq_type(L1_EQ_TYPE)
     eval_config.set_l3_eq_type(L3_EQ_TYPE)
-    param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ 'BOUNDARY' if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
+    eval_config.set_traj_type(TRAJECTORY_TYPE)
+    param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ eval_config.traj_type if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
     all_segs = ['prep-turn%','exec-turn%','ln\__\__']
     all_conds = [[("EQUILIBRIUM_ACTIONS.SEGMENT like 'prep-turn%' ESCAPE '\\'","SEGMENT=prep-left-turn"),
                  ("EQUILIBRIUM_ACTIONS.SEGMENT like 'exec-turn%' ESCAPE '\\'","SEGMENT=exec-left-turn"),
@@ -493,7 +494,8 @@ def analyse_equilibrium_data():
     eval_config = EvalConfig()
     eval_config.set_l1_eq_type(L1_EQ_TYPE)
     eval_config.set_l3_eq_type(L3_EQ_TYPE)
-    param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ 'BOUNDARY' if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
+    eval_config.set_traj_type(TRAJECTORY_TYPE)
+    param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ eval_config.traj_type if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
     all_segs = ['prep-turn%','exec-turn%','ln\__\__','rt_prep-turn%','rt_exec-turn%']
     plot_dict = dict()
     for seg in all_segs:
@@ -656,7 +658,8 @@ def build_results_tree():
     eval_config = EvalConfig()
     eval_config.set_l1_eq_type(L1_EQ_TYPE)
     eval_config.set_l3_eq_type(L3_EQ_TYPE)
-    param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ 'BOUNDARY' if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
+    eval_config.set_traj_type(TRAJECTORY_TYPE)
+    param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ eval_config.traj_type if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
     X,Y = [],[]
     data_dict = dict()
     act_combs = []
@@ -728,12 +731,14 @@ def build_results_tree():
 ''' this method calculates the equilibria_core based on the trajectories that were generated in the hopping plans.
 Assumes that the trajectories are already present in the cache.'''
 def calc_eqs_for_hopping_trajectories():
+    db_utils.reduce_relev_agents()
     show_plots = False
     update_only = False
     eval_config = EvalConfig()
     eval_config.set_l1_eq_type(L1_EQ_TYPE)
     eval_config.set_l3_eq_type(L3_EQ_TYPE)
-    param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ 'BOUNDARY' if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
+    eval_config.set_traj_type(TRAJECTORY_TYPE)
+    param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ TRAJECTORY_TYPE if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
     if update_only:
         eval_config.set_update_only(True)
         eq_acts_in_db = get_equil_action_in_db(param_str)

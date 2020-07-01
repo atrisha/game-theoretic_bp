@@ -170,19 +170,19 @@ def plot_baselines():
     import ast
     
     all_l1_actions = []
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\770\\uni_weber_generated_trajectories_770.db')
     c = conn.cursor()
-    conn1 = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn1 = sqlite3.connect('D:\\intersections_dataset\\dataset\\770\\uni_weber_770.db')
     c1 = conn1.cursor()
     ag_id = 44
-    q_string = "select distinct l1_action from GENERATED_TRAJECTORY_INFO where agent_id="+str(ag_id)
+    q_string = "select distinct l1_action from GENERATED_TRAJECTORY_INFO "
     c.execute(q_string)
     res = c.fetchall()
     all_l1_actions = [row[0] for row in res]        
     emp_path = utils.get_path(ag_id)
     plt.plot([x[0] for x in emp_path],[x[1] for x in emp_path],'blue')
     for l1_act in all_l1_actions:
-        q_string = "SELECT DISTINCT TRAJ_ID FROM GENERATED_TRAJECTORY_INFO where l1_action='"+l1_act+"' and agent_id="+str(ag_id)
+        q_string = "SELECT DISTINCT TRAJ_ID FROM GENERATED_TRAJECTORY_INFO where l1_action='"+l1_act
         c.execute(q_string)
         res = tuple(row[0] for row in c.fetchall())
         
@@ -218,21 +218,21 @@ def plot_baselines():
     
 def plot_boundaries():
     import ast
-    
+    constants.CURRENT_FILE_ID = '770'
     all_l1_actions = []
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\770\\uni_weber_generated_trajectories_770.db')
     c = conn.cursor()
-    conn1 = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn1 = sqlite3.connect('D:\\intersections_dataset\\dataset\\770\\uni_weber_770.db')
     c1 = conn1.cursor()
     ag_id = 43
-    q_string = "select distinct l1_action from GENERATED_TRAJECTORY_INFO where agent_id="+str(ag_id)
+    q_string = "select distinct l1_action from GENERATED_TRAJECTORY_INFO"
     c.execute(q_string)
     res = c.fetchall()
     all_l1_actions = [row[0] for row in res]        
     emp_path = utils.get_path(ag_id)
     plt.plot([x[0] for x in emp_path],[x[1] for x in emp_path],'blue')
     for l1_act in all_l1_actions:
-        q_string = "SELECT DISTINCT TRAJ_ID FROM GENERATED_TRAJECTORY_INFO where l1_action='"+l1_act+"' and agent_id="+str(ag_id)
+        q_string = "SELECT DISTINCT TRAJ_ID FROM GENERATED_TRAJECTORY_INFO where l1_action='"+l1_act+"'"
         c.execute(q_string)
         res = tuple(row[0] for row in c.fetchall())
         
@@ -341,7 +341,7 @@ def plot_all_trajectories(traj,ax1,ax2,ax3):
         
 def plot_traffic_regions():
     import ast
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\769\\uni_weber_769.db')
     c = conn.cursor()
     q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point' and region_property <> 'left_boundary'"
     c.execute(q_string)
@@ -490,4 +490,4 @@ def show_baseline_animation():
       
     
 if __name__ == '__main__':     
-    show_baseline_animation()
+    plot_boundaries()

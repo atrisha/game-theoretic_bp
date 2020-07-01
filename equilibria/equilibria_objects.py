@@ -48,6 +48,8 @@ class L3Calculation:
         order_map = {x.split('-')[0]:o_i for o_i,x in enumerate(self.l1l2_strat)}
         self.load_trajs()
         cost_eval = CostEvaluation(self.eq_context)
+        cost_eval.pedest_payoff = None
+        cost_eval.exc_payoff = None
         if num_agents > 1:
             for ag_key,ag_acts in self.maxmin_traj_info.items():
                 for traj_id,dets in ag_acts.items():
@@ -61,7 +63,7 @@ class L3Calculation:
                 for traj_id,dets in ag_acts.items():
                     payoff = cost_eval.calc_maxmin_payoff(dets['trajectory'], None, ag_key, None)
                     self.maxmin_traj_info[ag_key][traj_id][self.l3_key].append(payoff)
-                    
+        
         all_sv_act_payoff = []
         all_agents_act_payoff = []
         for ag_key,ag_acts in self.maxmin_traj_info.items():
@@ -116,6 +118,7 @@ class L1L2UtilityProcessor:
         sv_traj_action_dict = dict()
         for k,v in l1l2_utility_dict_chunk.items():
             l3_utility_dict[k] = dict()
+            num_agents = len(k)
             order_map = {x.split('-')[0]:o_i for o_i,x in enumerate(k)}
             traj_info_ids = [(x.split('-')[0],int(x.split('-')[1])) for x in k]
             ids_to_fetch_from_db = []
@@ -191,10 +194,16 @@ class L1L2UtilityProcessor:
         
         for l1l2_strat,l3_utility_dict in l3_utility_dict_chunk.items():
             ct_2 += 1
-            if self.eq_context.eval_config.l3_eq == 'MAXMIN' or self.eq_context.eval_config.l3_eq == 'BR':
-                start_time = time.time()
-                maxmin_obj = L3Calculation(l3_utility_dict,self.eq_context,l1l2_strat,self.eq_context.eval_config.l3_eq)
-                l3_eq_obj = maxmin_obj.calc_maxmin_eq()
+            #if self.eq_context.eval_config.l3_eq == 'MAXMIN' or self.eq_context.eval_config.l3_eq == 'BR':
+            maxmin_obj = L3Calculation(l3_utility_dict,self.eq_context,l1l2_strat,self.eq_context.eval_config.l3_eq)
+            start_time = time.time()
+            l3_eq_obj = maxmin_obj.calc_maxmin_eq()
+            end_time = time.time()
+            exec_time = str((end_time-start_time))
+            N_size = (len(l3_utility_dict)-1)*81*len(l3_utility_dict)
+            log.info(str(self.run_idx)+':'+str(ct_2)+'/'+str(chunk_N)+' DONE calculating '+self.eq_context.eval_config.l3_eq+' strategy for L3 actions in '+exec_time+'s'+' N='+str(N_size))
+            #log.info(str(ct_2)+'/'+str(chunk_N)+' DONE calculating '+self.eq_context.eval_config.l3_eq+' strategy for L3 actions in '+exec_time+'s'+' N='+str(N_size))
+            '''
             else:
                 l3_payoff = dict()
                 if len(l3_utility_dict) >= 3000 and len(l3_utility_dict) < 100000:
@@ -216,7 +225,7 @@ class L1L2UtilityProcessor:
                     l3_payoff = l3_processor_obj.process()
                 N_l3payoff_table = len(l3_payoff)
                 start_time = time.time()
-                log.info(str(ct_2)+'/'+str(chunk_N)+' calculating max min strategy for L3 actions of size '+str(N_l3payoff_table))
+                log.info(str(ct_2)+'/'+str(chunk_N)+' calculating '+self.eq_context.eval_config.l3_eq+' strategy for L3 actions of size '+str(N_l3payoff_table))
                 eq_core = EquilibriaCore(self.eq_context.eval_config.num_agents,l3_payoff,N_l3payoff_table)
                 l3_eq = eq_core.calc_max_min_response()
                 
@@ -236,11 +245,9 @@ class L1L2UtilityProcessor:
                         sv_act_payoffs.append(sv_payoff)
                     l3_eq_obj.all_traj_act_payoffs.append(sv_act_payoffs)
                 readable_eq = utils.print_readable(e)
-            
+            '''
             self.all_l3_eq[l1l2_strat] = l3_eq_obj
-            end_time = time.time()
-            exec_time = str((end_time-start_time))
-            log.info(str(ct_2)+'/'+str(chunk_N)+' DONE calculating '+self.eq_context.eval_config.l3_eq+' strategy for L3 actions in '+exec_time+'s')
+            
             if len(l3_eq_obj.eq_payoff) > 0:
                 self.l1l2_payoffdict[tuple(x.split('-')[0] for x in l1l2_strat)] = l3_eq_obj.eq_payoff[0] 
 
@@ -279,6 +286,7 @@ def multithread_l1l2_utility_execution(l1l2_utility_dict_chunk,params):
     l1l2_utility_dict_chunk_copy = copy.deepcopy(l1l2_utility_dict_chunk)
     eq_obj_copy = copy.deepcopy(eq_obj)
     l1l2_processor_obj = L1L2UtilityProcessor(l1l2_utility_dict_chunk_copy,sv_det,time_ts,eq_obj_copy)
+    l1l2_processor_obj.run_idx = 0
     l1l2_processor_obj.process()
     return l1l2_processor_obj
    
@@ -317,7 +325,7 @@ class Equilibria:
                 
     
     def calc_empirical_actions(self):
-        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
         c = conn.cursor()
         q_string = "SELECT * FROM TRAJECTORIES_0"+constants.CURRENT_FILE_ID+"_EXT WHERE L1_ACTION IS NOT NULL"
         c.execute(q_string)
@@ -511,7 +519,8 @@ class Equilibria:
             belief_dict = {tuple(x.split('-')[0] for x in k):v for k,v in zip(all_action_combinations,all_belief_combinations)}
         utility_dict = {k:np.zeros(shape=len(k)) for k in all_action_combinations}
         self.eval_config.set_num_agents(len(all_action_combinations[0]))
-        self.l1l2_trajectory_cache = utils.load_trajs_for_traj_info_id(all_baseline_ids,True,self.eval_config.traj_type)
+        if self.eval_config.l3_eq is None:
+            self.l1l2_trajectory_cache = utils.load_trajs_for_traj_info_id(all_baseline_ids,True,self.eval_config.traj_type)
         logging.info('building payoff dict...DONE')
         if 'BELIEF' in self.eval_config.l1_eq:
             return utility_dict,sv_actions,belief_dict
@@ -535,6 +544,26 @@ class Equilibria:
             processed_dict[k] = v
         return payoffdict
         
+    def construct_oth_ag_eq_info(self,e,p,time_ts,sv_id,payoffdict):
+        oth_ag_eq_info = dict()
+        for oth_ag_idx,e_st in enumerate(e):
+            if e_st[6:9]!='000':
+                oth_ag_id = int(e_st[6:9])
+                if (sv_id,oth_ag_id) in self.empirical_actions[time_ts] and len(self.empirical_actions[time_ts][(sv_id,oth_ag_id)]) > 0:
+                    oth_ag_emp_act = e_st[:-4]+self.empirical_actions[time_ts][(sv_id,oth_ag_id)][0][-4:]
+                else:
+                    continue
+                oth_ag_eq_act = e_st
+                oth_ag_eq_payoff = round(p[oth_ag_idx],6)
+                replaced_strat = list(e)
+                replaced_strat[oth_ag_idx] = oth_ag_emp_act
+                replaced_strat = tuple(replaced_strat)
+                oth_ag_emp_payoff = round(payoffdict[replaced_strat][oth_ag_idx],6)
+                oth_ag_payoffdiff = round(oth_ag_eq_payoff-oth_ag_emp_payoff,6)
+                if oth_ag_id not in oth_ag_eq_info:
+                    oth_ag_eq_info[oth_ag_id] = []
+                oth_ag_eq_info[oth_ag_id].append((oth_ag_eq_payoff,oth_ag_emp_payoff))
+        return oth_ag_eq_info
     
     def calc_l1l2_equilibrium(self):
         ct,N = 0,len(self.eval_config.traj_metadata)
@@ -550,7 +579,7 @@ class Equilibria:
             for sv_id,sv_det in m_data.items():
                 if self.eval_config.update_only and time_ts in self.eval_config.eq_acts_in_db:
                     if sv_id in self.eval_config.eq_acts_in_db[time_ts]:
-                        log.info("equilibrium already in db....continuing")
+                        log.info("equilibrium already in db....continuing "+str(ct)+"/"+str(N))
                         continue
                 equilibra_dict[time_ts][sv_id] = dict()
                 l1l2_utility_dict,sv_actions,belief_dict = self.build_l1l2_utility_table(sv_det,time_ts)
@@ -571,19 +600,20 @@ class Equilibria:
                 else:
                     u_ct = 0
                     N_payoff_table = len(l1l2_utility_dict)
-                    chunk_yield = utils.dict_chunks(l1l2_utility_dict, 100)
+                    chunk_yield = utils.dict_chunks(l1l2_utility_dict, math.ceil(N_payoff_table/20))
                     l1l2_utility_dict_chunks = [x for x in chunk_yield]
                     all_l3_eq = dict()
                     payoffdict = dict()
                     chunks_n = len(l1l2_utility_dict_chunks)
                     ct_1 = 0
-                    if chunks_n > 2:
+                    if N_payoff_table < 4000:
                         multithread = True
                         dict_processor = DictProcessor(multithread_l1l2_utility_execution,(sv_det,time_ts,self),l1l2_utility_dict_chunks,l1l2_utility_dict)
                         all_l3_eq,payoffdict = dict_processor.execute_threads_callback(multithread_l1l2_utility_execution_callback, (all_l3_eq,payoffdict))
                     else:
-                        for l1l2_utility_dict_chunk in l1l2_utility_dict_chunks:
+                        for ch_idx,l1l2_utility_dict_chunk in enumerate(l1l2_utility_dict_chunks):
                             l1l2_processor_obj = L1L2UtilityProcessor(l1l2_utility_dict_chunk,sv_det,time_ts,self)
+                            l1l2_processor_obj.run_idx = ch_idx
                             l1l2_processor_obj.process()
                             all_l3_eq.update(l1l2_processor_obj.all_l3_eq)
                             payoffdict.update(l1l2_processor_obj.l1l2_payoffdict)
@@ -606,6 +636,7 @@ class Equilibria:
                             sv_act_payoffs.append(sv_payoff)
                         readable_eq = utils.print_readable(e)
                         l1l2_eq.all_act_payoffs = sv_act_payoffs
+                        l1l2_eq.oth_ag_eq_info = self.construct_oth_ag_eq_info(e,p,time_ts,sv_id,payoffdict)
                         all_eq.append(l1l2_eq)
                         
                 elif self.eval_config.l1_eq == 'BR_TRUE_BELIEF':
@@ -644,6 +675,7 @@ class Equilibria:
                             sv_act_payoffs.append(sv_payoff)
                         readable_eq = utils.print_readable(e)
                         l1l2_eq.all_act_payoffs = sv_act_payoffs
+                        l1l2_eq.oth_ag_eq_info = self.construct_oth_ag_eq_info(e,p,time_ts,sv_id,payoffdict)
                         all_eq.append(l1l2_eq)
                 elif self.eval_config.l1_eq == 'MAXMIN':
                     eq_core = EquilibriaCore(self.eval_config.num_agents,payoffdict,N_payoff_table)
@@ -661,6 +693,7 @@ class Equilibria:
                             sv_act_payoffs.append(sv_payoff)
                         readable_eq = utils.print_readable(e)
                         l1l2_eq.all_act_payoffs = sv_act_payoffs
+                        l1l2_eq.oth_ag_eq_info = self.construct_oth_ag_eq_info(e,p,time_ts,sv_id,payoffdict)
                         all_eq.append(l1l2_eq)
                 else:
                     sys.exit('equilibria type not implemented')
@@ -686,7 +719,7 @@ class Equilibria:
     
     
     def insert_to_db(self):
-        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
         c = conn.cursor()
         q_string = "SELECT max(ROWID) from EQUILIBRIUM_ACTIONS"
         c.execute(q_string)
@@ -698,7 +731,7 @@ class Equilibria:
         param_str = self.eval_config.l1_eq +'|'+ self.eval_config.l3_eq +'|'+ self.eval_config.traj_type if self.eval_config.l3_eq is not None else self.eval_config.l1_eq +'|BASELINE_ONLY'
         q_string = "REPLACE INTO EQUILIBRIUM_ACTIONS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         ins_list = []
-        l3_ins_list = []
+        l3_ins_list,oth_eq_ins_list = [],[]
         for time_ts,eq_det in self.equilibria_dict.items():
             for sv_id,sv_eq in eq_det.items():
                 track_id,curr_time,relev_agents,eq_act,emp_act,all_acts,all_act_payoffs,num_eq = sv_id,time_ts,[],[],self.empirical_actions[time_ts][(sv_id,0)],None,[],len(sv_eq['eq_info'])
@@ -706,10 +739,14 @@ class Equilibria:
                 for eq_inst in sv_eq['eq_info']:
                     for k,v in eq_inst.equilibria_actions.items():
                         if k[1] != 0:
-                            relev_agents.append(k[1])
+                            if k[1] not in relev_agents:
+                                relev_agents.append(k[1])
                         else:
                             eq_act.append(v[0])
                     all_act_payoffs.append(eq_inst.all_act_payoffs)
+                    for oth_ag_id,oth_ag_eq in eq_inst.oth_ag_eq_info.items():
+                        for oth_ag_eq_det in oth_ag_eq:
+                            oth_eq_ins_list.append((str(max_id), str(oth_ag_id), str(oth_ag_eq_det[0]), str(oth_ag_eq_det[1])))
                 ins_tuple = (str(max_id),int(constants.CURRENT_FILE_ID),self.eval_config.direction,track_id,curr_time,None,None,None,None,None,None,None,relev_agents,None,\
                      eq_act,emp_act,param_str,all_acts,all_act_payoffs,num_eq)
                 ins_tuple = tuple(str(x) if x is not None else x for x in ins_tuple)
@@ -723,18 +760,21 @@ class Equilibria:
                         for eq_s,eq_p in l3_eq_det.equilibria_actions.items():
                             l3_eq_acts.append(list(eq_s))
                         l3_ins_list.append((str(max_id),constants.CURRENT_FILE_ID,self.eval_config.l3_eq,str(l3_eq_acts),str(all_l3_acts),str(all_l3_payoffs)))
-                    max_id += 1
+                
+                max_id += 1
         c.executemany(q_string,ins_list)
         conn.commit()
         if self.eval_config.l3_eq is not None:
             q_string = "REPLACE INTO L3_EQUILIBRIUM_ACTIONS VALUES (?,?,?,?,?,?)"
             c.executemany(q_string,l3_ins_list)
+        q_string = "REPLACE INTO EQUILIBRIUM_ACTIONS_OTHER_AGENTS VALUES (?,?,?,?)"
+        c.executemany(q_string,oth_eq_ins_list)
         conn.commit()
         conn.close()
         
     def update_db(self,colmn_list):
         attr_map = {'ALL_ACTIONS':'sub_all_actions','ALL_ACTION_PAYOFFS':'sub_all_action_payoffs_at_eq'}
-        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
         cur = conn.cursor()
         q_string = ["UPDATE EQUILIBRIUM_ACTIONS SET "]
         for c in colmn_list[:-1]:
@@ -761,7 +801,7 @@ class EvalConfig:
         self.traj_dict = dict()
         strat_traj_ids = []
         self.direction = direction
-        self.traj_metadata = db_utils.get_traj_metadata(direction)
+        self.traj_metadata = db_utils.get_traj_metadata(direction,self.traj_type)
         self.time_list = []
 
     def set_l3_traj_dict(self,traj_dict):

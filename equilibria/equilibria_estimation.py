@@ -7,7 +7,7 @@ Created on Apr 20, 2020
 from equilibria import equilibria_core, cost_evaluation 
 from all_utils import utils,db_utils,trajectory_utils
 import itertools
-from constants import *
+import constants
 import numpy as np
 import matplotlib.pyplot as plt
 from planning_objects import VehicleState
@@ -209,7 +209,7 @@ def calc_equilibria(curr_time,traj_det,payoff_type,status_str,param_str,emp_acti
                         
 def get_equil_action_in_db(param_str):
     eq_acts = dict()
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "SELECT TRACK_ID,TIME FROM EQUILIBRIUM_ACTIONS where EQ_CONFIG_PARMS='"+param_str+"'"
     c.execute(q_string)                 
@@ -223,23 +223,33 @@ def get_equil_action_in_db(param_str):
          
 
 def add_eq_state_contexts(param_str,direction):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "SELECT TRACK_ID,TIME FROM EQUILIBRIUM_ACTIONS WHERE EQ_CONFIG_PARMS = '"+param_str+"' and task='"+str(direction)+"'"
     c.execute(q_string)                 
+    upd_res = c.fetchall()
+    N_tot = len(upd_res)
+    ''' If the entries are there for other params, fetch it from there instead. '''
+    q_string = "SELECT * FROM EQUILIBRIUM_ACTIONS WHERE task='"+str(direction)+"' AND EQ_CONFIG_PARMS != '"+param_str+"' AND TRAFFIC_SIGNAL IS NOT NULL"
+    c.execute(q_string)
     res = c.fetchall()
-    N_tot = len(res)
-    for ct,row in enumerate(res):
-        veh_state = utils.setup_vehicle_state(row[0],row[1])
-        ins_string = "UPDATE EQUILIBRIUM_ACTIONS SET TRAFFIC_SIGNAL=?, NEXT_SIGNAL_CHANGE=?, SEGMENT=?, SPEED=?, X=?, Y=?, LEAD_VEHICLE_ID=? WHERE TRACK_ID=? AND TIME=?"
-        ins_tuple = (veh_state.signal, str(veh_state.next_signal_change), veh_state.current_segment, veh_state.speed, veh_state.x, veh_state.y, veh_state.leading_vehicle.id if veh_state.leading_vehicle is not None else None,row[0],row[1])
+    state_context_map = {(row[3],row[4]):(row[5],row[6],row[7],row[8],row[9],row[10],row[11],row[3],row[4],param_str) for row in res}
+    ins_string = "UPDATE EQUILIBRIUM_ACTIONS SET TRAFFIC_SIGNAL=?, NEXT_SIGNAL_CHANGE=?, SEGMENT=?, SPEED=?, X=?, Y=?, LEAD_VEHICLE_ID=? WHERE TRACK_ID=? AND TIME=? AND EQ_CONFIG_PARMS=?"
+    ins_list = []
+    for ct,up_row in enumerate(upd_res):
+        if (up_row[0],up_row[1]) in state_context_map:
+            ins_tuple = state_context_map[(up_row[0],up_row[1])]
+        else:
+            veh_state = utils.setup_vehicle_state(up_row[0],up_row[1])
+            ins_tuple = (veh_state.signal, str(veh_state.next_signal_change), veh_state.current_segment, veh_state.speed, veh_state.x, veh_state.y, veh_state.leading_vehicle.id if veh_state.leading_vehicle is not None else None,up_row[0],up_row[1],param_str)
         print(ct,'/',N_tot,ins_tuple)
-        c.execute(ins_string,ins_tuple)
+        ins_list.append(ins_tuple)
+    c.executemany(ins_string,ins_list)
     conn.commit()
     conn.close()
     
 def temp_column_fix():
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "SELECT TRACK_ID,TIME,EQ_CONFIG_PARMS,EMPIRICAL_ACTION FROM EQUILIBRIUM_ACTIONS where EQ_CONFIG_PARMS='l2_BR_w_true_belief|l3_baseline_only'"
     c.execute(q_string)                 
@@ -260,7 +270,7 @@ def temp_column_fix():
     conn.close()
     
 def temp_all_act_order_fix():
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "SELECT TRACK_ID,TIME,EQ_CONFIG_PARMS,ALL_ACTIONS,ALL_ACTION_PAYOFFS FROM EQUILIBRIUM_ACTIONS where EQ_CONFIG_PARMS='l2_BR_w_true_belief|l3_baseline_only'"
     c.execute(q_string)                 
@@ -326,24 +336,149 @@ def split_by_distinct_actions(eq_info_rows):
                     brk=1
     return eq_dict
 
+def calc_l3_payoff(s_traj,r_traj,s_act,r_act,eq):
+    s_traj,r_traj = np.asarray(s_traj), np.asarray(r_traj)
+    ce = cost_evaluation.CostEvaluation(eq)
+    s_act_code,r_act_code = int(s_act[-4:-2 ]),int(r_act[-4:-2])
+    distgap_parms = ce.get_dist_gap_params((s_act_code, r_act_code))
+    slice_len = int(min(5*constants.PLAN_FREQ/constants.LP_FREQ,s_traj.shape[0],r_traj.shape[0]))
+    s_traj,r_traj = s_traj[:slice_len],r_traj[:slice_len]
+    if s_traj[0][0] != r_traj[0][0]:
+        print('time did not match',s_traj[0][0],r_traj[0][0])
+    s_x,s_y = s_traj[:,1], s_traj[:,2]
+    r_x,r_y = r_traj[:,1], r_traj[:,2]
+    ''' original trajectory is at 10hz. sample at 1hz for speedup'''
+    if len(s_x) > 3:
+        s_x,r_x,s_y,r_y = s_x[0::9],r_x[0::9],s_y[0::9],r_y[0::9]
+    _d = np.hypot(s_x-r_x,s_y-r_y)
+    min_dist = np.amin(_d)
+    inh_payoff = cost_evaluation.exp_dist_payoffs(min_dist,distgap_parms)
+    
+    traj_len = utils.calc_traj_len(s_traj)
+    exc_payoff = cost_evaluation.progress_payoffs_dist(traj_len)
+        
+    ag_pos = (s_traj[0,1],s_traj[0,2]) if s_traj is not None and len(s_traj) > 0 else None
+    ped_inh_payoff = ce.eval_pedestrian_inh_by_action(s_act,ag_pos)
+    
+        
+    final_payoff = ( (1-constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT) * ((constants.INHIBITORY_PAYOFF_WEIGHT*inh_payoff) + (constants.EXCITATORY_PAYOFF_WEIGHT*exc_payoff)) ) + \
+                            (constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT*ped_inh_payoff)
+    return final_payoff
 
-def build_analysis_table(eq_non_eq,u_deltas):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+def anaylze_l3_equlibrium():
+    file_id = '770'
+    constants.CURRENT_FILE_ID = file_id
+    
+    eval_config = EvalConfig()
+    eval_config.set_l3_eq_type('BR')
+    eval_config.set_traj_type('BOUNDARY')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
+    c = conn.cursor()
+    ''' first get the l1l2 equilibrium data and find the trajectories for the agents in the row'''
+    ''' calculate the payoff from the emprical trajectories and store it in a map'''
+    ''' get the equilibrium payoff and recocile that with the data in the above map. Since we do not add any l1l2 payoff, this is same as the value in l1l2eq data '''
+    ''' analyze the distribution of the difference '''
+    q_string = "select * from L1_ACTIONS"
+    c.execute(q_string)
+    res = c.fetchall()
+    emp_act_map = {(row[1],row[0]):ast.literal_eval(row[2]) for row in res}
+    q_string = "SELECT * FROM EQUILIBRIUM_ACTIONS WHERE EQUILIBRIUM_ACTIONS.EQ_CONFIG_PARMS LIKE '%|BR|BOUNDARY'"
+    c.execute(q_string)
+    res = c.fetchall()
+    l1l2_eq_map = dict()
+    for row in res:
+        if (row[3],row[4]) not in l1l2_eq_map:
+            l1l2_eq_map[(row[3],row[4])] = {'sv_id':None,'ra_ids':[],'pedestrian':None,'l1l2_eq_act':[],'l1l2eqid':None,'eq_payoffs':[]}
+        l1l2_eq_map[(row[3],row[4])]['sv_id'] = int(row[3])
+        l1l2_eq_map[(row[3],row[4])]['l1l2eqid'] = int(row[0])
+        l1l2_eq_map[(row[3],row[4])]['l1l2_eq_act'] = ast.literal_eval(row[14])
+        relev_agents = ast.literal_eval(row[12])
+        for r in relev_agents:
+            if r not in l1l2_eq_map[(row[3],row[4])]['ra_ids']:
+                l1l2_eq_map[(row[3],row[4])]['ra_ids'].append(r)
+        l1l2_eq_map[(row[3],row[4])]['pedestrian'] = row[13]
+        all_acts = ast.literal_eval(row[17])
+        all_act_payoffs = ast.literal_eval(row[18])
+        for eq_idx,e_a in enumerate(l1l2_eq_map[(row[3],row[4])]['l1l2_eq_act']):
+            eq_idx_in_allacts = all_acts.index(e_a)
+            curr_eq_payoffs = all_act_payoffs[eq_idx][eq_idx_in_allacts]
+            l1l2_eq_map[(row[3],row[4])]['eq_payoffs'].append(curr_eq_payoffs)
+        
+            
+    ct,N = 0,len(l1l2_eq_map)
+    for k,v in l1l2_eq_map.items():
+        ct +=1
+        print(ct,'/',N)
+        track_id,time_ts = k[0],k[1]
+        if len(v['ra_ids']) > 0:
+            q_string = "select track_id,time,X,Y from TRAJECTORIES_0"+str(file_id)+" WHERE TRACK_ID in "+str(tuple([track_id]+v['ra_ids']))+" AND TIME >="+str(time_ts)+" ORDER BY TRACK_ID,TIME"
+        else:
+            q_string = "select track_id,time,X,Y from TRAJECTORIES_0"+str(file_id)+" WHERE TRACK_ID = "+str(track_id)+" AND TIME >="+str(time_ts)+" ORDER BY TRACK_ID,TIME"
+        c.execute(q_string)
+        res = c.fetchall()
+        v['trajectories'] = dict()
+        v['emp_acts'] = dict()
+        for row in res:
+            if row[0] not in v['trajectories']:
+                v['trajectories'][row[0]] = []
+            v['trajectories'][row[0]].append((row[1],row[2],row[3]))
+            v['emp_acts'][row[0]] = emp_act_map[(row[0],time_ts)]
+        for _id in v['trajectories'].keys():
+            v['trajectories'][_id] = [v['trajectories'][_id][i] for i in np.arange(0,len(v['trajectories'][_id]),3)]
+            v['trajectories'][_id] = v['trajectories'][_id][:min(len(v['trajectories'][_id]),50)]
+    eq_delta_list = []
+    ct = 0
+    for k,v in l1l2_eq_map.items():
+        ct +=1
+        print(ct,'/',N)
+        track_id,time_ts = k[0],k[1]
+        eq = Equilibria(eval_config)
+        pedestrian_info = utils.setup_pedestrian_info(time_ts)
+        eq.eval_config.set_pedestrian_info(pedestrian_info)
+        s_traj = v['trajectories'][track_id]
+        try:
+            s_act = v['emp_acts'][track_id][0] if len(v['emp_acts'][track_id]) > 0 else None 
+        except IndexError:
+            brk=1
+        for ra_id in v['trajectories'].keys():
+            if ra_id != track_id:
+                r_traj = v['trajectories'][ra_id]
+                r_act = v['emp_acts'][ra_id][0] if len(v['emp_acts'][ra_id]) > 0 else None 
+                if s_act is not None and r_act is not None:
+                    final_payoff = calc_l3_payoff(s_traj, r_traj, s_act, r_act,eq)
+                    min_diff = min([x-final_payoff for x in v['eq_payoffs']])
+                    eq_delta_list.append(min_diff)
+    X = np.arange(-1.5,1.55,0.05)
+    count, bins, ignored = plt.hist(eq_delta_list, X, density=True)
+    plt.show()
+                    
+
+
+    
+    
+def build_analysis_table(eq_non_eq,u_deltas,file_id=None):
+    if file_id is None:
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
+    else:
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
     c = conn.cursor()
     eval_config = EvalConfig()
-    eval_config.set_l1_eq_type(L1_EQ_TYPE)
-    eval_config.set_l3_eq_type(L3_EQ_TYPE)
-    eval_config.set_traj_type(TRAJECTORY_TYPE)
+    eval_config.set_l1_eq_type(constants.L1_EQ_TYPE)
+    eval_config.set_l3_eq_type(constants.L3_EQ_TYPE)
+    eval_config.set_traj_type(constants.TRAJECTORY_TYPE)
     param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ eval_config.traj_type if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
     all_segs = ['prep-turn%','exec-turn%','ln\__\__']
     all_conds = [[("EQUILIBRIUM_ACTIONS.SEGMENT like 'prep-turn%' ESCAPE '\\'","SEGMENT=prep-left-turn"),
                  ("EQUILIBRIUM_ACTIONS.SEGMENT like 'exec-turn%' ESCAPE '\\'","SEGMENT=exec-left-turn"),
                  ("EQUILIBRIUM_ACTIONS.SEGMENT like 'ln\__\__' ESCAPE '\\'","SEGMENT=OTHER LANES"),
                  ("EQUILIBRIUM_ACTIONS.SEGMENT like 'rt_prep-turn%' ESCAPE '\\'","SEGMENT=prep-right-turn"),
-                 ("EQUILIBRIUM_ACTIONS.SEGMENT like 'rt_exec-turn%' ESCAPE '\\'","SEGMENT=exec-right-turn")],[
-                 ("TRAFFIC_SIGNAL = 'R'","TRAFFIC_SIGNAL=R"),
-                 ("TRAFFIC_SIGNAL = 'Y'","TRAFFIC_SIGNAL=Y"),
-                 ("TRAFFIC_SIGNAL = 'G'","TRAFFIC_SIGNAL=G")],[
+                 ("EQUILIBRIUM_ACTIONS.SEGMENT like 'rt_exec-turn%' ESCAPE '\\'","SEGMENT=exec-right-turn")],
+                 [("TASK = 'W_S'","TASK=W_S"),
+                 ("TASK = 'S_W'","TASK=S_W"),
+                 ("TASK = 'N_E'","TASK=N_E"),
+                 ("TASK = 'W_N'","TASK=W_N"),
+                 ("TASK = 'S_E'","TASK=S_E"),
+                 ("TASK = 'E_S'","TASK=E_S")],[
                  ("CAST(SUBSTR(NEXT_SIGNAL_CHANGE,2,INSTR(NEXT_SIGNAL_CHANGE,',')-2) AS DECIMAL) < 10 AND (SUBSTR(NEXT_SIGNAL_CHANGE,INSTR(NEXT_SIGNAL_CHANGE,',')+3,1) = 'Y' OR SUBSTR(NEXT_SIGNAL_CHANGE,INSTR(NEXT_SIGNAL_CHANGE,',')+3,1) = 'R')","NEXT_CHANGE=<10-Y/R"),
                  ("CAST(SUBSTR(NEXT_SIGNAL_CHANGE,2,INSTR(NEXT_SIGNAL_CHANGE,',')-2) AS DECIMAL) < 10 AND SUBSTR(NEXT_SIGNAL_CHANGE,INSTR(NEXT_SIGNAL_CHANGE,',')+3,1) = 'Y'","NEXT_CHANGE=<10-G"),
                  ("CAST(SUBSTR(NEXT_SIGNAL_CHANGE,2,INSTR(NEXT_SIGNAL_CHANGE,',')-2) AS DECIMAL) >= 10 AND (SUBSTR(NEXT_SIGNAL_CHANGE,INSTR(NEXT_SIGNAL_CHANGE,',')+3,1) = 'Y' OR SUBSTR(NEXT_SIGNAL_CHANGE,INSTR(NEXT_SIGNAL_CHANGE,',')+3,1) = 'R')","NEXT_CHANGE=>EQ 10-Y/R"),
@@ -353,8 +488,6 @@ def build_analysis_table(eq_non_eq,u_deltas):
                  ("SPEED > 14","SPEED=HIGH SPEED")],[
                  ("PEDESTRIAN = 'Y'","PEDESTRIAN=PEDESTRIAN"),
                  ("PEDESTRIAN = 'N'","PEDESTRIAN=NO PEDESTRIAN")],[
-                 ("LEAD_VEHICLE_ID IS NULL","LEAD VEHICLE=NO LV"),
-                 ("LEAD_VEHICLE_ID IS NOT NULL","LEAD VEHICLE=LV")],[
                  ("(LENGTH(RELEV_AGENT_IDS)-2) = 0","NUM OF RELEV AGENTS=RL 0"),
                  ("(LENGTH(RELEV_AGENT_IDS)-2) > 0 AND (LENGTH(RELEV_AGENT_IDS) - LENGTH(REPLACE(RELEV_AGENT_IDS, ',', '')))=1","NUM OF RELEV AGENTS = RL <EQ 2"),
                  ("(LENGTH(RELEV_AGENT_IDS)-2) > 0 AND (LENGTH(RELEV_AGENT_IDS) - LENGTH(REPLACE(RELEV_AGENT_IDS, ',', '')))>1","NUM OF RELEV AGENTS = RL > 2")]
@@ -369,10 +502,16 @@ def build_analysis_table(eq_non_eq,u_deltas):
     plt_X = []
     plt_Y = []
     plt_x_ct = 0
-    with open(os.path.join(constants.ROOT_DIR,constants.RESULTS,param_str.replace("|",',')+file_suffix+'.csv'), "w") as csv_file:
+    if file_id is not None:
+        constants.RESULTS = 'results_all'
+    if not os.path.exists(os.path.join(constants.ROOT_DIR,constants.RESULTS)):
+        os.makedirs(os.path.join(constants.ROOT_DIR,constants.RESULTS))
+    working_file_id = file_id if file_id is not None else constants.CURRENT_FILE_ID
+    with open(os.path.join(constants.ROOT_DIR,constants.RESULTS,working_file_id+'_'+param_str.replace("|",',')+file_suffix+'.csv'), "w") as csv_file:
         writer = csv.writer(csv_file, delimiter=',', quoting=csv.QUOTE_NONE,escapechar=' ')
         if eq_non_eq or u_deltas:
-            writer.writerow(['EQ_TYPE','SEGMENT','SIGNAL','NEXT_CHANGE','SPEED','PEDESTRIAN','LEAD_VEHICLE','RELEV_VEHICLE','ACTIONS','ON_EQ'])
+            writer.writerow(['EQ_TYPE','SEGMENT','TASK','NEXT_CHANGE','SPEED','PEDESTRIAN','RELEV_VEHICLE','ACTIONS','ON_EQ'])
+        N = len(all_cond_combinations)
         for cond_idx,cond_info in enumerate(all_cond_combinations):
             cond,cond_str = ' and '.join([x[0] for x in cond_info]),[x[1].split("=")[1] for x in cond_info]
             table_dict[cond_idx] = dict()
@@ -382,8 +521,10 @@ def build_analysis_table(eq_non_eq,u_deltas):
             res = c.fetchall()
             eq_dict = split_by_distinct_actions(res)
             eq_dict_l.append(eq_dict)
+            ct_act_k = 0
             for didx,eq_dict in enumerate(eq_dict_l):
                 for act_k,act_info in eq_dict.items():
+                    ct_act_k += 1
                     act_delta_dict = dict()
                     emp_act_distr = []
                     eq_act_distr = []            
@@ -459,13 +600,14 @@ def build_analysis_table(eq_non_eq,u_deltas):
                                 if u_deltas:
                                     for emp_pay_diff in emp_act_distr:
                                         writer.writerow([param_str]+cond_str+['acts-'+str(all_act_map[str(all_acts)]),emp_pay_diff])
-                                        print(','.join([x for x in cond_str]),'acts-'+str(all_act_map[str(all_acts)]),emp_pay_diff)
+                                        print(file_id,str(cond_idx)+'/'+str(N),constants.TRAJECTORY_TYPE,constants.L1_EQ_TYPE,constants.L3_EQ_TYPE,','.join([x for x in cond_str]),'acts-'+str(all_act_map[str(all_acts)]),emp_pay_diff)
                                         
                                 else:
                                     for emp_pay_diff in emp_act_distr:
                                         plt_x_ct += 1
                                         plt_X.append(plt_x_ct)
                                         plt_Y.append(emp_pay_diff)
+                                    
                                     _data,_bins = np.histogram(emp_act_distr, bins=np.arange(0,1.02,.01), density=True)
                                     _data = [x*0.01 for x in _data]
                                     
@@ -489,7 +631,7 @@ def build_analysis_table(eq_non_eq,u_deltas):
     '''                       
                             
 def analyse_equilibrium_data():
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     eval_config = EvalConfig()
     eval_config.set_l1_eq_type(L1_EQ_TYPE)
@@ -733,12 +875,12 @@ Assumes that the trajectories are already present in the cache.'''
 def calc_eqs_for_hopping_trajectories():
     db_utils.reduce_relev_agents()
     show_plots = False
-    update_only = False
+    update_only = True
     eval_config = EvalConfig()
-    eval_config.set_l1_eq_type(L1_EQ_TYPE)
-    eval_config.set_l3_eq_type(L3_EQ_TYPE)
-    eval_config.set_traj_type(TRAJECTORY_TYPE)
-    param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ TRAJECTORY_TYPE if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
+    eval_config.set_l1_eq_type(constants.L1_EQ_TYPE)
+    eval_config.set_l3_eq_type(constants.L3_EQ_TYPE)
+    eval_config.set_traj_type(constants.TRAJECTORY_TYPE)
+    param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ constants.TRAJECTORY_TYPE if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
     if update_only:
         eval_config.set_update_only(True)
         eq_acts_in_db = get_equil_action_in_db(param_str)
@@ -746,7 +888,7 @@ def calc_eqs_for_hopping_trajectories():
     else:
         eval_config.set_update_only(False)
         eval_config.set_eq_acts_in_db(None)
-    d = ['S_W','N_E']
+    d = ['W_S','S_W','N_E']
     task_list = ['W_S','S_W','N_E','W_N','S_E','E_S']
     for direction in task_list:
         
@@ -757,23 +899,34 @@ def calc_eqs_for_hopping_trajectories():
         eq.calc_empirical_actions()
         eq.calc_equilibrium()
         add_eq_state_contexts(param_str,direction)
-    traj_util_obj = trajectory_utils.TrajectoryUtils()
-    traj_util_obj.update_l1_action_in_eq_data(param_str)
-    traj_util_obj.update_pedestrian_info_in_eq_data(param_str)
-    build_analysis_table(False,True)
-    build_analysis_table(True,False)
     
     
-if __name__ == '__main__':
+    
+def main():
+    constants.CURRENT_FILE_ID = sys.argv[1]
+    constants.TRAJECTORY_TYPE = sys.argv[2]
+    constants.L1_EQ_TYPE = sys.argv[3]
+    constants.L3_EQ_TYPE = sys.argv[4] if sys.argv[4] != 'None' else None
+    
+    constants.TEMP_TRAJ_CACHE = 'temp_traj_cache_'+constants.CURRENT_FILE_ID+'_'+constants.TRAJECTORY_TYPE
+    constants.L3_ACTION_CACHE = 'l3_action_trajectories_'+constants.CURRENT_FILE_ID
+    constants.RESULTS = 'results_'+constants.CURRENT_FILE_ID
+    constants.setup_logger()
+    
     calc_eqs_for_hopping_trajectories()
-    '''
+    
     eval_config = EvalConfig()
-    eval_config.set_l1_eq_type(L1_EQ_TYPE)
-    eval_config.set_l3_eq_type(L3_EQ_TYPE)
+    eval_config.set_l1_eq_type(constants.L1_EQ_TYPE)
+    eval_config.set_l3_eq_type(constants.L3_EQ_TYPE)
     traj_util_obj = trajectory_utils.TrajectoryUtils()
-    param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ 'BOUNDARY' if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
+    param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ constants.TRAJECTORY_TYPE if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
     traj_util_obj.update_l1_action_in_eq_data(param_str)
     traj_util_obj.update_pedestrian_info_in_eq_data(param_str)
+    
     build_analysis_table(False,True)
     build_analysis_table(True,False)
-    '''
+
+'''constants.TRAJECTORY_TYPE = 'BASELINE'
+constants.L1_EQ_TYPE = 'NASH'
+constants.L3_EQ_TYPE = None
+build_analysis_table(False,True,'769')'''

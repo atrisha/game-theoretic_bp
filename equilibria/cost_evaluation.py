@@ -28,10 +28,11 @@ from motion_planners.planning_objects import TrajectoryDef
 from collections import OrderedDict
 from all_utils import db_utils
 import concurrent.futures
+import time
 import threading
 
-import logging
-logging.basicConfig(format='%(levelname)-8s %(funcName)s-2s  %(module)s: %(message)s',level=logging.INFO)
+log = constants.common_logger
+
 
 
 
@@ -45,6 +46,18 @@ class CostEvaluation():
     def __init__(self,eq_context):
         self.eq_context = eq_context
         
+    def get_dist_gap_params(self,codes):
+        codes = tuple(codes)
+        act_code_s,act_code_r = codes[0],codes[1]
+        if (act_code_s in [1,2,11] and act_code_r in [3,4]) or (act_code_r in [1,2,11] and act_code_s in [3,4]):
+            ''' 3.5-9 unsafe and safe'''
+            return (6.25,1)
+        elif act_code_s in [5,8]:
+            ''' 5-10 unsafe and safe'''
+            return (7.5,1)
+        else:
+            ''' 5-15 unsafe and safe'''
+            return (10,2.2)
     
     def calc_l3_equilibrium_payoffs(self,inhibitory,excitatory,traj_id_list,strategy_tuple,traffic_signal):
         num_agents = len(traj_id_list)
@@ -103,6 +116,10 @@ class CostEvaluation():
     def eval_inhibitory(self,traj_dict_list, all_possible_payoffs, strategy_tuple):
         disp_arr_x,disp_arr_y = [],[] 
         num_agents = len(strategy_tuple)
+        act_code_m = np.empty(shape=(num_agents,num_agents),dtype=(int,2))
+        for i in np.arange(num_agents):
+            for j in np.arange(num_agents):
+                act_code_m[i,j] = (int(strategy_tuple[i].split('-')[0][-4:-2]), int(strategy_tuple[j].split('-')[0][-4:-2]))
         all_possible_payoffs_inh = dict(all_possible_payoffs)
         for traj_idx_tuple in all_possible_payoffs.keys():
             ''' pair-wise min distance matrix '''
@@ -128,9 +145,10 @@ class CostEvaluation():
             ''' to be safe, make the matrix symmetric '''
             dist_among_agents = np.minimum(dist_among_agents,dist_among_agents.T)
             ''' find the minimum distance for a vehicle action given all other agent actions '''
-            dist = np.amin(dist_among_agents,axis=1)
+            distgap_parm_matrix = np.apply_along_axis(self.get_dist_gap_params,axis=2,arr=act_code_m)
+            payoff_m = exp_dist_payoffs(dist_among_agents, distgap_parm_matrix)
             #payoffs = dist_payoffs(dist) + constants.L2_ACTION_PAYOFF_ADDITIVE
-            payoffs = dist_payoffs(dist)
+            payoffs = np.amin(payoff_m,axis=1)
             all_possible_payoffs_inh[traj_idx_tuple] = payoffs
         return all_possible_payoffs_inh
         
@@ -152,7 +170,7 @@ class CostEvaluation():
         return all_possible_payoffs_exc
     
     
-    def eval_pedestrian_inh_by_action(self,action):
+    def eval_pedestrian_inh_by_action(self,action,ag_pos):
         sv_id = int(action[3:6])
         ra_id = int(action[6:9])
         l1_act_code = int(action[9:11])
@@ -168,22 +186,43 @@ class CostEvaluation():
                 for ped_state in pedestrian_info:
                     if xwalk in ped_state.crosswalks:
                         if ped_state.crosswalks[xwalk]['location'] == constants.ON_CROSSWALK:
-                            payoff = payoff*1 if l1_act_code == 11 else payoff*0
+                            if ag_pos is not None:
+                                if l1_act_code == 11:
+                                    payoff = payoff*1
+                                else:
+                                    dist_to_ped = math.hypot(ped_state.x-ag_pos[0],ped_state.y-ag_pos[0])
+                                    if dist_to_ped <= 2*constants.PEDESTRIAN_CROSSWALK_DIST_THRESH:
+                                        payoff = payoff*0
+                                    else:
+                                        payoff = min(payoff,(dist_to_ped-20)/80,1)
+                            else:
+                                payoff = payoff*1 if l1_act_code == 11 else payoff*0
                         elif ped_state.crosswalks[xwalk]['location'] == constants.BEFORE_CROSSWALK \
                                 and ped_state.crosswalks[xwalk]['dist_to_entry'] < constants.PEDESTRIAN_CROSSWALK_DIST_THRESH \
                                     and ((ped_state.crosswalks[xwalk]['next_change'][1] == 'G' and ped_state.crosswalks[xwalk]['next_change'][0] <= constants.PEDESTRIAN_CROSSWALK_TIME_THRESH) \
                                              or ped_state.crosswalks[xwalk]['next_change'][1] == 'R'):
                             ''' before the crosswalk, within the distance threshold, and the signal is green or about to change to green'''
-                            payoff = payoff*1 if l1_act_code == 11 else payoff*0
+                            if ag_pos is not None:
+                                if l1_act_code == 11:
+                                    payoff = payoff*1
+                                else:
+                                    dist_to_ped = math.hypot(ped_state.x-ag_pos[0],ped_state.y-ag_pos[0])
+                                    if dist_to_ped <= 2*constants.PEDESTRIAN_CROSSWALK_DIST_THRESH:
+                                        payoff = payoff*0
+                                    else:
+                                        payoff = min(payoff,(dist_to_ped-20)/80,1)
+                            else:
+                                payoff = payoff*1 if l1_act_code == 11 else payoff*0
                         else:
                             payoff = payoff*1
-        return payoff
+        return payoff if payoff == 1 else -1+payoff
        
     def eval_pedestrian_inhibitory(self,traj_dict_list, all_possible_payoffs, strategy_tuple):
         payoff_vect = np.full(shape=(len(strategy_tuple),),fill_value=0)
         all_possible_payoffs_inh_ped = dict(all_possible_payoffs)
         for idx,action in enumerate(strategy_tuple):
-            payoff = self.eval_pedestrian_inh_by_action(action)
+            ag_pos = (traj_dict_list[idx][int(action.split('-')[1])][0,2], traj_dict_list[idx][int(action.split('-')[1])][0,3])
+            payoff = self.eval_pedestrian_inh_by_action(action,ag_pos)
             payoff_vect[idx] = payoff
         for traj_idx_tuple in all_possible_payoffs.keys():
             all_possible_payoffs_inh_ped[traj_idx_tuple] = payoff_vect
@@ -253,28 +292,57 @@ class CostEvaluation():
         return all_possible_payoffs
     
     def calc_maxmin_payoff(self,s_traj,r_traj,s_act_key,r_act_key):
+        #start_time =time.time()
         if constants.INHIBITORY and r_traj is not None:
+            s_act_code,r_act_code = int(s_act_key.split('-')[0][-4:-2]),int(r_act_key.split('-')[0][-4:-2])
+            distgap_parms = self.get_dist_gap_params((s_act_code, r_act_code))
             slice_len = int(min(5*constants.PLAN_FREQ/constants.LP_FREQ,s_traj.shape[0],r_traj.shape[0]))
             s_traj,r_traj = s_traj[:slice_len],r_traj[:slice_len]
             s_x,s_y = s_traj[:,1], s_traj[:,2]
             r_x,r_y = r_traj[:,1], r_traj[:,2]
+            ''' original trajectory is at 10hz. sample at 1hz for speedup'''
+            if len(s_x) > 3:
+                s_x,r_x,s_y,r_y = s_x[0::9],r_x[0::9],s_y[0::9],r_y[0::9]
             _d = np.hypot(s_x-r_x,s_y-r_y)
             min_dist = np.amin(_d)
-            inh_payoff = dist_payoffs(min_dist)
+            inh_payoff = exp_dist_payoffs(min_dist,distgap_parms)
         else:
             inh_payoff = 1
+        #end_time = time.time()
+        #exec_time = str((end_time-start_time))
+        #log.info('inhibitory '+exec_time+'s')
+        #start_time =time.time()
         if constants.EXCITATORY:
-            traj_len = utils.calc_traj_len(s_traj)
-            ''' for now calculate the plan payoffs '''
-            exc_payoff = progress_payoffs_dist(traj_len)
+            if self.eq_context.eval_config.l3_eq == 'GAUSSIAN':
+                if self.exc_payoff is None:
+                    traj_len = utils.calc_traj_len(s_traj)
+                    exc_payoff = progress_payoffs_dist(traj_len)
+                    self.exc_payoff = exc_payoff
+                else:
+                    exc_payoff = self.exc_payoff
+            else:
+                traj_len = utils.calc_traj_len(s_traj)
+                exc_payoff = progress_payoffs_dist(traj_len)
+        #end_time = time.time()
+        #exec_time = str((end_time-start_time))
+        #log.info('excitatory '+exec_time+'s')
+        #start_time =time.time()
         if constants.INHIBITORY_PEDESTRIAN:
-            ped_inh_payoff = self.eval_pedestrian_inh_by_action(s_act_key)
+            if self.pedest_payoff is None:
+                ag_pos = (s_traj[0,1],s_traj[0,2]) if s_traj is not None and len(s_traj) > 0 else None
+                ped_inh_payoff = self.eval_pedestrian_inh_by_action(s_act_key,ag_pos)
+                self.pedest_payoff = ped_inh_payoff
+            else:
+                ped_inh_payoff = self.pedest_payoff
+        #end_time = time.time()
+        #exec_time = str((end_time-start_time))
+        #log.info('pedestrian '+exec_time+'s')
         final_payoff = ( (1-constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT) * ((constants.INHIBITORY_PAYOFF_WEIGHT*inh_payoff) + (constants.EXCITATORY_PAYOFF_WEIGHT*exc_payoff)) ) + \
                             (constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT*ped_inh_payoff)
         return final_payoff
 
 def eval_trajectory_viability(traj_id_list):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_generated_trajectories_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     cplx_list = []
     for t_l in traj_id_list:
@@ -291,8 +359,14 @@ def eval_trajectory_viability(traj_id_list):
     
 
 
-def dist_payoffs(dist_arr):
-    return scipy.special.erf((dist_arr - constants.DIST_COST_MEAN) / (constants.DIST_COST_SD * math.sqrt(2)))
+def dist_payoffs(dist_arr,params):
+    return scipy.special.erf((dist_arr - params[0]) / (params[1] * math.sqrt(2)))
+
+def exp_dist_payoffs(dist_arr,params):
+    if not isinstance(params, np.ndarray):
+        return scipy.special.erf((dist_arr - params[0]) / (params[1] * 2))
+    else:
+        return scipy.special.erf((dist_arr - params[:,:,0]) / (params[:,:,1] * 2))
 
 def progress_payoffs_velocity(dist_arr):
     return scipy.special.erf((dist_arr - constants.SPEED_COST_MEAN) / (constants.SPEED_COST_SD * math.sqrt(2)))

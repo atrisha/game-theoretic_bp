@@ -243,9 +243,10 @@ L2_ACTION_CODES_2_NAME = {1:'AGGRESSIVE',
 
 MAX_L3_ACTIONS = 10
 
-L3_ACTION_CACHE = 'l3_action_trajectories'
-TEMP_TRAJ_CACHE = 'temp_traj_cache'
-RESULTS = 'results'
+VEH_CATEGORIES = "('Car','Medium Vehicle','Heavy Vehicle','Motorcycle','Bus')"
+#VEH_CATEGORIES = "('Bus')"
+
+RESULTS = None
 
 DIST_COST_MEAN = 3
 DIST_COST_SD = 0.5
@@ -275,12 +276,14 @@ BASELINE_TRAJECTORIES_ONLY = False
 INHIBITORY = True
 EXCITATORY = True
 INHIBITORY_PEDESTRIAN = True
-L1_EQ_TYPE = 'NASH'
-L3_EQ_TYPE = 'BR'
-TRAJECTORY_TYPE = 'GAUSSIAN'
+L1_EQ_TYPE = None
+L3_EQ_TYPE = None
+TRAJECTORY_TYPE = None
 
 
-CURRENT_FILE_ID = '770'
+CURRENT_FILE_ID = None
+TEMP_TRAJ_CACHE = None
+L3_ACTION_CACHE = None
 import logging
 import logging.handlers
 format='%(levelname)-8s %(funcName)s : %(message)s'
@@ -289,14 +292,20 @@ logger = logging.getLogger("pylog")
 logger.setLevel(logging.INFO)
 eq_logger = logging.getLogger("pylog")
 eq_logger.setLevel(logging.INFO)
-fh = logging.handlers.RotatingFileHandler(os.path.join(LOG_DIR,'run.log'),maxBytes=50000000,backupCount=20)
-fh.setLevel(logging.INFO)
-fh.setFormatter(logging.Formatter(format))
-fheq = logging.handlers.RotatingFileHandler(os.path.join(LOG_DIR,'run-eq.log'),maxBytes=50000000,backupCount=20)
-fheq.setLevel(logging.INFO)
-fheq.setFormatter(logging.Formatter(format))
-logger.addHandler(fh)
-eq_logger.addHandler(fheq)
 common_logger = logger
 
-import os
+def setup_logger():
+    logging.basicConfig(format=format,level=logging.INFO)
+    logger = logging.getLogger("pylog")
+    logger.setLevel(logging.INFO)
+    eq_logger = logging.getLogger("pylog")
+    eq_logger.setLevel(logging.INFO)
+    fh = logging.handlers.RotatingFileHandler(os.path.join(LOG_DIR,CURRENT_FILE_ID+'_run.log'),maxBytes=50000000,backupCount=20)
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(logging.Formatter(format))
+    fheq = logging.handlers.RotatingFileHandler(os.path.join(LOG_DIR,CURRENT_FILE_ID+'_run-eq.log'),maxBytes=50000000,backupCount=20)
+    fheq.setLevel(logging.INFO)
+    fheq.setFormatter(logging.Formatter(format))
+    logger.addHandler(fh)
+    eq_logger.addHandler(fheq)
+    common_logger = logger

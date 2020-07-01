@@ -61,7 +61,7 @@ def fix_exec_turn():
    
 def assign_traffic_segment_seq():
     traffic_segments = None
-    
+    print('opening','D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "SELECT TRACK_ID FROM TRACKS WHERE TYPE <> 'Pedestrian' AND TYPE <> 'Bicycle'"
@@ -79,7 +79,7 @@ def assign_traffic_segment_seq():
         c.execute(q_string)
         res = c.fetchall()
         track_regions = []
-        if veh == 14:
+        if veh == 17:
             brk = 8
         for row in res:
             if row[0] is not None and len(row[0]) > 1:
@@ -288,9 +288,9 @@ def insert_gate_crossing_events():
             ins_list = [None if x==' ' else x for x in ins_list]
             if ct > 0:
                 q_string = "INSERT INTO `GATE_CROSSING_EVENTS` VALUES (0"+constants.CURRENT_FILE_ID+",?,?,?,?,?,?,?,?,?,?,?,?)"
+                print('INSERTING', ins_list)
+                c.execute(q_string, (ins_list[0],'LANE_GATE',ins_list[1],ins_list[2],ins_list[3],ins_list[4],ins_list[5],ins_list[6],ins_list[7],ins_list[8],ins_list[9],None))
                 
-                c.execute(q_string, (ins_list[0],ins_list[1],'LANE_GATE',ins_list[2],ins_list[3],ins_list[4],ins_list[5],ins_list[6],ins_list[7],ins_list[8],ins_list[9],None))
-                print(ins_list)
                 
             ct += 1
             
@@ -367,9 +367,7 @@ def insert_trajectories_ext():
     '''
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
-    vehs = []
-    for d in ['W_S','S_W','N_E','W_N','S_E','E_S']:
-        vehs.extend(utils.get_agents_for_task(d))
+    vehs = utils.get_all_agentids()
     
     #vehs = [140]
     q_string = "select TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".*,TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ,v_TIMES.ENTRY_TIME,v_TIMES.EXIT_TIME from TRAJECTORIES_0"+constants.CURRENT_FILE_ID+",TRAJECTORY_MOVEMENTS,v_TIMES where TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TRACK_ID=TRAJECTORY_MOVEMENTS.TRACK_ID and v_TIMES.TRACK_ID = TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TRACK_ID ORDER BY TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TRACK_ID,TRAJECTORIES_0"+constants.CURRENT_FILE_ID+".TIME"
@@ -387,6 +385,10 @@ def insert_trajectories_ext():
                  'ln_n_2':'g','ln_n_3':'g','l_n_s_l':'orange','l_n_s_r':'orange','ln_s_-1':'lime','ln_s_-2':'lime'}
     
     for agent_id, track in traj_info.items():
+        '''
+        if agent_id < 195:
+            continue
+        '''
         u_strings = []
         colors = []
         assigned_segments = []
@@ -649,7 +651,7 @@ def insert_generated_traj_info():
                             #act_str = unreadable(str(k)+'|000|'+l1+'|'+l2_a)
                             i_string_data = (769,sub_agent,0,l1,l2_a[0],ts,l2_a[1])
                             i_strings.append(i_string_data)
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_generated_trajectories_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     
     for i_s in i_strings:
@@ -661,7 +663,7 @@ def insert_generated_traj_info():
 
 
 def insert_generated_trajectories():
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_generated_trajectories_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     c.execute('delete from GENERATED_TRAJECTORY')
     conn.commit()
@@ -722,7 +724,7 @@ def insert_generated_trajectories():
     
     
 def insert_trajectory_complexity():
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_generated_trajectories_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "SELECT TRAJECTORY_ID FROM GENERATED_TRAJECTORY_COMPLEXITY"
     c.execute(q_string)
@@ -775,10 +777,16 @@ def insert_trajectory_complexity():
     conn.close()
 
 
-def get_traj_metadata(task):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+def get_traj_metadata(task,traj_type):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_generated_trajectories_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
-    q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE GENERATED_TRAJECTORY_INFO.TRAJ_ID IN (SELECT DISTINCT GENERATED_BASELINE_TRAJECTORY.TRAJECTORY_INFO_ID FROM GENERATED_BASELINE_TRAJECTORY UNION SELECT DISTINCT GENERATED_BOUNDARY_TRAJECTORY.TRAJECTORY_INFO_ID FROM GENERATED_BOUNDARY_TRAJECTORY) AND GENERATED_TRAJECTORY_INFO.AGENT_ID IN "+str(tuple(utils.get_agents_for_task(task)))+" ORDER BY GENERATED_TRAJECTORY_INFO.AGENT_ID"
+    if traj_type != 'GAUSSIAN':
+        if traj_type == 'BOUNDARY':
+            q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE GENERATED_TRAJECTORY_INFO.TRAJ_ID IN (SELECT DISTINCT GENERATED_BASELINE_TRAJECTORY.TRAJECTORY_INFO_ID FROM GENERATED_BASELINE_TRAJECTORY UNION SELECT DISTINCT GENERATED_BOUNDARY_TRAJECTORY.TRAJECTORY_INFO_ID FROM GENERATED_BOUNDARY_TRAJECTORY) AND GENERATED_TRAJECTORY_INFO.AGENT_ID IN "+str(tuple(utils.get_agents_for_task(task)))+" ORDER BY GENERATED_TRAJECTORY_INFO.AGENT_ID"
+        else:
+            q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE GENERATED_TRAJECTORY_INFO.TRAJ_ID IN (SELECT DISTINCT GENERATED_BASELINE_TRAJECTORY.TRAJECTORY_INFO_ID FROM GENERATED_BASELINE_TRAJECTORY) AND GENERATED_TRAJECTORY_INFO.AGENT_ID IN "+str(tuple(utils.get_agents_for_task(task)))+" ORDER BY GENERATED_TRAJECTORY_INFO.AGENT_ID"
+    else:
+        q_string = "SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE GENERATED_TRAJECTORY_INFO.TRAJ_ID IN (SELECT DISTINCT GENERATED_GAUSSIAN_TRAJECTORY.TRAJECTORY_INFO_ID FROM GENERATED_GAUSSIAN_TRAJECTORY) AND GENERATED_TRAJECTORY_INFO.AGENT_ID IN "+str(tuple(utils.get_agents_for_task(task)))+" ORDER BY GENERATED_TRAJECTORY_INFO.AGENT_ID"
     c.execute(q_string)
     res = c.fetchall()
     state_dict = OrderedDict()
@@ -820,7 +828,7 @@ def get_traj_metadata(task):
 
 
 def reduce_relev_agents():
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories_'+constants.CURRENT_FILE_ID+'.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_generated_trajectories_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "select TRAJECTORY_INFO_ID,count(distinct TRAJECTORY_ID) from GENERATED_BOUNDARY_TRAJECTORY GROUP BY TRAJECTORY_INFO_ID ORDER BY TRAJECTORY_INFO_ID"
     c.execute(q_string)
@@ -879,12 +887,12 @@ def reduce_relev_agents():
         
         max_l3 = max([x for x in v[1]])
         #log.info(str(v[0])+'/'+str(max_l3))
-        if max_l3 > 10000:
+        if max_l3 > 10000 or len(v[2]) > 8:
             #print(k,v[0],max_l3,str(v[2]))
             log.info(str(v[0])+'/'+str(max_l3))
             ag_id,ts = ast.literal_eval(k)
             r_agents = [int(x) for x in v[2] if int(x) != 0]
-            reduced_list = reduce_relev_agents(ag_id,ts,r_agents)
+            reduced_list = utils.reduce_relev_agents(ag_id,ts,r_agents)
             for ag in r_agents:
                 if ag not in reduced_list:
                     if (ag_id,ts,ag) not in relev_agents_to_reduce:
@@ -900,10 +908,8 @@ def reduce_relev_agents():
             for row in res:
                 if row[1] not in traj_info_ids_to_del:
                     traj_info_ids_to_del.append(row[1])
-        for traj_info_id in traj_info_ids_to_del:
-            print(traj_info_id)
         print(len(traj_info_ids_to_del))
-        '''
+        
         q_string = "DELETE FROM GENERATED_BASELINE_TRAJECTORY WHERE TRAJECTORY_INFO_ID IN"+str(tuple(traj_info_ids_to_del))
         c.execute(q_string)
         q_string = "DELETE FROM GENERATED_BOUNDARY_TRAJECTORY WHERE TRAJECTORY_INFO_ID IN"+str(tuple(traj_info_ids_to_del))
@@ -912,7 +918,7 @@ def reduce_relev_agents():
         c.execute(q_string)
         conn.commit()
         conn.close()
-        '''
+        
         '''
         plt.figure()
         plt.title('l1')
@@ -922,9 +928,59 @@ def reduce_relev_agents():
         plt.hist(n_l3,bins=[0,1000,2000,4000,8000,16000,32000,100000,500000,1000000,10000000,np.inf])
         plt.show()
         '''
-        
-        
-        #print(max(n_l1), max(n_l3))
 
-if __name__ == '__main__':
-    insert_segment_gate_events()
+def process_directionless_vehicles():
+    update_dict = dict()
+    with open("D:\\intersections_dataset\\dataset\\directionless_vehicles.csv", newline='') as csvfile:
+        csvreader = csv.reader(csvfile, delimiter=',', skipinitialspace=True)
+        ct = 0
+        valid_gates = [(29,131),(29,63),(17,73),(127,73),(28,132),(27,130),(27,18),(128,131),(26,63),(30,72),(59,34),(59,132),(126,130),(60,18),(61,62),(125,73),(64,34),(129,132),(65,18),(65,130)]
+        for row in csvreader:
+            size = len(row)       
+            file_id = int(row[0])
+            if file_id < 782:
+                continue
+            veh_id = int(row[1])
+            entry_gate = int(row[2])
+            exit_gate = int(row[3])
+            if file_id not in update_dict:
+                update_dict[file_id] = dict()
+                update_dict[file_id][veh_id] = (entry_gate,exit_gate)
+            else:
+                if veh_id not in update_dict[file_id]:
+                    update_dict[file_id][veh_id] = (entry_gate,exit_gate)
+                else:
+                    print("shouldnt happen",row)
+                    sys.exit()
+    for k,v in update_dict.items():
+        if k < 782:
+            continue
+        u_string = "UPDATE TRAJECTORY_MOVEMENTS SET ENTRY_GATE=?, EXIT_GATE=?, GATES_PASSED=? WHERE FILE_ID=? AND TRACK_ID=?"
+        u_list = []
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+str(k)+'\\uni_weber_'+str(k)+'.db')
+        c = conn.cursor()
+        for ag,gates in v.items():
+            u_list.append((gates[0],gates[1],str(gates[0])+','+str(gates[1]),k,ag))
+            print(u_string,gates[0],gates[1],str(gates[0])+','+str(gates[1]),k,ag)
+        c.executemany(u_string,u_list)
+        conn.commit()
+        conn.close()
+    
+            
+            
+            
+
+def main():
+    #global CURRENT_FILE_ID,TEMP_TRAJ_CACHE,L3_ACTION_CACHE
+    constants.CURRENT_FILE_ID = sys.argv[1]
+    #constants.TRAJECTORY_TYPE = sys.argv[1]
+    constants.TEMP_TRAJ_CACHE = 'temp_traj_cache_'+constants.CURRENT_FILE_ID
+    constants.L3_ACTION_CACHE = 'l3_action_trajectories_'+constants.CURRENT_FILE_ID
+    #insert_trajectories()
+    #insert_trajectory_movements()
+    #insert_gate_crossing_events()
+    #assign_traffic_segment_seq()
+    insert_trajectories_ext()
+    #insert_segment_gate_events()
+    
+

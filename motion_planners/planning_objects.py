@@ -18,6 +18,8 @@ class VehicleState:
         self.track_info_set = True
         self.track_id = vehicle_track_info[0,]
         self.id = int(self.track_id)
+        if vehicle_track_info[1,] is None:
+            print("no track for",self.track_id)
         self.x = float(vehicle_track_info[1,])
         self.y = float(vehicle_track_info[2,])
         self.speed = kph_to_mps(float(vehicle_track_info[3,]))

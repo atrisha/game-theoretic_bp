@@ -77,33 +77,52 @@ class PathInfo:
     
 class TrajectoryPlan:
     
-    def insert_baseline_trajectory(self,table_name):
-        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    def insert_baseline_trajectory(self,table_name,traj_info_id,traj_info_dict,max_traj_id=None):
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_generated_trajectories_'+constants.CURRENT_FILE_ID+'.db')
         c = conn.cursor()
-        q_string = "select MAX("+table_name+".TRAJECTORY_ID) FROM "+table_name
-        c.execute(q_string)
-        res = c.fetchone()
-        max_traj_id = int(res[0]) if res[0] is not None else 0
+        if max_traj_id is None:
+            q_string = "select MAX("+table_name+".TRAJECTORY_ID) FROM "+table_name
+            c.execute(q_string)
+            res = c.fetchone()
+            max_traj_id = int(res[0]) if res[0] is not None else 0
         agent_id = self.veh_id
         time_ts = self.veh_state.current_time
         relev_agent = self.relev_veh_id
         l1_action = self.l1_action
         l2_action = self.l2_action
-        i_string_data = (int(constants.CURRENT_FILE_ID),agent_id,relev_agent,l1_action,l2_action,time_ts,1)
+        i_string_data = (int(constants.CURRENT_FILE_ID),traj_info_id,agent_id,relev_agent,l1_action,l2_action,time_ts,1)
+        if table_name == 'GENERATED_GAUSSIAN_TRAJECTORY':
+            if traj_info_dict is not None and (agent_id,relev_agent,l1_action,l2_action,time_ts) in traj_info_dict:
+                traj_info_id = traj_info_dict[(agent_id,relev_agent,l1_action,l2_action,time_ts)]
+            else:
+                c.execute("SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE AGENT_ID="+str(i_string_data[1])+" AND RELEV_AGENT_ID="+str(i_string_data[2])+" AND L1_ACTION='"+str(i_string_data[3])+"' AND \
+                            L2_ACTION='"+str(i_string_data[4])+"' AND TIME="+str(i_string_data[5]))
+                res = c.fetchone()
+                if res is not None and len(res) > 0:
+                    traj_info_id = res[1]
+                else:
+                    c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?)',i_string_data)
+                    conn.commit()
+                    traj_info_id = int(c.lastrowid)
+            i_string_data = (int(constants.CURRENT_FILE_ID),traj_info_id,agent_id,relev_agent,l1_action,l2_action,time_ts,1)
+        else:
+            i_string_data = (int(constants.CURRENT_FILE_ID),traj_info_id,agent_id,relev_agent,l1_action,l2_action,time_ts,1)
+            
         #print('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?,?)',i_string_data)
+        '''
         c.execute("SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE AGENT_ID="+str(i_string_data[1])+" AND RELEV_AGENT_ID="+str(i_string_data[2])+" AND L1_ACTION='"+str(i_string_data[3])+"' AND \
                         L2_ACTION='"+str(i_string_data[4])+"' AND TIME="+str(i_string_data[5]))
         res = c.fetchone()
         if res is not None and len(res) > 0:
             traj_info_id = res[1]
-            log.info('deleted '+table_name+' with info id'+str(traj_info_id))
-            c.execute('DELETE FROM '+table_name+' WHERE TRAJECTORY_INFO_ID='+str(traj_info_id))
-            conn.commit()
+            #log.info('deleted '+table_name+' with info id'+str(traj_info_id))
+            #c.execute('DELETE FROM '+table_name+' WHERE TRAJECTORY_INFO_ID='+str(traj_info_id))
+            #conn.commit()
         else:
             c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?)',i_string_data)
             conn.commit()
             traj_info_id = int(c.lastrowid)
-            
+        '''
         
         traj_id = max_traj_id+1
         ins_list = []
@@ -118,15 +137,16 @@ class TrajectoryPlan:
             tx,rx,ry,ryaw,rv,ra,rj = traj_dets[0][:slice_len],traj_dets[1][:slice_len],traj_dets[2][:slice_len],traj_dets[3][:slice_len],traj_dets[4][:slice_len],traj_dets[5][:slice_len],traj_dets[6][:slice_len]
             ins_list.extend(list(zip([traj_id]*slice_len,[traj_info_id]*slice_len,[round(x,5) for x in tx],[round(x,5) for x in rx],[round(x,5) for x in ry],[round(x,5) for x in ryaw],[round(x,5) for x in rv],[round(x,5) for x in ra],[round(x,5) for x in rj])))
             traj_id += 1
+        new_max_trajid = traj_id-1
         i_string = 'INSERT INTO '+table_name+' VALUES (?,?,?,?,?,?,?,?,?)'
         #n=1000
         #chunks = [ins_list[i:i+n] for i in range(0, len(ins_list), n)]
         #for chunk in chunks:
-        c.executemany(i_string,ins_list)
-        conn.commit()
-        conn.close()
+        #c.executemany(i_string,ins_list)
+        #conn.commit()
+        #conn.close()
         log.info('inserted '+table_name+' with info id'+str(traj_info_id)+ ' and time_ts '+str(i_string_data[5]))
-    
+        return ins_list,new_max_trajid,i_string_data
 
     
     def set_generate_boundary(self,flag):

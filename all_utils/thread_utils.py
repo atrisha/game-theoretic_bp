@@ -102,13 +102,15 @@ class DictProcessor:
     def execute(self):
         all_chunks = self.all_chunks
         all_futures = []
-        
+        processed_dict = self.execute_threads()
+        '''
         if len(self.dict_to_process) < 300:
-            '''use multithreading '''
+            use multithreading 
             processed_dict = self.execute_threads()
         else:
-            '''use multiprocessing '''
+            use multiprocessing
             processed_dict = self.execute_mp()
+        '''
         return processed_dict
         
 class CustomMPS():

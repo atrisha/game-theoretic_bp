@@ -324,8 +324,23 @@ print(z)
 print(z1)
 print(z2)
 '''
-print(str(None))
-    
+import ast
+import sys
+import scipy.special
+def dist_payoffs(dist_arr,c,s):
+    return scipy.special.erf((dist_arr - c) / (s * math.sqrt(2)))
+def dist_payoffs_exp(dist_arr,c,s):
+    return scipy.special.erf((dist_arr - c) / (s * 2))
+print(dist_payoffs_exp(np.inf, 10, 2))
+a = np.linspace(start=0, stop=20, num=300)
+p = list(zip([10,7.5,6.25],[2.2,1,1]))
+param_dict = {(5,15):(10,2.2),(5,10):(7.5,1),(3.5,9):(6.25,1)}
+for par in p:
+    plt.figure()
+    plt.title(par)
+    plt.plot(a,dist_payoffs(a,par[0],par[1]),color='blue')
+    plt.plot(a,dist_payoffs_exp(a,par[0],par[1]),color='red')
+plt.show()
     
     
     

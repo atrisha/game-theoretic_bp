@@ -6,8 +6,8 @@ Created on Jan 29, 2020
 import csv
 import numpy as np
 import sqlite3
-import all_utils
 
+from all_utils import utils
 import sys
 import constants
 import motion_planners
@@ -98,25 +98,73 @@ def save_get_l3_action_file(file_id,agent_id,relev_agent_id, time_ts, l1_action,
 
 
 def push_trajectories_to_db():
-    from all_utils import utils
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_generated_trajectories_'+constants.CURRENT_FILE_ID+'.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM GENERATED_TRAJECTORY_INFO")
+    res = c.fetchall()
+    traj_info_dict = {(row[2],row[3],row[4],row[5],row[6]):row[1] for row in res}
     all_files = os.listdir(os.path.join(constants.ROOT_DIR, constants.TEMP_TRAJ_CACHE))
     all_files.sort()
     N = len(all_files)
+    boundary_ins_list,baseline_ins_list,gaussian_ins_list = [],[],[]
+    bounary_max_tid,baseline_max_tid,gaussian_tid = None,None,None
+    traj_info_id = 1
+    traj_info_ins_list = []
     for idx,file in enumerate(all_files):
         log.info(str(idx)+'/'+str(N))
         filename = os.path.join(constants.ROOT_DIR,constants.TEMP_TRAJ_CACHE,file)
         traj_plan = utils.pickle_load(filename)
         if not constants.TRAJECTORY_TYPE == 'GAUSSIAN':
+            i_string_boundary = 'INSERT INTO '+'GENERATED_BOUNDARY_TRAJECTORY'+' VALUES (?,?,?,?,?,?,?,?,?)'
+            i_string_baseline = 'INSERT INTO '+'GENERATED_BASELINE_TRAJECTORY'+' VALUES (?,?,?,?,?,?,?,?,?)'
             print(traj_plan.veh_state.l1_action,len(traj_plan.trajectories['baseline']), len(traj_plan.trajectories['boundary']))
-            traj_plan.insert_baseline_trajectory('GENERATED_BOUNDARY_TRAJECTORY')
-            traj_plan.insert_baseline_trajectory('GENERATED_BASELINE_TRAJECTORY')
+            ins_list,new_max_trajid,traj_info_ins_tup = traj_plan.insert_baseline_trajectory('GENERATED_BOUNDARY_TRAJECTORY',traj_info_id,None,bounary_max_tid)
+            boundary_ins_list.extend(ins_list)
+            bounary_max_tid = new_max_trajid
+            ins_list,new_max_trajid,traj_info_ins_tup = traj_plan.insert_baseline_trajectory('GENERATED_BASELINE_TRAJECTORY',traj_info_id,None,baseline_max_tid)
+            traj_info_id += 1
+            baseline_ins_list.extend(ins_list)
+            baseline_max_tid = new_max_trajid
+            traj_info_ins_list.append(traj_info_ins_tup)
+            if len(boundary_ins_list) > 500000:
+                c.executemany(i_string_boundary,boundary_ins_list)
+                conn.commit()
+                boundary_ins_list = []
+            if len(baseline_ins_list) > 500000:
+                c.executemany(i_string_baseline,baseline_ins_list)
+                conn.commit()
+                baseline_ins_list = []
+                
         else:
+            i_string = 'INSERT INTO '+'GENERATED_GAUSSIAN_TRAJECTORY'+' VALUES (?,?,?,?,?,?,?,?,?)'
             if 'gaussian' in traj_plan.trajectories:
                 print(traj_plan.veh_state.l1_action,len(traj_plan.trajectories['gaussian']))
-                traj_plan.insert_baseline_trajectory('GENERATED_GAUSSIAN_TRAJECTORY')
-        if file == '7690530000201_47,5475':
-            brk=1
+                ins_list,new_max_trajid,traj_info_ins_tup = traj_plan.insert_baseline_trajectory('GENERATED_GAUSSIAN_TRAJECTORY',None,traj_info_dict,gaussian_tid)
+                traj_info_ins_list.append(traj_info_ins_tup)
+                gaussian_ins_list.extend(ins_list)
+                gaussian_tid = new_max_trajid
+            if len(gaussian_ins_list) > 500000:
+                c.executemany(i_string,gaussian_ins_list)
+                conn.commit()
+                gaussian_ins_list = []
+    if not constants.TRAJECTORY_TYPE == 'GAUSSIAN':
+        c.executemany(i_string_boundary,boundary_ins_list)
+        conn.commit()
+        c.executemany(i_string_baseline,baseline_ins_list)
+        conn.commit()
         f=1
+    else:
+        c.executemany(i_string,gaussian_ins_list)
+        conn.commit()
+        f=1
+    if not constants.TRAJECTORY_TYPE == 'GAUSSIAN':
+        for t in traj_info_ins_list:
+            print(t)
+        c.executemany('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,?,?,?,?,?,?,?)',traj_info_ins_list)
+        conn.commit()
+    conn.close()
+        
+                
         
         
 
@@ -440,7 +488,7 @@ def generate_hopping_plans():
         agent_ids = agent_ids + [int(x) for x in utils.get_agents_for_task(t)] 
     agent_ids.sort()
     all_params = []
-    for agent_id in [8]: 
+    for agent_id in agent_ids: 
         ''' veh_state object maintains details about an agent'''
         
         veh_state = VehicleState()
@@ -454,7 +502,10 @@ def generate_hopping_plans():
         ''' get the agent's trajectory'''
         agent_track = utils.get_track(veh_state,None)
         veh_state.set_full_track(agent_track)
-        veh_state.set_entry_exit_time((float(agent_track[0][6]), float(agent_track[-1][6])))
+        try:
+            veh_state.set_entry_exit_time((float(agent_track[0][6]), float(agent_track[-1][6])))
+        except IndexError:
+            brk = 1
         veh_state.action_plans = dict()
         veh_state.relev_agents = []
         
@@ -470,7 +521,7 @@ def generate_hopping_plans():
     n=12
     all_params.sort(key=lambda x: x[1][6])
     chunks = [all_params[i:i+n] for i in range(0, len(all_params), n)]
-    '''
+    
     cmp = CustomThreaExs()
     import time
     N = len(chunks)
@@ -478,11 +529,11 @@ def generate_hopping_plans():
         done = False
         done = cmp.execute_no_return(generate_action_plans, chunk)
         print('DONE',d_idx,N,done)
-    
     '''
+    
     for p in all_params:
         generate_action_plans(p)
-    
+    '''
 
 def generate_lattice_boundary_trajectories():
     from all_utils import utils
@@ -531,8 +582,12 @@ def generate_lattice_boundary_trajectories():
 
     
 
-if __name__ == '__main__':
-    from all_utils import utils
-    #generate_hopping_plans()
+def main():
+    constants.CURRENT_FILE_ID = sys.argv[1]
+    constants.TRAJECTORY_TYPE = sys.argv[2]
+    constants.TEMP_TRAJ_CACHE = 'temp_traj_cache_'+constants.CURRENT_FILE_ID+'_'+constants.TRAJECTORY_TYPE
+    constants.L3_ACTION_CACHE = 'l3_action_trajectories_'+constants.CURRENT_FILE_ID
+    constants.setup_logger()
+    generate_hopping_plans()
     push_trajectories_to_db()
     #utils.remove_files(constants.TEMP_TRAJ_CACHE)

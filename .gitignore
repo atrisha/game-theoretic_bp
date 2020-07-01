@@ -3,9 +3,13 @@
 __pycache__/
 l3_action_trajectories/*
 l3_action_trajectories/
+l3_action_trajectories*/*
+l3_action_trajectories*/
 logs/*
 logs/
 temp_traj_cache/*
 temp_traj_cache/
+temp_traj_cache*/*
+temp_traj_cache*/
 results/
 results/*

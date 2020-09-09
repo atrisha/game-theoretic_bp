@@ -15,10 +15,12 @@ logging.basicConfig(format='%(levelname)-8s %(filename)s: %(message)s',level=log
 
 class EquilibriaCore:
     
-    def __init__(self,num_players,pay_off_dict,N):
+    def __init__(self,num_players,pay_off_dict,N,sv_actions,is_l1agent):
         self.num_players = num_players
         self.pay_off_dict = pay_off_dict
         self.N = N
+        self.sv_actions = sv_actions
+        self.isl1agent = is_l1agent
         #self.bidirec_payoff_dict = bidict(pay_off_dict).inverse
 
     def calc_pure_strategy_nash_equilibrium_exhaustive(self):
@@ -95,17 +97,81 @@ class EquilibriaCore:
             for i in np.arange(num_players):  
                 if s[i] not in res_dict[i]:
                     res_dict[i][s[i]] = np.inf
-                else:
-                    if p[i] < res_dict[i][s[i]]:
-                        res_dict[i][s[i]] = p[i]
+                if p[i] < res_dict[i][s[i]]:
+                    res_dict[i][s[i]] = p[i]
         eq_strat = [None]*num_players
+        self.sv_action_payoffs = []
         for k,v in res_dict.items():
             eq_strat[k] = max(v.items(), key=operator.itemgetter(1))[0]
+            if next(iter(v.keys()))[6:9] == '000':
+                for sv_action in self.sv_actions:
+                    self.sv_action_payoffs.append(round(v[sv_action],6))
         eq_strat = tuple(eq_strat)
         eq_res = {eq_strat:payoff_dict[eq_strat]}
+        if self.isl1agent:
+            qbr_eq_res = dict()
+            self.sv_act_payoffs = dict()
+            for e,p in eq_res.items():
+                eq_act_tuple = [x if x[6:9]!='000' else None for x in list(e)]
+                _t_sv_act_payoffs = []
+                _t_eq_pay,_t_eq_strat = [-np.inf]*self.num_players,None
+                for sv_act in self.sv_actions:
+                    _act_tup = tuple([x if x is not None else sv_act for x in eq_act_tuple])
+                    sv_index = _act_tup.index(sv_act)
+                    sv_payoff = round(payoff_dict[_act_tup][sv_index],6)
+                    if sv_payoff > _t_eq_pay[sv_index]:
+                        _t_eq_pay = payoff_dict[_act_tup]
+                        _t_eq_strat = _act_tup
+                    _t_sv_act_payoffs.append(sv_payoff)
+                qbr_eq_res[_t_eq_strat] = _t_eq_pay
+                self.sv_act_payoffs[_t_eq_strat] = _t_sv_act_payoffs
+            return qbr_eq_res
+        else:
+            return eq_res
         return eq_res
     
     def calc_best_response(self):
+        payoff_dict = self.pay_off_dict
+        num_players = self.num_players
+        res_dict = {n:{} for n in np.arange(self.num_players)}
+        for s,p in payoff_dict.items():
+            for i in np.arange(num_players):  
+                if s[i] not in res_dict[i]:
+                    res_dict[i][s[i]] = -np.inf 
+                if p[i] > res_dict[i][s[i]]:
+                    res_dict[i][s[i]] = p[i]
+        eq_strat = [None]*num_players
+        
+        self.sv_action_payoffs = []
+        for k,v in res_dict.items():
+            eq_strat[k] = max(v.items(), key=operator.itemgetter(1))[0]
+            if next(iter(v.keys()))[6:9] == '000':
+                for sv_action in self.sv_actions:
+                    self.sv_action_payoffs.append(round(v[sv_action],6))
+        eq_strat = tuple(eq_strat)
+        eq_res = {eq_strat:payoff_dict[eq_strat]}
+        if self.isl1agent:
+            qbr_eq_res = dict()
+            self.sv_act_payoffs = dict()
+            for e,p in eq_res.items():
+                eq_act_tuple = [x if x[6:9]!='000' else None for x in list(e)]
+                _t_sv_act_payoffs = []
+                _t_eq_pay,_t_eq_strat = [-np.inf]*self.num_players,None
+                for sv_act in self.sv_actions:
+                    _act_tup = tuple([x if x is not None else sv_act for x in eq_act_tuple])
+                    sv_index = _act_tup.index(sv_act)
+                    sv_payoff = round(payoff_dict[_act_tup][sv_index],6)
+                    if sv_payoff > _t_eq_pay[sv_index]:
+                        _t_eq_pay = payoff_dict[_act_tup]
+                        _t_eq_strat = _act_tup
+                    _t_sv_act_payoffs.append(sv_payoff)
+                qbr_eq_res[_t_eq_strat] = _t_eq_pay
+                self.sv_act_payoffs[_t_eq_strat] = _t_sv_act_payoffs
+            return qbr_eq_res
+        else:
+            return eq_res
+    
+    def calc_best_response_deprecated2(self):
         num_players = len(list(self.pay_off_dict.values())[0]) 
         br_strats = tuple([max(self.pay_off_dict.keys(), key=(lambda k: self.pay_off_dict[k][i]))[i] for i in np.arange(num_players)])
         br_payoffs = self.pay_off_dict[br_strats]
@@ -343,10 +409,16 @@ prisoners_dilemma = {('p1s1','p2s1'):[-1,-1],
                      ('p1s2','p2s1'):[0,-3],
                      ('p1s2','p2s2'):[-2,-2]}
 
-game_of_chicken = {('go','go'):[0,0],
+game_of_chicken2 = {('go','go'):[0,0],
                      ('go','wait'):[7,2],
                      ('wait','go'):[2,5],
                      ('wait','wait'):[4,4]}
+
+game_of_chicken = {('go','go'):[1,-1],
+                     ('go','wait'):[-1,1],
+                     ('wait','go'):[-1,1],
+                     ('wait','wait'):[1,-1]}
+
 
 toy_merge = {(('wait', 'cancel'), ('slow', 'cont. speed')): [10, 20], 
              (('wait', 'cancel'), ('speed', 'cont. speed')): [10, 20], 
@@ -369,15 +441,15 @@ toy_merge = {(('wait', 'cancel'), ('slow', 'cont. speed')): [10, 20],
 br_b = calc_best_response_with_beliefs(toy_merge,dict())
 br = calc_best_response(toy_merge)
 '''
-'''
-ne_all = calc_pure_strategy_nash_equilibrium_exhaustive1(pay_off_dict,True)
+eq = EquilibriaCore(2,game_of_chicken,len(game_of_chicken),None,None)
+ne_all = eq.calc_pure_strategy_nash_equilibrium_exhaustive()
 #ne = calc_pure_strategy_nash_equilibrium_exhaustive(game_of_chicken)
 #print(br)
 print()
 print('all toy1')
 for k,v in ne_all.items():
     print(k,v)
-
+'''
 ne_all = calc_pure_strategy_nash_equilibrium_exhaustive(pay_off_dict,True)
 #ne = calc_pure_strategy_nash_equilibrium_exhaustive(game_of_chicken)
 #print(br)

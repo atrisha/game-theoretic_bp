@@ -1,0 +1,3 @@
+from equilibria.equilibria_estimation import generate_results_file
+
+generate_results_file()

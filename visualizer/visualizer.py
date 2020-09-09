@@ -13,6 +13,18 @@ from all_utils.utils import kph_to_mps
 import matplotlib.animation as animation
 log = constants.common_logger
 from collections import OrderedDict
+import itertools
+
+def show_l3_payoff_hist():
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+'769'+'\\uni_weber_'+'769'+'.db')
+    c = conn.cursor()
+    q_string = "select * from L3_PAYOFF_INFO"
+    c.execute(q_string)
+    res = c.fetchall()
+    eq_delta_list = [row[1] for row in res]
+    X = np.arange(-1.5,1.55,0.05)
+    count, bins, ignored = plt.hist(eq_delta_list, X, density=True)
+    plt.show()
 
 def show_qre_plot_toy_example():
     x_lambdas,x_ax = [],[]
@@ -357,14 +369,20 @@ def plot_traffic_regions():
             for i,j in zip(np.arange(len(X)-1), np.arange(1,len(Y))):
                 plt.arrow(X[i], Y[i], X[j]-X[i], Y[j]-Y[i], head_width=0.5, head_length=0.5)
                 f=1
-        #plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
+        plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
+    
     '''
     q_string = "SELECT X_POSITION,Y_POSITION FROM CONFLICT_POINTS"
     c.execute(q_string)
     q_res = c.fetchall()
     plt.plot([x[0] for x in q_res], [x[1] for x in q_res], 'x')
-    plt.show()   
     '''
+    
+    all_x = np.arange(538785,538895,.5)
+    all_y = np.arange(4813970,4814055,.5)
+    grids = list(itertools.product(list(all_x),list(all_y)))
+    #plt.plot([x[0] for x in grids],[x[1] for x in grids],'r.',markersize=.25)   
+    
     #plt.ylim(4813961, 4814065)
     #plt.xlim(538776, 538897)
     #plt.show()
@@ -490,4 +508,4 @@ def show_baseline_animation():
       
     
 if __name__ == '__main__':     
-    plot_boundaries()
+    plot_traffic_regions()

@@ -983,4 +983,54 @@ def main():
     insert_trajectories_ext()
     #insert_segment_gate_events()
     
-
+def count_agents():
+    k='769'
+    ag_ct, p_ct, decision_ct, game_ct = 0,0,0,0
+    file_list = [str(x) for x  in np.arange(769,772).tolist() + np.arange(775,786).tolist()]
+    for k in file_list:
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+k+'\\uni_weber_'+k+'.db')
+        c = conn.cursor()
+        q_string = "select count(TRAJECTORY_MOVEMENTS.TRACK_ID) from TRAJECTORY_MOVEMENTS"
+        c.execute(q_string)
+        res = c.fetchone()
+        ct = int(res[0])
+        ag_ct += ct
+        print(k,ct)
+        
+    for k in file_list:
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+k+'\\uni_weber_'+k+'.db')
+        c = conn.cursor()
+        q_string = "select count(TRAJECTORY_MOVEMENTS.TRACK_ID) from TRAJECTORY_MOVEMENTS WHERE TRAJECTORY_MOVEMENTS.TYPE='Pedestrian'"
+        c.execute(q_string)
+        res = c.fetchone()
+        ct = int(res[0])
+        p_ct += ct
+        print(k,p_ct)
+    
+    
+    for k in file_list:
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+k+'\\uni_weber_'+k+'.db')
+        c = conn.cursor()
+        q_string = "select count(*) from L1_ACTIONS"
+        c.execute(q_string)
+        res = c.fetchone()
+        ct = int(res[0])
+        decision_ct += ct
+        print(k,decision_ct)
+        
+    for k in file_list:
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+k+'\\uni_weber_'+k+'.db')
+        c = conn.cursor()
+        q_string = "select count(*) from EQUILIBRIUM_ACTIONS where EQUILIBRIUM_ACTIONS.EQ_CONFIG_PARMS='BR|BASELINE_ONLY'"
+        c.execute(q_string)
+        res = c.fetchone()
+        ct = int(res[0])
+        game_ct += ct
+        print(k,game_ct)
+    
+    print('TOTAL AGENTS',ag_ct)
+    print('TOTAL PEDESTRIANS',p_ct)
+    print('TOTAL DECISION POINTS',decision_ct)
+    print('TOTAL GAMES',game_ct)
+#count_agents()
+    

@@ -324,6 +324,7 @@ def split_by_distinct_actions(eq_info_rows):
             for idx,eq_a in enumerate([utils.print_readable(x)[8:] for x  in ast.literal_eval(row[14])]):
                 if max(all_act_payoffs[idx]) != all_act_payoffs[idx][all_acts_l.index(eq_a)]:
                     brk=1
+            eq_dict[all_acts]['agent_detail'] = [(row[1],row[3],row[4])]
         else:
             eq_dict[all_acts]['emp_act'].append([utils.print_readable(x)[8:] for x in ast.literal_eval(row[15])])
             eq_dict[all_acts]['eq_acts'].append([utils.print_readable(x)[8:] for x  in ast.literal_eval(row[14])])
@@ -334,26 +335,31 @@ def split_by_distinct_actions(eq_info_rows):
                 eq_p = all_act_payoffs[idx][all_acts_l.index(eq_a)]
                 if max_p != eq_p:
                     brk=1
+            eq_dict[all_acts]['agent_detail'].append((row[1],row[3],row[4]))
     return eq_dict
 
 def calc_l3_payoff(s_traj,r_traj,s_act,r_act,eq):
-    s_traj,r_traj = np.asarray(s_traj), np.asarray(r_traj)
     ce = cost_evaluation.CostEvaluation(eq)
-    s_act_code,r_act_code = int(s_act[-4:-2 ]),int(r_act[-4:-2])
-    distgap_parms = ce.get_dist_gap_params((s_act_code, r_act_code))
-    slice_len = int(min(5*constants.PLAN_FREQ/constants.LP_FREQ,s_traj.shape[0],r_traj.shape[0]))
-    s_traj,r_traj = s_traj[:slice_len],r_traj[:slice_len]
-    if s_traj[0][0] != r_traj[0][0]:
-        print('time did not match',s_traj[0][0],r_traj[0][0])
-    s_x,s_y = s_traj[:,1], s_traj[:,2]
-    r_x,r_y = r_traj[:,1], r_traj[:,2]
-    ''' original trajectory is at 10hz. sample at 1hz for speedup'''
-    if len(s_x) > 3:
-        s_x,r_x,s_y,r_y = s_x[0::9],r_x[0::9],s_y[0::9],r_y[0::9]
-    _d = np.hypot(s_x-r_x,s_y-r_y)
-    min_dist = np.amin(_d)
-    inh_payoff = cost_evaluation.exp_dist_payoffs(min_dist,distgap_parms)
-    
+    if r_traj is not None:
+        s_traj,r_traj = np.asarray(s_traj), np.asarray(r_traj)
+        
+        s_act_code,r_act_code = int(s_act[-4:-2 ]),int(r_act[-4:-2])
+        distgap_parms = ce.get_dist_gap_params((s_act_code, r_act_code))
+        slice_len = int(min(5*constants.PLAN_FREQ/constants.LP_FREQ,s_traj.shape[0],r_traj.shape[0]))
+        s_traj,r_traj = s_traj[:slice_len],r_traj[:slice_len]
+        if s_traj[0][0] != r_traj[0][0]:
+            print('time did not match',s_traj[0][0],r_traj[0][0])
+        s_x,s_y = s_traj[:,1], s_traj[:,2]
+        r_x,r_y = r_traj[:,1], r_traj[:,2]
+        ''' original trajectory is at 10hz. sample at 1hz for speedup'''
+        if len(s_x) > 3:
+            s_x,r_x,s_y,r_y = s_x[0::9],r_x[0::9],s_y[0::9],r_y[0::9]
+        _d = np.hypot(s_x-r_x,s_y-r_y)
+        min_dist = np.amin(_d)
+        inh_payoff = cost_evaluation.exp_dist_payoffs(min_dist,distgap_parms)
+    else:
+        s_traj = np.asarray(s_traj)
+        inh_payoff = 1
     traj_len = utils.calc_traj_len(s_traj)
     exc_payoff = cost_evaluation.progress_payoffs_dist(traj_len)
         
@@ -365,7 +371,7 @@ def calc_l3_payoff(s_traj,r_traj,s_act,r_act,eq):
                             (constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT*ped_inh_payoff)
     return final_payoff
 
-def anaylze_l3_equlibrium():
+def anaylze_l3_equlibrium_deprecated():
     file_id = '770'
     constants.CURRENT_FILE_ID = file_id
     
@@ -440,6 +446,7 @@ def anaylze_l3_equlibrium():
             s_act = v['emp_acts'][track_id][0] if len(v['emp_acts'][track_id]) > 0 else None 
         except IndexError:
             brk=1
+        
         for ra_id in v['trajectories'].keys():
             if ra_id != track_id:
                 r_traj = v['trajectories'][ra_id]
@@ -451,9 +458,189 @@ def anaylze_l3_equlibrium():
     X = np.arange(-1.5,1.55,0.05)
     count, bins, ignored = plt.hist(eq_delta_list, X, density=True)
     plt.show()
-                    
+       
+def fix_relev_agents():
+    file_id = '770'
+    constants.CURRENT_FILE_ID = file_id
+    
+    eval_config = EvalConfig()
+    eval_config.set_l3_eq_type('BR')
+    eval_config.set_traj_type('BOUNDARY')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
+    c = conn.cursor()
+    ''' first get the l1l2 equilibrium data and find the trajectories for the agents in the row'''
+    ''' calculate the payoff from the emprical trajectories and store it in a map'''
+    ''' get the equilibrium payoff and recocile that with the data in the above map. Since we do not add any l1l2 payoff, this is same as the value in l1l2eq data '''
+    ''' analyze the distribution of the difference '''
+    q_string = "select * from L1_ACTIONS"
+    c.execute(q_string)
+    res = c.fetchall()
+    emp_act_map = {(row[1],row[0]):ast.literal_eval(row[2]) for row in res}
+    q_string = "SELECT EQUILIBRIUM_ACTIONS.L1L2_EQ_ID FROM EQUILIBRIUM_ACTIONS WHERE EQUILIBRIUM_ACTIONS.EQ_CONFIG_PARMS LIKE '%|BR|BOUNDARY'"
+    c.execute(q_string)
+    res = c.fetchall()
+    l1l2eqids = [row[0] for row in res]
+    eq_delta_list = []
+    ct,N = 0,len(l1l2eqids)+1
+    for l1l2eqid in l1l2eqids:
+        ct +=1
+        print(ct,'/',N)
+        q_string = "select * from L3_EQUILIBRIUM_ACTIONS INNER JOIN EQUILIBRIUM_ACTIONS ON EQUILIBRIUM_ACTIONS.L1L2_EQ_ID=L3_EQUILIBRIUM_ACTIONS.L1L2_EQ_ID WHERE L3_EQUILIBRIUM_ACTIONS.L1L2_EQ_ID="+str(l1l2eqid)
+        c.execute(q_string)
+        res = c.fetchall()
+        if len(res) == 0:
+            continue
+        agents = [res[0][9]]
+        sv_id = agents[0]
+        rv_agents = [int(x[6:9]) for x in ast.literal_eval(res[0][3])[0] if int(x[6:9])!=0]
+        rv_agents_indb = ast.literal_eval(res[0][18])
+        if len(rv_agents) != len(set(rv_agents_indb)):
+            print(res[0][0],res[0][3],res[0][18]) 
+        
+    conn.close()            
 
-
+def anaylze_l3_equlibrium():
+    
+    constants.CURRENT_FILE_ID = sys.argv[1]
+    constants.TRAJECTORY_TYPE = sys.argv[3]
+    constants.L3_EQ_TYPE = sys.argv[2]
+    file_id = constants.CURRENT_FILE_ID
+    
+    eval_config = EvalConfig()
+    eval_config.set_l3_eq_type('BR')
+    eval_config.set_traj_type('BOUNDARY')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
+    c = conn.cursor()
+    ''' first get the l1l2 equilibrium data and find the trajectories for the agents in the row'''
+    ''' calculate the payoff from the emprical trajectories and store it in a map'''
+    ''' get the equilibrium payoff and recocile that with the data in the above map. Since we do not add any l1l2 payoff, this is same as the value in l1l2eq data '''
+    ''' analyze the distribution of the difference '''
+    q_string = "select * from L1_ACTIONS"
+    c.execute(q_string)
+    res = c.fetchall()
+    emp_act_map = {(row[1],row[0]):ast.literal_eval(row[2]) for row in res}
+    db_map = dict()
+    q_string = "SELECT EQUILIBRIUM_ACTIONS.L1L2_EQ_ID FROM EQUILIBRIUM_ACTIONS WHERE EQUILIBRIUM_ACTIONS.EQ_CONFIG_PARMS LIKE '%|"+constants.L3_EQ_TYPE+"|"+constants.TRAJECTORY_TYPE+"'"
+    q_string = "select * from L3_EQUILIBRIUM_ACTIONS INNER JOIN EQUILIBRIUM_ACTIONS ON EQUILIBRIUM_ACTIONS.L1L2_EQ_ID=L3_EQUILIBRIUM_ACTIONS.L1L2_EQ_ID WHERE EQUILIBRIUM_ACTIONS.EQ_CONFIG_PARMS LIKE '%|BR|BOUNDARY'"
+    c.execute(q_string)
+    res = c.fetchall()
+    for row in res:
+        if row[0] not in db_map:
+            db_map[row[0]] = []
+        db_map[row[0]].append(row)
+    
+    ins_list = []
+    
+    ct,N = 0,len(db_map)+1
+    for l1l2eqid,res in db_map.items():
+        ct +=1
+        start_time = time.time()
+        #q_string = "select * from L3_EQUILIBRIUM_ACTIONS INNER JOIN EQUILIBRIUM_ACTIONS ON EQUILIBRIUM_ACTIONS.L1L2_EQ_ID=L3_EQUILIBRIUM_ACTIONS.L1L2_EQ_ID WHERE L3_EQUILIBRIUM_ACTIONS.L1L2_EQ_ID="+str(l1l2eqid)
+        #c.execute(q_string)
+        #res = c.fetchall()
+        end_time = time.time()
+        #print(end_time-start_time)
+        if len(res) == 0:
+            continue
+        agents = [res[0][9]]
+        sv_id = agents[0]
+        rv_agents = rv_agents = [int(x[6:9]) for x in ast.literal_eval(res[0][3])[0] if int(x[6:9])!=0]
+        for r in rv_agents:
+            if r not in agents:
+                agents.append(r)
+        time_ts = float(res[0][10])
+        if (sv_id,time_ts) not in emp_act_map or len(emp_act_map[(sv_id,time_ts)])==0:
+            continue
+        emp_actions = []
+        for ag_idx,ag in enumerate(agents):
+            if (ag,time_ts) in emp_act_map and len(emp_act_map[(ag,time_ts)])>0:
+                if ag_idx > 0:
+                    emp_act_entry = emp_act_map[(ag,time_ts)][0]
+                    emp_act_agent_translated = emp_actions[0][0:6] + emp_act_entry[3:6] + emp_act_entry[9:]  
+                    emp_actions.append(emp_act_agent_translated)
+                else:
+                    emp_actions.append(emp_act_map[(ag,time_ts)][0])
+            else:
+                continue
+        if len(agents) != len(emp_actions):
+            continue
+        traj_dict = dict()
+        this_l3_payoff = None
+        matched = False
+        for row in res:
+            l3_eq_acts = ast.literal_eval(row[3])[0]
+            l3_eq_payoffs = ast.literal_eval(row[5])[0]
+            all_l3_acts = ast.literal_eval(row[4])
+            this_l1l2_strat = [x.split('-')[0] for x in l3_eq_acts]
+            if this_l1l2_strat == emp_actions:
+                matched = True
+                for l3_strat in l3_eq_acts:
+                    l3_eq_traj_id = l3_strat.split('-')[1]
+                    if l3_strat[6:9] == '000':
+                        traj_dict[int(l3_strat[3:6])] = dict()
+                        traj_dict[int(l3_strat[3:6])]['traj_id'] = l3_eq_traj_id
+                        this_l3_payoff = l3_eq_payoffs[all_l3_acts.index(l3_strat)]
+                    else:
+                        traj_dict[int(l3_strat[6:9])] = dict()
+                        traj_dict[int(l3_strat[6:9])]['traj_id'] = l3_eq_traj_id
+        if not matched:
+            for row in res:
+                l3_eq_acts = ast.literal_eval(row[3])[0]
+                this_l1l2_strat = [x.split('-')[0] for x in l3_eq_acts]
+                print(this_l1l2_strat,emp_actions)
+            continue
+        start_time = time.time()
+        if len(agents) > 1:
+            q_string = "select track_id,time,X,Y from TRAJECTORIES_0"+str(file_id)+" WHERE TRACK_ID in "+str(tuple(agents))+" AND TIME >="+str(time_ts)+" ORDER BY TRACK_ID,TIME"
+        else:
+            q_string = "select track_id,time,X,Y from TRAJECTORIES_0"+str(file_id)+" WHERE TRACK_ID = "+str(agents[0])+" AND TIME >="+str(time_ts)+" ORDER BY TRACK_ID,TIME"
+        c.execute(q_string)
+        res = c.fetchall()
+        end_time = time.time()
+        #print(end_time-start_time)
+        
+        for row in res:
+            if 'traj' not in traj_dict[row[0]]:
+                traj_dict[row[0]]['traj'] = []
+            traj_dict[row[0]]['traj'].append((row[1],row[2],row[3]))
+        for k in traj_dict.keys():
+            traj_dict[k]['traj'] = [traj_dict[k]['traj'][i] for i in np.arange(0,len(traj_dict[k]['traj']),3)]
+            traj_dict[k]['traj'] = traj_dict[k]['traj'][:min(len(traj_dict[k]['traj']),50)]
+        eq = Equilibria(eval_config)
+        start_time = time.time()
+        pedestrian_info = utils.setup_pedestrian_info(time_ts)
+        eq.eval_config.set_pedestrian_info(pedestrian_info)
+        s_traj = traj_dict[sv_id]['traj']
+        s_act = emp_actions[0]
+        final_payoff = []
+        for ag_idx,ag in enumerate(agents):
+            if ag != sv_id:
+                r_traj = traj_dict[ag]['traj']
+                r_act = emp_actions[ag_idx]
+                emp_payoff = calc_l3_payoff(s_traj, r_traj, s_act, r_act,eq)
+                final_payoff.append(emp_payoff)
+            else:
+                if len(agents) == 1:
+                    emp_payoff = calc_l3_payoff(s_traj, None, s_act, None,eq)
+                    final_payoff.append(emp_payoff)
+        end_time = time.time()
+        #print(end_time-start_time)
+        if len(final_payoff) > 0:
+            emp_payoff = min(final_payoff)
+            payoff_diff = this_l3_payoff-emp_payoff
+            ins_list.append((l1l2eqid,payoff_diff,emp_payoff))              
+            print(ct,'/',N,payoff_diff,emp_payoff)
+        else:
+            print(ct,'/',N)
+    u_string = "INSERT INTO L3_PAYOFF_INFO VALUES (?,?,?)"
+    c.executemany(u_string,ins_list)
+    conn.commit()
+    conn.close()               
+               
+                        
+                        
+            
+        
     
     
 def build_analysis_table(eq_non_eq,u_deltas,file_id=None):
@@ -467,7 +654,6 @@ def build_analysis_table(eq_non_eq,u_deltas,file_id=None):
     eval_config.set_l3_eq_type(constants.L3_EQ_TYPE)
     eval_config.set_traj_type(constants.TRAJECTORY_TYPE)
     param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ eval_config.traj_type if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
-    all_segs = ['prep-turn%','exec-turn%','ln\__\__']
     all_conds = [[("EQUILIBRIUM_ACTIONS.SEGMENT like 'prep-turn%' ESCAPE '\\'","SEGMENT=prep-left-turn"),
                  ("EQUILIBRIUM_ACTIONS.SEGMENT like 'exec-turn%' ESCAPE '\\'","SEGMENT=exec-left-turn"),
                  ("EQUILIBRIUM_ACTIONS.SEGMENT like 'ln\__\__' ESCAPE '\\'","SEGMENT=OTHER LANES"),
@@ -480,9 +666,9 @@ def build_analysis_table(eq_non_eq,u_deltas,file_id=None):
                  ("TASK = 'S_E'","TASK=S_E"),
                  ("TASK = 'E_S'","TASK=E_S")],[
                  ("CAST(SUBSTR(NEXT_SIGNAL_CHANGE,2,INSTR(NEXT_SIGNAL_CHANGE,',')-2) AS DECIMAL) < 10 AND (SUBSTR(NEXT_SIGNAL_CHANGE,INSTR(NEXT_SIGNAL_CHANGE,',')+3,1) = 'Y' OR SUBSTR(NEXT_SIGNAL_CHANGE,INSTR(NEXT_SIGNAL_CHANGE,',')+3,1) = 'R')","NEXT_CHANGE=<10-Y/R"),
-                 ("CAST(SUBSTR(NEXT_SIGNAL_CHANGE,2,INSTR(NEXT_SIGNAL_CHANGE,',')-2) AS DECIMAL) < 10 AND SUBSTR(NEXT_SIGNAL_CHANGE,INSTR(NEXT_SIGNAL_CHANGE,',')+3,1) = 'Y'","NEXT_CHANGE=<10-G"),
+                 ("CAST(SUBSTR(NEXT_SIGNAL_CHANGE,2,INSTR(NEXT_SIGNAL_CHANGE,',')-2) AS DECIMAL) < 10 AND SUBSTR(NEXT_SIGNAL_CHANGE,INSTR(NEXT_SIGNAL_CHANGE,',')+3,1) = 'G'","NEXT_CHANGE=<10-G"),
                  ("CAST(SUBSTR(NEXT_SIGNAL_CHANGE,2,INSTR(NEXT_SIGNAL_CHANGE,',')-2) AS DECIMAL) >= 10 AND (SUBSTR(NEXT_SIGNAL_CHANGE,INSTR(NEXT_SIGNAL_CHANGE,',')+3,1) = 'Y' OR SUBSTR(NEXT_SIGNAL_CHANGE,INSTR(NEXT_SIGNAL_CHANGE,',')+3,1) = 'R')","NEXT_CHANGE=>EQ 10-Y/R"),
-                 ("CAST(SUBSTR(NEXT_SIGNAL_CHANGE,2,INSTR(NEXT_SIGNAL_CHANGE,',')-2) AS DECIMAL) >= 10 AND SUBSTR(NEXT_SIGNAL_CHANGE,INSTR(NEXT_SIGNAL_CHANGE,',')+3,1) = 'Y'","NEXT_CHANGE=>EQ 10-G")
+                 ("CAST(SUBSTR(NEXT_SIGNAL_CHANGE,2,INSTR(NEXT_SIGNAL_CHANGE,',')-2) AS DECIMAL) >= 10 AND SUBSTR(NEXT_SIGNAL_CHANGE,INSTR(NEXT_SIGNAL_CHANGE,',')+3,1) = 'G'","NEXT_CHANGE=>EQ 10-G")
                  ],[("SPEED <= 8","SPEED=LOW SPEED"),
                  ("SPEED <= 14 AND SPEED > 8","SPEED=MEDIUM SPEED"),
                  ("SPEED > 14","SPEED=HIGH SPEED")],[
@@ -507,10 +693,10 @@ def build_analysis_table(eq_non_eq,u_deltas,file_id=None):
     if not os.path.exists(os.path.join(constants.ROOT_DIR,constants.RESULTS)):
         os.makedirs(os.path.join(constants.ROOT_DIR,constants.RESULTS))
     working_file_id = file_id if file_id is not None else constants.CURRENT_FILE_ID
-    with open(os.path.join(constants.ROOT_DIR,constants.RESULTS,working_file_id+'_'+param_str.replace("|",',')+file_suffix+'.csv'), "w") as csv_file:
+    with open(os.path.join(constants.ROOT_DIR,'results_all_2907',working_file_id+'_'+param_str.replace("|",',')+file_suffix+'.csv'), "w") as csv_file:
         writer = csv.writer(csv_file, delimiter=',', quoting=csv.QUOTE_NONE,escapechar=' ')
         if eq_non_eq or u_deltas:
-            writer.writerow(['EQ_TYPE','SEGMENT','TASK','NEXT_CHANGE','SPEED','PEDESTRIAN','RELEV_VEHICLE','ACTIONS','ON_EQ'])
+            writer.writerow(['EQ_TYPE','SEGMENT','TASK','NEXT_CHANGE','SPEED','PEDESTRIAN','RELEV_VEHICLE','ACTIONS','AGGRESSIVE','FILE_ID','TRACK_ID','TIME','ON_EQ'])
         N = len(all_cond_combinations)
         for cond_idx,cond_info in enumerate(all_cond_combinations):
             cond,cond_str = ' and '.join([x[0] for x in cond_info]),[x[1].split("=")[1] for x in cond_info]
@@ -526,7 +712,8 @@ def build_analysis_table(eq_non_eq,u_deltas,file_id=None):
                 for act_k,act_info in eq_dict.items():
                     ct_act_k += 1
                     act_delta_dict = dict()
-                    emp_act_distr = []
+                    emp_act_distr,agent_tags = [],[]
+                    act_aggr_distr = []
                     eq_act_distr = []            
                     all_acts = ast.literal_eval(act_k)
                     disp_str = []
@@ -572,6 +759,13 @@ def build_analysis_table(eq_non_eq,u_deltas,file_id=None):
                                                 if eq_act == e_a:
                                                     brk=1
                                         emp_act_distr.append(min_payoff_diff)
+                                        aggr_tag = e_a.split('_')[-1]
+                                        if aggr_tag == 'AGGRESSIVE':
+                                            act_aggr_distr.append('Y')
+                                        else:
+                                            act_aggr_distr.append('N')
+                                        agent_tags.append(list(act_info['agent_detail'][acts_idx]))
+                                        
                             elif k == 'eq_acts':
                                 for acts_idx,eq_acts in enumerate(v):
                                     for act_idx,e_a in enumerate(eq_acts):
@@ -583,27 +777,27 @@ def build_analysis_table(eq_non_eq,u_deltas,file_id=None):
                         if len(emp_act_distr) > 0:
                             table_dict[cond_idx][str(all_acts)]['data'] = emp_act_distr
                             if eq_non_eq:
-                                for emp_pay_diff in emp_act_distr:
+                                for emp_pay_diff,aggr_tag,ag_tag in zip(emp_act_distr,act_aggr_distr,agent_tags):
                                     if emp_pay_diff == 0:
-                                        writer.writerow([param_str]+cond_str+['acts-'+str(all_act_map[str(all_acts)]),0])
-                                        print(','.join([x for x in cond_str]),'acts-'+str(all_act_map[str(all_acts)]),0)
+                                        writer.writerow([param_str]+cond_str+['acts-'+str(all_act_map[str(all_acts)]),aggr_tag,ag_tag[0],ag_tag[1],ag_tag[2],0])
+                                        print(','.join([x for x in cond_str]),'acts-'+str(all_act_map[str(all_acts)]),aggr_tag,ag_tag[0],ag_tag[1],ag_tag[2],0)
                                         plt_x_ct += 1
                                         plt_X.append(plt_x_ct)
                                         plt_Y.append(0)
                                     else:
-                                        writer.writerow([param_str]+cond_str+['acts-'+str(all_act_map[str(all_acts)]),1])
-                                        print(','.join([x for x in cond_str]),'acts-'+str(all_act_map[str(all_acts)]),1)
+                                        writer.writerow([param_str]+cond_str+['acts-'+str(all_act_map[str(all_acts)]),aggr_tag,ag_tag[0],ag_tag[1],ag_tag[2],1])
+                                        print(','.join([x for x in cond_str]),'acts-'+str(all_act_map[str(all_acts)]),aggr_tag,ag_tag[0],ag_tag[1],ag_tag[2],1)
                                         plt_x_ct += 1
                                         plt_X.append(plt_x_ct)
                                         plt_Y.append(1)
                             else:
                                 if u_deltas:
-                                    for emp_pay_diff in emp_act_distr:
-                                        writer.writerow([param_str]+cond_str+['acts-'+str(all_act_map[str(all_acts)]),emp_pay_diff])
-                                        print(file_id,str(cond_idx)+'/'+str(N),constants.TRAJECTORY_TYPE,constants.L1_EQ_TYPE,constants.L3_EQ_TYPE,','.join([x for x in cond_str]),'acts-'+str(all_act_map[str(all_acts)]),emp_pay_diff)
+                                    for emp_pay_diff,aggr_tag,ag_tag in zip(emp_act_distr,act_aggr_distr,agent_tags):
+                                        writer.writerow([param_str]+cond_str+['acts-'+str(all_act_map[str(all_acts)]),aggr_tag,ag_tag[0],ag_tag[1],ag_tag[2],emp_pay_diff])
+                                        print(working_file_id,str(cond_idx)+'/'+str(N),constants.TRAJECTORY_TYPE,constants.L1_EQ_TYPE,constants.L3_EQ_TYPE,','.join([x for x in cond_str]),'acts-'+str(all_act_map[str(all_acts)]),aggr_tag,ag_tag[0],ag_tag[1],ag_tag[2],emp_pay_diff)
                                         
                                 else:
-                                    for emp_pay_diff in emp_act_distr:
+                                    for emp_pay_diff,aggr_tag,ag_tag in zip(emp_act_distr,act_aggr_distr,agent_tags):
                                         plt_x_ct += 1
                                         plt_X.append(plt_x_ct)
                                         plt_Y.append(emp_pay_diff)
@@ -618,8 +812,8 @@ def build_analysis_table(eq_non_eq,u_deltas,file_id=None):
                                         l = -popt[0]
                                     table_dict[cond_idx][str(all_acts)]['lambda'] = l
                                     table_dict[cond_idx][str(all_acts)]['N'] = len(emp_act_distr)
-                                    print(param_str,','.join([x for x in cond_str]),'|'.join(all_acts),len(emp_act_distr),l)
-                                    writer.writerow([param_str]+cond_str+['|'.join(all_acts),len(emp_act_distr),l])
+                                    print(param_str,','.join([x for x in cond_str]),'|'.join(all_acts),len(emp_act_distr),aggr_tag,ag_tag[0],ag_tag[1],ag_tag[2],l)
+                                    writer.writerow([param_str]+cond_str+['|'.join(all_acts),len(emp_act_distr),aggr_tag,ag_tag[0],ag_tag[1],ag_tag[2],l])
     print(all_act_map)
     '''
     X = np.arange(0,1.1,0.05)
@@ -874,7 +1068,6 @@ def build_results_tree():
 Assumes that the trajectories are already present in the cache.'''
 def calc_eqs_for_hopping_trajectories():
     db_utils.reduce_relev_agents()
-    show_plots = False
     update_only = True
     eval_config = EvalConfig()
     eval_config.set_l1_eq_type(constants.L1_EQ_TYPE)
@@ -924,9 +1117,23 @@ def main():
     traj_util_obj.update_pedestrian_info_in_eq_data(param_str)
     
     build_analysis_table(False,True)
-    build_analysis_table(True,False)
+    #build_analysis_table(True,False)
 
-'''constants.TRAJECTORY_TYPE = 'BASELINE'
-constants.L1_EQ_TYPE = 'NASH'
-constants.L3_EQ_TYPE = None
-build_analysis_table(False,True,'769')'''
+def generate_results_file():
+    constants.CURRENT_FILE_ID = sys.argv[1]
+    constants.TRAJECTORY_TYPE = sys.argv[2]
+    constants.L1_EQ_TYPE = sys.argv[3]
+    constants.L3_EQ_TYPE = sys.argv[4] if sys.argv[4] != 'None' else None
+    constants.TEMP_TRAJ_CACHE = 'temp_traj_cache_'+constants.CURRENT_FILE_ID+'_'+constants.TRAJECTORY_TYPE
+    constants.L3_ACTION_CACHE = 'l3_action_trajectories_'+constants.CURRENT_FILE_ID
+    constants.RESULTS = 'results_'+constants.CURRENT_FILE_ID
+    constants.setup_logger()
+    
+    build_analysis_table(False,True)
+
+#constants.TRAJECTORY_TYPE = 'BASELINE'
+#constants.L1_EQ_TYPE = 'BR'
+#constants.L3_EQ_TYPE = None
+#
+#anaylze_l3_equlibrium()
+#main()

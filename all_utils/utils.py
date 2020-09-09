@@ -493,10 +493,11 @@ def reduce_relev_agents(agent_id,time_ts,relev_agents):
     
 
 ''' add two parallel lines to line at a lateral distance on either side of line'''
-def add_parallel(line, dist):
+def add_parallel(line, dist, dist2=None):
     #if len(line) < 2:
         #logging.warn("attemped to add parallel to line size less than 2")
-        
+    if dist2 == None:
+        dist2 = dist
     pointline = True if len(line) < 2 else False
     p_line_lat1, p_line_lat2 = [],[]
     if not pointline:
@@ -508,10 +509,10 @@ def add_parallel(line, dist):
             cl_normal = (cl_angle + (math.pi/2))%(2*math.pi)
             ''' add the point normal to pt1 and pt2 on both sides '''
             pt1_lat1 = (pt1[0] + dist*np.cos(cl_normal), pt1[1] + dist*np.sin(cl_normal))
-            pt1_lat2 = (pt1[0] - dist*np.cos(cl_normal), pt1[1] - dist*np.sin(cl_normal))
+            pt1_lat2 = (pt1[0] - dist2*np.cos(cl_normal), pt1[1] - dist2*np.sin(cl_normal))
             
             pt2_lat1 = (pt2[0] + dist*np.cos(cl_normal), pt2[1] + dist*np.sin(cl_normal))
-            pt2_lat2 = (pt2[0] - dist*np.cos(cl_normal), pt2[1] - dist*np.sin(cl_normal))
+            pt2_lat2 = (pt2[0] - dist2*np.cos(cl_normal), pt2[1] - dist2*np.sin(cl_normal))
             if l_idx == 1:
                 p_line_lat1.append(pt1_lat1)
                 p_line_lat2.append(pt1_lat2)

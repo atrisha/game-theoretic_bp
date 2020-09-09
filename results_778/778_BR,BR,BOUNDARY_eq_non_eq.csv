@@ -1,0 +1,862 @@
+EQ_TYPE,SEGMENT,TASK,NEXT_CHANGE,SPEED,PEDESTRIAN,RELEV_VEHICLE,ACTIONS,ON_EQ
+BR|BR|BOUNDARY,prep-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,N_E,<10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,N_E,<10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,W_N,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-3,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-3,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-3,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-3,0
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,prep-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-Y/R,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-4,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,S_W,>EQ  10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-5,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-5,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-5,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-5,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-5,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-5,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-5,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-5,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-5,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,<10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,N_E,>EQ  10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-5,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-5,0
+BR|BR|BOUNDARY,exec-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-5,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-5,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-5,0
+BR|BR|BOUNDARY,exec-left-turn,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-5,0
+BR|BR|BOUNDARY,exec-left-turn,W_N,<10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-5,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,MEDIUM  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,MEDIUM  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,MEDIUM  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,MEDIUM  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,W_N,>EQ  10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-5,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-5,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-Y/R,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-Y/R,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-5,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-G,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-G,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,<10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-1,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-left-turn,E_S,>EQ  10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_S,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,0
+BR|BR|BOUNDARY,OTHER  LANES,W_S,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,<10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,<10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-8,0
+BR|BR|BOUNDARY,OTHER  LANES,W_S,<10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,0
+BR|BR|BOUNDARY,OTHER  LANES,W_S,<10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,<10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,<10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-8,0
+BR|BR|BOUNDARY,OTHER  LANES,W_S,<10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,0
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-8,0
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-4,0
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-Y/R,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,0
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-8,0
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-4,0
+BR|BR|BOUNDARY,OTHER  LANES,W_S,>EQ  10-G,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_W,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,N_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,<10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,W_N,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,0
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,0
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,S_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-8,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,<10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,<10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,<10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,<10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-Y/R,MEDIUM  SPEED,PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-9,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,OTHER  LANES,E_S,>EQ  10-G,MEDIUM  SPEED,PEDESTRIAN,  RL  >  2,acts-2,1
+BR|BR|BOUNDARY,prep-right-turn,W_S,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-10,0
+BR|BR|BOUNDARY,prep-right-turn,W_S,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-right-turn,W_S,<10-G,LOW  SPEED,PEDESTRIAN,  RL  >  2,acts-10,0
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,0
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-10,0
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,0
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,0
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-10,0
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,0
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,prep-right-turn,W_S,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,prep-right-turn,S_E,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,prep-right-turn,S_E,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,prep-right-turn,S_E,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,prep-right-turn,S_E,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-10,1
+BR|BR|BOUNDARY,prep-right-turn,S_E,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-10,0
+BR|BR|BOUNDARY,prep-right-turn,S_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-right-turn,S_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-right-turn,S_E,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-4,1
+BR|BR|BOUNDARY,prep-right-turn,S_E,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,prep-right-turn,S_E,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-4,1
+BR|BR|BOUNDARY,prep-right-turn,S_E,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-10,1
+BR|BR|BOUNDARY,prep-right-turn,S_E,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-10,0
+BR|BR|BOUNDARY,prep-right-turn,S_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,prep-right-turn,S_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,<10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,W_S,<10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,W_S,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,<10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,<10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,<10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,W_S,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-Y/R,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-Y/R,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-Y/R,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-Y/R,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-Y/R,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-G,LOW  SPEED,PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-G,LOW  SPEED,PEDESTRIAN,  RL  <EQ  2,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,1
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-G,LOW  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-G,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-G,MEDIUM  SPEED,PEDESTRIAN,RL  0,acts-2,0
+BR|BR|BOUNDARY,exec-right-turn,S_E,>EQ  10-G,MEDIUM  SPEED,NO  PEDESTRIAN,RL  0,acts-2,0

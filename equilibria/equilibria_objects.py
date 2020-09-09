@@ -581,6 +581,9 @@ class Equilibria:
                     if sv_id in self.eval_config.eq_acts_in_db[time_ts]:
                         log.info("equilibrium already in db....continuing "+str(ct)+"/"+str(N))
                         continue
+                if len(sv_det[sv_id]) == 0:
+                    log.info("no info on sv....continuing "+str(ct)+"/"+str(N))
+                    continue
                 equilibra_dict[time_ts][sv_id] = dict()
                 l1l2_utility_dict,sv_actions,belief_dict = self.build_l1l2_utility_table(sv_det,time_ts)
                 
@@ -619,8 +622,9 @@ class Equilibria:
                             payoffdict.update(l1l2_processor_obj.l1l2_payoffdict)
                 logging.info(self.eval_config.direction+" "+str(time_ts)+"-"+str(sv_id)+":"+str(ct)+'/'+str(N)+":"+str(N_payoff_table))
                 all_eq = []
+                l1_agent = False
                 if self.eval_config.l1_eq == 'NASH':
-                    eq_core = EquilibriaCore(self.eval_config.num_agents,payoffdict,N_payoff_table)
+                    eq_core = EquilibriaCore(self.eval_config.num_agents,payoffdict,N_payoff_table,sv_actions,False)
                     logging.info('calculating equilibria...')
                     eq = eq_core.calc_pure_strategy_nash_equilibrium_exhaustive()
                     logging.info('calculating equilibria...DONE '+str(eq_core.exec_time)+'ms')
@@ -659,38 +663,34 @@ class Equilibria:
                                                 sv_act_payoffs.append(sv_payoff)
                         l1l2_eq.all_act_payoffs = sv_act_payoffs
                         all_eq.append(l1l2_eq)
-                elif self.eval_config.l1_eq == 'BR':
-                    eq_core = EquilibriaCore(self.eval_config.num_agents,payoffdict,N_payoff_table)
+                elif self.eval_config.l1_eq == 'BR' or self.eval_config.l1_eq == 'L1BR':
+                    l1_agent = True if self.eval_config.l1_eq == 'L1BR' else False
+                    eq_core = EquilibriaCore(self.eval_config.num_agents,payoffdict,N_payoff_table,sv_actions,l1_agent)
                     logging.info('calculating equilibria...')
                     eq = eq_core.calc_best_response()
                     for e,p in eq.items():
                         l1l2_eq = self.L1L2Equilibrium()
                         l1l2_eq.equilibria_actions = {(int(k[0][3:6]), int(k[0][6:9])):(k[0],k[1]) for k in zip(e,p)}
-                        eq_act_tuple = [x if x[6:9]!='000' else None for x in list(e)]
-                        sv_act_payoffs = []
-                        for sv_act in sv_actions:
-                            _act_tup = tuple([x if x is not None else sv_act for x in eq_act_tuple])
-                            sv_index = _act_tup.index(sv_act)
-                            sv_payoff = round(payoffdict[_act_tup][sv_index],6)
-                            sv_act_payoffs.append(sv_payoff)
+                        if not l1_agent:
+                            sv_act_payoffs = eq_core.sv_action_payoffs
+                        else:
+                            sv_act_payoffs = eq_core.sv_act_payoffs[e]
                         readable_eq = utils.print_readable(e)
                         l1l2_eq.all_act_payoffs = sv_act_payoffs
                         l1l2_eq.oth_ag_eq_info = self.construct_oth_ag_eq_info(e,p,time_ts,sv_id,payoffdict)
                         all_eq.append(l1l2_eq)
-                elif self.eval_config.l1_eq == 'MAXMIN':
-                    eq_core = EquilibriaCore(self.eval_config.num_agents,payoffdict,N_payoff_table)
+                elif self.eval_config.l1_eq == 'MAXMIN' or self.eval_config.l1_eq == 'L1MAXMIN':
+                    l1_agent = True if self.eval_config.l1_eq == 'L1MAXMIN' else False
+                    eq_core = EquilibriaCore(self.eval_config.num_agents,payoffdict,N_payoff_table,sv_actions,l1_agent)
                     logging.info('calculating equilibria...')
                     eq = eq_core.calc_max_min_response()
                     for e,p in eq.items():
                         l1l2_eq = self.L1L2Equilibrium()
                         l1l2_eq.equilibria_actions = {(int(k[0][3:6]), int(k[0][6:9])):(k[0],k[1]) for k in zip(e,p)}
-                        eq_act_tuple = [x if x[6:9]!='000' else None for x in list(e)]
-                        sv_act_payoffs = []
-                        for sv_act in sv_actions:
-                            _act_tup = tuple([x if x is not None else sv_act for x in eq_act_tuple])
-                            sv_index = _act_tup.index(sv_act)
-                            sv_payoff = round(payoffdict[_act_tup][sv_index],6)
-                            sv_act_payoffs.append(sv_payoff)
+                        if not l1_agent:
+                            sv_act_payoffs = eq_core.sv_action_payoffs
+                        else:
+                            sv_act_payoffs = eq_core.sv_act_payoffs[e]
                         readable_eq = utils.print_readable(e)
                         l1l2_eq.all_act_payoffs = sv_act_payoffs
                         l1l2_eq.oth_ag_eq_info = self.construct_oth_ag_eq_info(e,p,time_ts,sv_id,payoffdict)
@@ -762,14 +762,16 @@ class Equilibria:
                         l3_ins_list.append((str(max_id),constants.CURRENT_FILE_ID,self.eval_config.l3_eq,str(l3_eq_acts),str(all_l3_acts),str(all_l3_payoffs)))
                 
                 max_id += 1
-        c.executemany(q_string,ins_list)
-        conn.commit()
-        if self.eval_config.l3_eq is not None:
-            q_string = "REPLACE INTO L3_EQUILIBRIUM_ACTIONS VALUES (?,?,?,?,?,?)"
-            c.executemany(q_string,l3_ins_list)
-        q_string = "REPLACE INTO EQUILIBRIUM_ACTIONS_OTHER_AGENTS VALUES (?,?,?,?)"
-        c.executemany(q_string,oth_eq_ins_list)
-        conn.commit()
+        
+        if len(ins_list) > 0:
+            c.executemany(q_string,ins_list)
+            conn.commit()
+            if self.eval_config.l3_eq is not None:
+                q_string = "REPLACE INTO L3_EQUILIBRIUM_ACTIONS VALUES (?,?,?,?,?,?)"
+                c.executemany(q_string,l3_ins_list)
+            q_string = "REPLACE INTO EQUILIBRIUM_ACTIONS_OTHER_AGENTS VALUES (?,?,?,?)"
+            c.executemany(q_string,oth_eq_ins_list)
+            conn.commit()
         conn.close()
         
     def update_db(self,colmn_list):

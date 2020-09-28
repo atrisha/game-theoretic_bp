@@ -1,0 +1,26 @@
+Software dependency: R studio Version 1.3
+R libraries used:
+
+library(tidyverse)
+library(broom)
+library(purrr)
+library(dplyr)
+library(dominanceanalysis)
+library(sjPlot)
+library(rstatix)
+
+Note: The R scripts clears the environment variables before each run. 
+
+Step 0. Extract code_and_data.zip to a location of your choice.
+
+Step 1. Open R studio and set the working directory to the following folder
+
+setwd("<full path to code_and_data folder>\\results")
+
+Step 2. For RQ 1 and 2, run
+
+source('<full path to code_and_data folder>/r_scripts/analysis_rq_1-2.R', encoding = 'UTF-8')
+
+Step 3. For RQ 3, run
+
+source('<full path to code_and_data folder>/r_scripts/analysis_rq_3.R', encoding = 'UTF-8')

@@ -1,0 +1,3 @@
+from equilibria.equilibria_estimation import anaylze_l3_equlibrium
+
+anaylze_l3_equlibrium()

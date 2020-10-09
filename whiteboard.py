@@ -343,11 +343,8 @@ for par in p:
     plt.plot(a,dist_payoffs_exp(a,par[0],par[1]),color='red')
 plt.show()
 '''
-ag = [769, 140, 180.346833]
-s = ','.join([str(x).strip(' ') for x in [[769, 140, 180.346833]]]).strip()
-print(s) 
-s = [str(x) for x in ag]
-print(s)
+import os
+print(os.path.join(os.path.abspath(__file__),"CACHE"))
     
     
     

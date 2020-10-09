@@ -162,14 +162,20 @@ class TrajectoryUtils:
     def update_l1_action_in_eq_data(self,param_str):
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
         c = conn.cursor()
-        u_string = "update EQUILIBRIUM_ACTIONS SET EMPIRICAL_ACTION=NULL where EQ_CONFIG_PARMS='"+param_str+"'"
+        if param_str == 'all':
+            u_string = "update EQUILIBRIUM_ACTIONS SET EMPIRICAL_ACTION=NULL"
+        else:
+            u_string = "update EQUILIBRIUM_ACTIONS SET EMPIRICAL_ACTION=NULL where EQ_CONFIG_PARMS='"+param_str+"'"
         c.execute(u_string)
         conn.commit()
         q_string = "SELECT * FROM L1_ACTIONS"
         c.execute(q_string)
         res = c.fetchall()
         l1_act_map = {(row[0],row[1]):row[2] for row in res}
-        u_string = "update EQUILIBRIUM_ACTIONS SET EMPIRICAL_ACTION=? where TIME=? AND TRACK_ID=? AND EQ_CONFIG_PARMS='"+param_str+"'"
+        if param_str == 'all':
+            u_string = "update EQUILIBRIUM_ACTIONS SET EMPIRICAL_ACTION=? where TIME=? AND TRACK_ID=?"
+        else:
+            u_string = "update EQUILIBRIUM_ACTIONS SET EMPIRICAL_ACTION=? where TIME=? AND TRACK_ID=? AND EQ_CONFIG_PARMS='"+param_str+"'"
         u_list = []
         for k,v in l1_act_map.items():
             u_list.append((v,k[0],k[1]))
@@ -264,7 +270,7 @@ class TrajectoryUtils:
         time_track_list = [(row[0],row[1]) for row in res if row[1]!=0]
         action_list = []
         ct,N = 0,len(time_track_list)
-        all_files = os.listdir(os.path.join(constants.ROOT_DIR, constants.L3_ACTION_CACHE))
+        all_files = os.listdir(os.path.join(constants.CACHE_DIR, constants.L3_ACTION_CACHE))
         all_files.sort()
         N = len(all_files)
         file_key_map = dict()
@@ -274,15 +280,15 @@ class TrajectoryUtils:
             ag_id = int(st.split('-')[0])
             relev_id,time = st.split('-')[1].split('_')
             if int(relev_id) == 0:
-                file_key_map[(ag_id,time)] = os.path.join(constants.ROOT_DIR,constants.L3_ACTION_CACHE,org_str)
+                file_key_map[(ag_id,time)] = os.path.join(constants.CACHE_DIR,constants.L3_ACTION_CACHE,org_str)
             else:
                 if (int(relev_id),time) not in file_key_map:
-                    file_key_map[(int(relev_id),time)] = os.path.join(constants.ROOT_DIR,constants.L3_ACTION_CACHE,org_str)
+                    file_key_map[(int(relev_id),time)] = os.path.join(constants.CACHE_DIR,constants.L3_ACTION_CACHE,org_str)
                 
         u_string = "INSERT INTO L1_ACTIONS VALUES (?,?,?)"
         u_list = []
         for time_ts,agent_id in time_track_list:
-            if agent_id == 2 and time_ts == 8.008:
+            if agent_id == 100 and time_ts > 107:
                 brk = 1
             ct += 1
             pedestrian_info = utils.setup_pedestrian_info(time_ts)
@@ -380,7 +386,9 @@ class TrajectoryUtils:
 
 def main():
     import sys
-    constants.CURRENT_FILE_ID = sys.argv[1]
+    constants.CURRENT_FILE_ID = '769'
     constants.L3_ACTION_CACHE = 'l3_action_trajectories_'+constants.CURRENT_FILE_ID
     traj_util_obj = TrajectoryUtils()
-    traj_util_obj.assign_l1_actions()
+    #traj_util_obj.assign_l1_actions()
+    #traj_util_obj.update_l1_action_in_eq_data('all')
+#main()

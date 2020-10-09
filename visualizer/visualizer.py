@@ -13,7 +13,13 @@ from all_utils.utils import kph_to_mps
 import matplotlib.animation as animation
 log = constants.common_logger
 from collections import OrderedDict
+from collections import Counter
 import itertools
+import math
+import seaborn as sn
+import pandas as pd
+import ast
+from matplotlib import rcParams
 
 def show_l3_payoff_hist():
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+'769'+'\\uni_weber_'+'769'+'.db')
@@ -355,7 +361,7 @@ def plot_traffic_regions():
     import ast
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\769\\uni_weber_769.db')
     c = conn.cursor()
-    q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point' and region_property <> 'left_boundary'"
+    q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point' and region_property == 'center_line'"
     c.execute(q_string)
     q_res = c.fetchall()
     plt.axis("equal")
@@ -434,10 +440,12 @@ def plot_exit_yaws():
             plt.arrow(statistics.mean(all_exits[k][0]), statistics.mean(all_exits[k][1]), 5 * math.cos(v), 5 * math.sin(v), fc='r', ec='k', head_width=.25, head_length=.25)
     plt.show()
     
-      
+    
+    
+pause = False  
 def show_baseline_animation():
     
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\769\\uni_weber_generated_trajectories_769.db')
     c = conn.cursor()
     q_string = "select * from GENERATED_TRAJECTORY_INFO order by time"
     c.execute(q_string)
@@ -446,66 +454,236 @@ def show_baseline_animation():
     ct,N = 0,len(res)
     for row in res:
         ct += 1
+        #if ct == 100:
+        #    break
         log.info("loading "+str(ct)+'/'+str(N))
-        if row[6] not in traj_info_dict:
-            traj_info_dict[row[6]] = dict()
-            traj_info_dict[row[6]][(row[2],row[3])] = row[1]
+        t = int(round(row[6]))
+        if t not in traj_info_dict:
+            traj_info_dict[t] = dict()
+            traj_info_dict[t][(row[2],row[3])] = row[1]
         else:
-            if (row[2],row[3]) not in traj_info_dict[row[6]]:
-                traj_info_dict[row[6]][(row[2],row[3])] = row[1]
+            if (row[2],row[3]) not in traj_info_dict[t]:
+                traj_info_dict[t][(row[2],row[3])] = row[1]
     ct,N = 0,len(traj_info_dict)    
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\769\\uni_weber_769.db')
+    c = conn.cursor()
+    emp_traj_dict = dict()
+    for k,v in traj_info_dict.items():
+        ct += 1
+        log.info("loading "+str(ct)+'/'+str(N))
+        q_string = "select * from TRAJECTORIES_0769 where time >="+str(k)+" and time <"+str(k+1)+" order by track_id,time"
+        c.execute(q_string)
+        res = c.fetchall()
+        temp_trajs = dict()
+        for row in res:
+            if row[0] not in temp_trajs:
+                temp_trajs[row[0]] = []
+            temp_trajs[row[0]].append((row[1], row[2]))
+        emp_traj_dict[k] = dict()
+        for t_k,t_v in traj_info_dict[k].items():
+            if t_k[1] == 0:
+                if t_k[0] in temp_trajs:
+                    emp_traj_dict[k][t_k] = temp_trajs[t_k[0]]
+            else:
+                if t_k[1] in temp_trajs:
+                    emp_traj_dict[k][t_k] = temp_trajs[t_k[1]]
+        for o_a,o_t in temp_trajs.items():
+            if o_a not in [x[0] for x in traj_info_dict[k].keys()] and o_a not in [x[1] for x in traj_info_dict[k].keys()]:
+                emp_traj_dict[k][(o_a,-1)] = o_t
+    q_string = "select * from L1_ACTIONS"
+    c.execute(q_string)
+    res = c.fetchall()                
+    acts_dict = dict()
+    for row in res:
+        if (round(row[0]),row[1]) not in acts_dict:
+            acts_dict[(round(row[0]),row[1])] = [utils.get_l1_action_string(int(x[9:11])) for x in ast.literal_eval(row[2])]
+    q_string = "select EQUILIBRIUM_ACTIONS.TRACK_ID, EQUILIBRIUM_ACTIONS.TIME,EQ_ACTIONS from EQUILIBRIUM_ACTIONS where EQUILIBRIUM_ACTIONS.EQ_CONFIG_PARMS='NASH|BR|BOUNDARY' order by EQUILIBRIUM_ACTIONS.TRACK_ID, EQUILIBRIUM_ACTIONS.TIME"
+    c.execute(q_string)
+    res = c.fetchall()                
+    eq_acts_dict = dict()
+    for row in res:
+        if (round(row[1]),row[0]) not in eq_acts_dict:
+            eq_acts_dict[(round(row[1]),row[0])] = list(dict.fromkeys([utils.get_l1_action_string(int(x[9:11])) for x in ast.literal_eval(row[2])]))
+    f=1
+    '''
     for k,v in traj_info_dict.items():
         ct += 1
         log.info("loading "+str(ct)+'/'+str(N))
         for ag,traj_info_id in v.items():
-            q_string = "select * from GENERATED_GAUSSIAN_TRAJECTORY where GENERATED_GAUSSIAN_TRAJECTORY.TRAJECTORY_INFO_ID="+str(traj_info_id)+" order by TRAJECTORY_ID,TIME"
+            q_string = "select * from GENERATED_BASELINE_TRAJECTORY where GENERATED_BASELINE_TRAJECTORY.TRAJECTORY_INFO_ID="+str(traj_info_id)+" order by TRAJECTORY_ID,TIME"
             print(traj_info_id)
             c.execute(q_string)
             res = c.fetchall()
+            if len(res) == 0:
+                continue
             selected_traj_id = res[0][0]
             traj_info_dict[k][ag] = [(row[3],row[4]) for row in res if row[0]==selected_traj_id]
-    
-    
-    #plt.xlim(538777, 538900)
-    #plt.ylim(483960, 4814070)
+    '''
+    traj_info_dict = emp_traj_dict
     fig, ax = plt.subplots()
-    plot_traffic_regions()
-    plt.xlim(538777, 538900)
-    plt.ylim(4813960, 4814065)
+    #plot_traffic_regions()
+    plt.xlim(538780, 538890)
+    plt.ylim(4813970, 4814055)
+    img = plt.imread("D:\\behavior modeling\\background.jpg")
+    ax.imshow(img, extent=[538780, 538890, 4813970, 4814055])
     title = ax.text(0.5,0.85, "", bbox={'facecolor':'w', 'alpha':0.5, 'pad':5},
                 transform=ax.transAxes, ha="center")
     
     #line1, = ax.plot([], [], "ro-")
     #line2, = ax.plot([], [], "ro-")
+    def onClick(event):
+        global pause
+        pause ^= True
+        print('paused',pause)
     
     def connect(p):
         i,time_ts = p[0],p[1]
         lines = dict()
+        acts = dict()
         #start=max((i-5,0))
         curr_line = []
+        curr_acts = []
         for ag,traj in traj_info_dict[time_ts].items():
             if ag not in lines:
-                col = 'red' if ag[1] == 0 else 'blue'
+                if ag[1] == 0:
+                    col = 'red'
+                elif ag[1] == -1:
+                    col = 'black'
+                else: 
+                    col = 'blue'
                 lines[ag], = ax.plot([], [], "o-", c=col)
+                acts[ag] = ax.text(0.4,0.85, "", bbox={'facecolor':'w', 'alpha':0.5, 'pad':5}, ha="center", fontsize="x-small")
             start_i = max(0,i-5)
             #line1.set_data(sample_path1[start:i,0],sample_path1[start:i,1])
             #line2.set_data(sample_path2[start:i,0],sample_path2[start:i,1])
             if i+1 <= len(traj):
                 lines[ag].set_data([x[0] for x in traj[start_i:i+1]],[x[1] for x in traj[start_i:i+1]])
+                this_eq_act = []
+                this_act = ''
+                if ag[1] == 0:
+                    this_act = str(acts_dict[(time_ts,ag[0])]) if (time_ts,ag[0]) in acts_dict else 'x'
+                    if (time_ts,ag[0]) in eq_acts_dict:
+                        for act in eq_acts_dict[(time_ts,ag[0])]:
+                            if this_act != 'x':
+                                if act in acts_dict[(time_ts,ag[0])]:
+                                    this_eq_act.append(act)
+                                    break
+                        if len(this_eq_act) == 0:
+                            this_eq_act = eq_acts_dict[(time_ts,ag[0])]
+                    this_act = this_act+'\n'+str(this_eq_act)
+                elif ag[1] != -1:
+                    this_act = str(acts_dict[(time_ts,ag[1])]) if (time_ts,ag[1]) in acts_dict else 'x'
+                    if (time_ts,ag[1]) in eq_acts_dict:
+                        for act in eq_acts_dict[(time_ts,ag[1])]:
+                            if this_act != 'x':
+                                if act in acts_dict[(time_ts,ag[1])]:
+                                    this_eq_act.append(act)
+                                    break
+                        if len(this_eq_act) == 0:
+                            this_eq_act = eq_acts_dict[(time_ts,ag[1])]
+                    this_act = this_act+'\n'+str(this_eq_act) if len(this_eq_act) > 0 else this_act
+                acts[ag].set_text(this_act)
+                acts[ag].set_x(traj[start_i][0])
+                acts[ag].set_y(traj[start_i][1])
                 curr_line.append(lines[ag])
+                curr_acts.append(acts[ag])
         title.set_text(str((time_ts,i)))
-        return tuple(curr_line+[title])
+        return tuple(curr_line+[title]+curr_acts)
     frame_list = []
     for k,v in traj_info_dict.items():
+        if len(v) == 0:
+            continue
         max_len = max([len(t) for _,t in v.items()])
         this_frame_list = [(x,k)for x in np.arange(max_len)]
         frame_list.extend(this_frame_list)
     frame_list.sort(key=lambda tup: tup[1])
+    fig.canvas.mpl_connect('button_press_event', onClick)
     ani = animation.FuncAnimation(fig, connect, frames=frame_list, interval=100, blit=True, repeat=False)
     plt.show()
     
 
+def plot_confusion_matrix():
+    #all_models = ["NASH|MAXMIN|BOUNDARY","NASH|BASELINE_ONLY","NASH|BR|GAUSSIAN","NASH|MAXMIN|GAUSSIAN","BR|BR|BOUNDARY","BR|MAXMIN|BOUNDARY","BR|BR|GAUSSIAN","BR|MAXMIN|GAUSSIAN","MAXMIN|BR|BOUNDARY","MAXMIN|MAXMIN|BOUNDARY","MAXMIN|BR|GAUSSIAN","MAXMIN|MAXMIN|GAUSSIAN","L1BR|BR|BOUNDARY","L1BR|MAXMIN|BOUNDARY","L1BR|BR|GAUSSIAN","L1BR|MAXMIN|GAUSSIAN","L1MAXMIN|BR|BOUNDARY","L1MAXMIN|MAXMIN|BOUNDARY","L1MAXMIN|BR|GAUSSIAN","L1MAXMIN|MAXMIN|GAUSSIAN","BR|BASELINE_ONLY","MAXMIN|BASELINE_ONLY","L1BR|BASELINE_ONLY","L1MAXMIN|BASELINE_ONLY"]
+    all_models = ["NASH|MAXMIN|BOUNDARY"]
+    for idx,model in enumerate(all_models):
+        all_files = [769,770,771]+np.arange(775,786).tolist()
+        confusion_dict = dict()
+        for file_id in all_files:
+            print(idx+1,file_id)
+            constants.CURRENT_FILE_ID = str(file_id)
+            conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
+            c = conn.cursor()
+            q_string = "select * from EQUILIBRIUM_ACTIONS where EQUILIBRIUM_ACTIONS.EQ_CONFIG_PARMS='"+model+"' order by track_id,time"
+            c.execute(q_string)
+            res = c.fetchall()
+            for row in res:
+                eq_acts = ast.literal_eval(row[14])
+                emp_acts = ast.literal_eval(row[15])
+                if len(emp_acts) > 0 and len(eq_acts) > 0:
+                    for emp_act in emp_acts:
+                        emp_act_str = utils.get_l1_action_string(int(emp_act[9:11]))
+                        if emp_act_str not in confusion_dict:
+                            confusion_dict[emp_act_str] = []
+                        if emp_act in eq_acts:
+                            confusion_dict[emp_act_str].append(emp_act_str)
+                        else:
+                            for eq_act in eq_acts:
+                                eq_act_str = utils.get_l1_action_string(int(eq_act[9:11]))
+                                confusion_dict[emp_act_str].append(eq_act_str)
+                            ''' since the mis-prediction is multi-valued we need to add N-1 true values to the count for proper normalization'''
+                            confusion_dict[emp_act_str] += [emp_act_str]*(len(eq_acts)-1)
+        confusion_key_list = list(confusion_dict.keys())
+        confusion_matrix = []
+        for k in confusion_key_list:
+            confusion_arr = []
+            ctr = Counter(confusion_dict[k])
+            _sum = sum(ctr.values())
+            for p_k in confusion_key_list:
+                th_prob = ctr[p_k]/_sum
+                confusion_arr.append(th_prob)
+            confusion_matrix.append(confusion_arr)
+        df_cm = pd.DataFrame(confusion_matrix, index = confusion_key_list,
+                      columns = confusion_key_list)
+        '''
+        #plt.figure(figsize=(10,20))
+        ct  = 0
+        for row in ax:
+            for col in row:
+                ct += 1
+                print('processing chart', ct)
+                sn.set(font_scale=.75)
+                chart = sn.heatmap(df_cm, annot=True, ax=col, cbar=False)
+                #col.tick_params('x',labelrotation=30)
+                #col.tick_params('y',labelrotation=0)
+                col.set_xticks([])
+                col.set_yticks([])
+                col.set_title('NASH|MAXMIN|BOUNDARY')
+                # fix for mpl bug that cuts off top/bottom of seaborn viz
+                b, t = col.get_ylim() # discover the values for bottom and top
+                b += 0.5 # Add 0.5 to the bottom
+                t -= 0.5 # Subtract 0.5 from the top
+                col.set_ylim(b, t) # update the ylim(bottom, top) values
+        plt.gcf().subplots_adjust(bottom=0.15)
+        fig.tight_layout()
+        '''
+        plt.figure()
+        plt.title(model)
+        chart = sn.heatmap(df_cm, annot=True)
+        sn.set(font_scale=.75)
+        plt.xticks(rotation=75)
+        plt.yticks(rotation=0)
+        plt.xlabel('Equilibrium action', labelpad=15)
+        plt.ylabel('Empirical action')
+        b, t = plt.ylim() # discover the values for bottom and top
+        b += 0.5 # Add 0.5 to the bottom
+        t -= 0.5 # Subtract 0.5 from the top
+        plt.ylim(b, t)
+    plt.savefig('sample.png', bbox_inches='tight')
+    plt.show()
+            
+if __name__ == '__main__':   
+    plot_confusion_matrix() 
+    
+
       
     
-if __name__ == '__main__':     
-    plot_traffic_regions()

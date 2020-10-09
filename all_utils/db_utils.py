@@ -1034,3 +1034,79 @@ def count_agents():
     print('TOTAL GAMES',game_ct)
 #count_agents()
     
+    
+def plot_velocity_distr_by_segment():
+    target_vel_map = dict()
+    for seg in constants.SEGMENT_MAP.keys():
+        #['769','770','771','775','776','777','778','779','780','781','782','783','784','785']
+        for file_id in ['769','770','771','775','776','777','778','779','780','781','782','783','784','785']:
+            constants.CURRENT_FILE_ID = file_id
+            conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
+            c = conn.cursor()
+            q_string = "select * FROM GATE_CROSSING_EVENTS WHERE GATE_CROSSING_EVENTS.GATE_TYPE='SEGMENT_GATE' AND GATE_CROSSING_EVENTS.GATE_ID='"+seg+"'"
+            c.execute(q_string)
+            res = c.fetchall()
+            vels = {(row[3],row[6]):row[7]/3.6 for row in res}
+            acts = dict()
+            '''
+            q_string = "SELECT * FROM TRAFFIC_LIGHTS ORDER BY TIME"
+            curr = c.execute(q_string)
+            names = [description[0] for description in curr.description]
+            res = c.fetchall()
+            traffic_lights = []
+            for row in res:
+                traffic_lights.append((row[-1],{names[i]:row[i] for i in np.arange(1,len(names)-1)}))
+            '''  
+            for k,v in vels.items():
+                if k[0] == 100:
+                    brk =1 
+                q_string = "select * from L1_ACTIONS WHERE L1_ACTIONS.TRACK_ID="+str(k[0])
+                c.execute(q_string)
+                res = c.fetchall()
+                for idx in np.arange(len(res)-1):
+                    if res[idx+1][0] >= k[1] >= res[idx][0]:
+                        '''
+                        curr_tl_idx = None
+                        for tl_idx,tl in enumerate(traffic_lights):
+                            if tl[0] >= k[1]:
+                                curr_tl_idx = max(tl_idx-1,0)
+                                break
+                        curr_tl_idx = len(traffic_lights)-1 if curr_tl_idx is None else curr_tl_idx
+                        curr_tl = traffic_lights[curr_tl_idx][1]['L_S_W']
+                        '''
+                        for ag_act in ast.literal_eval(res[idx+1][2]):
+                            action_str = utils.get_l1_action_string(int(ag_act[9:11]))
+                            if 'turn' in constants.SEGMENT_MAP[seg] and action_str == 'track_speed':
+                                action_str = 'proceed-turn'
+                            print(constants.SEGMENT_MAP[seg],action_str,'\t',v,k[0],k[1],file_id)
+                            if (constants.SEGMENT_MAP[seg],action_str) not in target_vel_map:
+                                target_vel_map[constants.SEGMENT_MAP[seg],action_str] = []
+                            target_vel_map[constants.SEGMENT_MAP[seg],action_str].append(v)
+                        break
+                            #acts[k] = [utils.get_l1_action_string(int(x[9:11]))]
+    
+    '''
+    plt.hist(list(vels.values()), density=True)
+    plt.figure()
+    plt.hist(list(acts.values()), density=True)
+    plt.show()
+    '''
+    for k in list(target_vel_map.keys()):
+        target_vel_map[k] = (np.min(target_vel_map[k]), np.max(target_vel_map[k]), np.mean(target_vel_map[k]), np.std(target_vel_map[k]),len(target_vel_map[k]))
+    u_string = "UPDATE TARGET_VELOCITIES SET EMP_MIN=?, EMP_MAX=?, EMP_MEAN=?, EMP_SD=?, NUM_SAMPLES=? WHERE SEGMENT=? AND ACTION=?"
+    
+    for file_id in ['769']:
+        u_list = []
+        constants.CURRENT_FILE_ID = file_id
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
+        c = conn.cursor()
+        for k,v in target_vel_map.items():
+            u_list.append((v[0],v[1],v[2],v[3],v[4],k[0],k[1]))
+        c.executemany(u_string,u_list)
+        conn.commit()
+        conn.close()
+    f=1
+        
+
+if __name__ == '__main__':     
+    plot_velocity_distr_by_segment()

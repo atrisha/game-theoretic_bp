@@ -179,7 +179,15 @@ def get_target_velocity(veh_state):
     c = conn.cursor()
     c.execute(q_string)
     res = c.fetchall()
-    target_vels = {row[0]:(row[3],row[4]) if row[3] != -1 else (veh_state.leading_vehicle.speed,1) for row in res}
+    target_vels = dict()
+    for row in res:
+        if row[3] != -1 :
+            if row[7] is not None and row[8] is not None:
+                target_vels[row[0]] = (row[7],row[8])
+            else:
+                target_vels[row[0]] = (max(row[3]-2,0),row[4]+2)
+        else:
+            target_vels[row[0]] = (veh_state.leading_vehicle.speed,1)
     return target_vels
 
 def get_centerline(lane_segment):
@@ -210,6 +218,7 @@ def get_mean_yaws_for_segments(segments):
     res = c.fetchall()
     yaws = {r[0]:r[1] for r in res}
     return yaws
+
     
 
 def get_leading_vehicles(veh_state):

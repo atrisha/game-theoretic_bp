@@ -7,6 +7,8 @@ import numpy as np
 import os
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(ROOT_DIR,'logs')
+DB_DIR = "D:\\intersections_dataset\\dataset\\"
+CACHE_DIR = "F:\\Spring2017\\workspaces\\game_theoretic_planner_cache\\"
 
 MAX_LONG_ACC_NORMAL = 2
 MAX_LONG_ACC_AGGR = 3.6
@@ -281,7 +283,8 @@ L3_EQ_TYPE = None
 TRAJECTORY_TYPE = None
 
 
-CURRENT_FILE_ID = None
+CURRENT_FILE_ID = '769'
+ALL_FILE_IDS = ['769','770','771'] + [str(x) for x in np.arange(775,786)]
 TEMP_TRAJ_CACHE = None
 L3_ACTION_CACHE = None
 import logging
@@ -293,6 +296,7 @@ logger.setLevel(logging.INFO)
 eq_logger = logging.getLogger("pylog")
 eq_logger.setLevel(logging.INFO)
 common_logger = logger
+show_plots = False
 
 def setup_logger():
     logging.basicConfig(format=format,level=logging.INFO)

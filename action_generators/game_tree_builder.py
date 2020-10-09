@@ -100,9 +100,19 @@ def save_get_l3_action_file(file_id,agent_id,relev_agent_id, time_ts, l1_action,
 def push_trajectories_to_db():
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_generated_trajectories_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
-    c.execute("SELECT * FROM GENERATED_TRAJECTORY_INFO")
-    res = c.fetchall()
-    traj_info_dict = {(row[2],row[3],row[4],row[5],row[6]):row[1] for row in res}
+    if not constants.TRAJECTORY_TYPE == 'GAUSSIAN':
+        ''' Baseline and boundary regenerates the generated_info, so we can clear this.'''
+        traj_info_dict = None
+        c.execute("DELETE FROM GENERATED_TRAJECTORY_INFO")
+        conn.commit()
+        ''' Boundary inserts Baseline data too.'''
+        if constants.TRAJECTORY_TYPE == 'BOUNDARY':
+            c.execute("DELETE FROM GENERATED_BASELINE_TRAJECTORY")
+            conn.commit()
+    else:
+        c.execute("SELECT * FROM GENERATED_TRAJECTORY_INFO")
+        res = c.fetchall()
+        traj_info_dict = {(row[2],row[3],row[4],row[5],row[6]):row[1] for row in res}
     all_files = os.listdir(os.path.join(constants.ROOT_DIR, constants.TEMP_TRAJ_CACHE))
     all_files.sort()
     N = len(all_files)
@@ -588,6 +598,8 @@ def main():
     constants.TEMP_TRAJ_CACHE = 'temp_traj_cache_'+constants.CURRENT_FILE_ID+'_'+constants.TRAJECTORY_TYPE
     constants.L3_ACTION_CACHE = 'l3_action_trajectories_'+constants.CURRENT_FILE_ID
     constants.setup_logger()
-    generate_hopping_plans()
+    #generate_hopping_plans()
     push_trajectories_to_db()
     #utils.remove_files(constants.TEMP_TRAJ_CACHE)
+if __name__ == '__main__':    
+    main()

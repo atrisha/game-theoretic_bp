@@ -338,7 +338,7 @@ class Equilibria:
         res = c.fetchall()
         for row in res:
             emp_act_in_db[(row[0],row[1])] = ast.literal_eval(row[2])
-        conn_trajdb = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber_generated_trajectories.db')
+        conn_trajdb = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_generated_trajectories_'+constants.CURRENT_FILE_ID+'.db')
         c_trajdb = conn_trajdb.cursor()
         self.empirical_actions = dict()
         ct = 0

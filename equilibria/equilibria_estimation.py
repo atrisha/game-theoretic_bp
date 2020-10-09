@@ -1081,7 +1081,6 @@ def calc_eqs_for_hopping_trajectories():
     else:
         eval_config.set_update_only(False)
         eval_config.set_eq_acts_in_db(None)
-    d = ['W_S','S_W','N_E']
     task_list = ['W_S','S_W','N_E','W_N','S_E','E_S']
     for direction in task_list:
         

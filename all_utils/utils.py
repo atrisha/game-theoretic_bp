@@ -175,19 +175,11 @@ def angle_between_lines_2pi(line_1,line_2):
 def get_target_velocity(veh_state):
     action = veh_state.l1_action
     q_string = "select * from TARGET_VELOCITIES where action='"+str(action)+"'"
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
+    conn = sqlite3.connect(constants.DB_DIR+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     c.execute(q_string)
     res = c.fetchall()
-    target_vels = dict()
-    for row in res:
-        if row[3] != -1 :
-            if row[7] is not None and row[8] is not None:
-                target_vels[row[0]] = (row[7],row[8])
-            else:
-                target_vels[row[0]] = (max(row[3]-2,0),row[4]+2)
-        else:
-            target_vels[row[0]] = (veh_state.leading_vehicle.speed,1)
+    target_vels = {row[0]:(row[3],row[4]) if row[3] != -1 else (veh_state.leading_vehicle.speed,1) for row in res}
     return target_vels
 
 def get_centerline(lane_segment):
@@ -312,8 +304,36 @@ def pickle_load(file_key):
     l3_actions = pickle.load( open( file_key, "rb" ) )
     return l3_actions
 
+def find_point_along_line(clx,cly,pt,dist):
+    if pt is not None:
+        path = [pt] + list(zip(clx,cly))
+    else:
+        path = list(zip(clx,cly))
+    dist_from_origin = [0] + [math.hypot(p2[0]-p1[0], p2[1]-p1[1]) for p1,p2 in list(zip(path[:-1],path[1:]))]
+    dist_from_origin = [sum(dist_from_origin[:i]) for i in np.arange(1,len(dist_from_origin))]
+    path_idx = find_index_in_list(dist, dist_from_origin)
+    if path_idx is None:
+        print(dist)
+        print(dist_from_origin)
+        raise IndexError("path_idx is None")
+    if path_idx >= len(path)-1:
+        path_idx = path_idx - 1
+    overflow = dist - dist_from_origin[path_idx]
+    r = overflow/math.hypot(path[path_idx+1][0]-path[path_idx][0], path[path_idx+1][1]-path[path_idx][1]) if overflow != 0 else 0
+    point_x = path[path_idx][0] + r*(path[path_idx+1][0] - path[path_idx][0])
+    point_y = path[path_idx][1] + r*(path[path_idx+1][1] - path[path_idx][1])
+    point = (point_x,point_y) 
+    return point
+
+
 def pickle_dump(cache,file_key,l3_actions):
-    file_key = os.path.join(constants.ROOT_DIR,cache,file_key)
+    file_key = os.path.join(constants.CACHE_DIR,cache,file_key)
+    directory = os.path.dirname(file_key)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    pickle.dump( l3_actions, open( file_key, "wb" ) )
+    
+def pickle_dump_to_dir(file_key,l3_actions):
     directory = os.path.dirname(file_key)
     if not os.path.exists(directory):
         os.makedirs(directory)
@@ -405,7 +425,7 @@ def remove_files(cache_dir):
         os.remove(os.path.join(path, f))      
         
 def get_processed_files(cache_dir):
-    path = os.path.join(constants.ROOT_DIR,cache_dir)
+    path = os.path.join(constants.CACHE_DIR,cache_dir)
     if os.path.exists(path):
         filelist = [ f for f in os.listdir(path)]
         return filelist
@@ -438,7 +458,7 @@ def construct_state_grid(pt1,pt2,N,tol,grid_type):
 
 
 def reduce_relev_agents(agent_id,time_ts,relev_agents):
-    ag_file_key = os.path.join(constants.ROOT_DIR,constants.L3_ACTION_CACHE,str(agent_id)+'-0_'+str(time_ts).replace('.', ','))
+    ag_file_key = os.path.join(constants.CACHE_DIR,constants.L3_ACTION_CACHE,str(agent_id)+'-0_'+str(time_ts).replace('.', ','))
     found = False
     if os.path.exists(ag_file_key):
         veh_state = pickle_load(ag_file_key)
@@ -449,7 +469,7 @@ def reduce_relev_agents(agent_id,time_ts,relev_agents):
     ra_states = []
     for r_a_id in relev_agents:
         found = False
-        ag_file_key = os.path.join(constants.ROOT_DIR,constants.L3_ACTION_CACHE,str(veh_state.id)+'-'+str(r_a_id)+'_'+str(time_ts).replace('.', ','))
+        ag_file_key = os.path.join(constants.CACHE_DIR,constants.L3_ACTION_CACHE,str(veh_state.id)+'-'+str(r_a_id)+'_'+str(time_ts).replace('.', ','))
         if os.path.exists(ag_file_key):
             r_a_state = pickle_load(ag_file_key)
             found = True
@@ -760,6 +780,9 @@ def setup_vehicle_state(veh_id,time_ts):
     r_a_state.set_direction(r_a_direction)
     next_signal_change = get_time_to_next_signal(time_ts, r_a_direction, r_a_traffic_light)
     r_a_state.set_time_to_next_signal(next_signal_change)
+    relev_crosswalks = get_relevant_crosswalks(r_a_state)
+    r_a_state.set_relev_crosswalks(relev_crosswalks)
+        
     return r_a_state
 
 def calc_traj_len(traj):

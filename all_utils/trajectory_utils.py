@@ -259,12 +259,16 @@ class TrajectoryUtils:
         conn.commit()
         conn.close() 
             
-    def assign_l1_actions(self):
+    def assign_l1_actions(self,selected_agent_id=None):
+        
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
         c = conn.cursor()
         conn_trajdb = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_generated_trajectories_'+constants.CURRENT_FILE_ID+'.db')
         c_trajdb = conn_trajdb.cursor()
-        q_string = "SELECT DISTINCT TIME,AGENT_ID FROM GENERATED_TRAJECTORY_INFO UNION SELECT DISTINCT TIME,RELEV_AGENT_ID FROM GENERATED_TRAJECTORY_INFO ORDER BY TIME"
+        if selected_agent_id is None:
+            q_string = "SELECT DISTINCT TIME,AGENT_ID FROM GENERATED_TRAJECTORY_INFO UNION SELECT DISTINCT TIME,RELEV_AGENT_ID FROM GENERATED_TRAJECTORY_INFO ORDER BY TIME"
+        else:
+            q_string = "SELECT DISTINCT TIME,AGENT_ID FROM GENERATED_TRAJECTORY_INFO where AGENT_ID="+str(selected_agent_id)
         c_trajdb.execute(q_string)
         res = c_trajdb.fetchall()
         time_track_list = [(row[0],row[1]) for row in res if row[1]!=0]
@@ -285,10 +289,10 @@ class TrajectoryUtils:
                 if (int(relev_id),time) not in file_key_map:
                     file_key_map[(int(relev_id),time)] = os.path.join(constants.CACHE_DIR,constants.L3_ACTION_CACHE,org_str)
                 
-        u_string = "INSERT INTO L1_ACTIONS VALUES (?,?,?)"
+        u_string = "REPLACE INTO L1_ACTIONS VALUES (?,?,?)"
         u_list = []
         for time_ts,agent_id in time_track_list:
-            if agent_id == 100 and time_ts > 107:
+            if agent_id == 100 and time_ts == 100.1:
                 brk = 1
             ct += 1
             pedestrian_info = utils.setup_pedestrian_info(time_ts)
@@ -333,6 +337,14 @@ class TrajectoryUtils:
                             break
                 else:
                     emp_act.append(proceed_actions[0])
+                if len(proceed_actions) > 0 and len(emp_act) == 0:
+                    if veh_state.task != 'STRAIGHT' and 'proceed-turn' in proceed_actions:
+                        emp_act.append('proceed-turn')
+                    else:
+                        if veh_state.leading_vehicle is not None:
+                            emp_act.append('follow_lead')
+                        else:
+                            emp_act.append('track_speed')
             if (len(wait_actions) > 0 and (not proceed and not wait)) or (wait and not proceed)> 0:
                 if 'wait-for-pedestrian' in wait_actions:
                     emp_act.append('wait-for-pedestrian')
@@ -363,9 +375,12 @@ class TrajectoryUtils:
                         if constants.SEGMENT_MAP[veh_state.current_segment] in constants.ENTRY_LANES:
                             if 'decelerate-to-stop' in wait_actions:
                                 emp_act.append('decelerate-to-stop')
+                            
                         else:
                             if 'wait-for-oncoming' in wait_actions:
                                 emp_act.append('wait-for-oncoming')
+                if len(emp_act) == 0 and len(wait_actions) == 1:
+                    emp_act.append(wait_actions[0]) 
             l2_act = None
             print(constants.CURRENT_FILE_ID+':'+str(ct)+'/'+str(N)+' '+str((time_ts,agent_id,emp_act)))
             if len(emp_act) > 0:
@@ -389,6 +404,6 @@ def main():
     constants.CURRENT_FILE_ID = '769'
     constants.L3_ACTION_CACHE = 'l3_action_trajectories_'+constants.CURRENT_FILE_ID
     traj_util_obj = TrajectoryUtils()
-    #traj_util_obj.assign_l1_actions()
+    traj_util_obj.assign_l1_actions()
     #traj_util_obj.update_l1_action_in_eq_data('all')
 #main()

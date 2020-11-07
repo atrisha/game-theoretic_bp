@@ -1,7 +1,7 @@
 '''
 Created on Jan 23, 2020
 
-@author: Atrisha
+@author: authorA
 '''
 
 import constants
@@ -17,7 +17,6 @@ from motion_planners.quartic_planner import *
 import matplotlib.pyplot as plt
 import sys
 import all_utils
-import scipy.stats
 from all_utils import utils
 from motion_planners.planning_objects import VehicleState
 from scipy.interpolate import CubicSpline, griddata, interp1d
@@ -37,6 +36,138 @@ def get_truncated_normal(mean=0, sd=1, low=0, upp=10):
     return truncnorm(
         (low - mean) / sd, (upp - mean) / sd, loc=mean, scale=sd)
 
+
+
+class Centerlines:
+    
+    ''' accepts a dict object with the form
+    {time_ts : {(agent_id,ra_id) : None} }
+    '''
+    def __init__(self,agent_list_def):
+        self.agent_list_def = agent_list_def
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
+        c = conn.cursor()
+        q_string = "select distinct TRAJECTORY_MOVEMENTS.TRAFFIC_SEGMENT_SEQ from TRAJECTORY_MOVEMENTS"
+        c.execute(q_string)
+        res = c.fetchall()
+        self.centerline_map = {tuple(ast.literal_eval(row[0])):None for row in res if row[0] is not None and 'l_e_n' not in row[0] and 'l_n_w' not in row[0]}
+        for seg in list(self.centerline_map.keys()):
+            seg_task = 'L_'+seg[0][3].upper()+'_'+seg[-1][-4].upper()
+            if constants.TASK_MAP[seg_task] == 'LEFT_TURN' or constants.TASK_MAP[seg_task] == 'RIGHT_TURN':
+                end_seg_tag = list(seg)[-1][-1]
+                alt_exit_segment = list(seg)[:-1] + [list(seg)[-1][:-1] + '1'] if end_seg_tag == '2' else list(seg)[:-1] + [list(seg)[-1][:-1] + '2']  
+                if tuple(alt_exit_segment) not in self.centerline_map:
+                    self.centerline_map[tuple(alt_exit_segment)] = None
+        q_string = "select * from TRAFFIC_REGIONS_DEF WHERE TRAFFIC_REGIONS_DEF.REGION_PROPERTY='center_line'"
+        c.execute(q_string)
+        res = c.fetchall()
+        self.all_centerlines = {row[0]:(ast.literal_eval(row[4]),ast.literal_eval(row[5])) for row in res}
+        
+        
+    def construct_centerline(self,veh_state):
+        start_seg = veh_state.current_segment
+        for k,v in self.centerline_map.items():
+            if start_seg not in k:
+                continue
+            segment_seq = list(k)
+            cl_X, cl_Y = [], []
+            cl_map = dict()
+            for s_idx,seg in enumerate(segment_seq):
+                if segment_seq.index(start_seg) > s_idx:
+                    continue
+                X_pts, Y_pts = self.all_centerlines[seg][0], self.all_centerlines[seg][1]
+                del_idx = []
+                if 'turn' in seg:
+                    if segment_seq[-1][-1] == '1':
+                        lat1,lat2 = utils.add_parallel(list(zip(X_pts,Y_pts)), 2, 0)
+                    else:
+                        if 'rt' in seg:
+                            lat1,lat2 = utils.add_parallel(list(zip(X_pts,Y_pts)), -1, 0)
+                        else:
+                            lat1,lat2 = utils.add_parallel(list(zip(X_pts,Y_pts)), -2, 0)
+                    X_pts = [x[0] for x in lat1]
+                    Y_pts = [x[1] for x in lat1]
+                cl_map[seg] = [X_pts,Y_pts]
+                if segment_seq.index(start_seg) == s_idx:
+                    for i in np.arange(len(X_pts)-1):
+                        angle_bet_veh_and_pts = utils.angle_between_lines_2pi([(veh_state.nose_x,veh_state.nose_y),(veh_state.x,veh_state.y)], [(veh_state.nose_x,veh_state.nose_y),(X_pts[i],Y_pts[i])])
+                        dist_from_veh = math.hypot(veh_state.nose_x-X_pts[i], veh_state.nose_y-Y_pts[i])
+                        
+                        if dist_from_veh < 3 or (angle_bet_veh_and_pts < math.pi/2 or 2*math.pi-angle_bet_veh_and_pts < math.pi/2):
+                            del_idx.append(i)
+                        
+                    X_pts = [veh_state.x,veh_state.nose_x] + [x for (i,x) in enumerate(X_pts) if i not in del_idx]
+                    Y_pts = [veh_state.y,veh_state.nose_y] + [x for (i,x) in enumerate(Y_pts) if i not in del_idx]
+                cl_X += X_pts
+                cl_Y += Y_pts
+            dup_indcs = []
+            fcl_X,fcl_Y = [],[]
+            for s_idx,seg in enumerate(list(k)):
+                if segment_seq.index(start_seg) > s_idx:
+                    continue
+                elif segment_seq.index(start_seg) == s_idx:
+                    scl = cl_map[seg]
+                    fcl_X = [veh_state.x,veh_state.nose_x]
+                    fcl_Y = [veh_state.y,veh_state.nose_y]
+                    for cl_pt in zip(scl[0],scl[1]):
+                        angle_bet_lines = utils.angle_between_lines_2pi([(veh_state.x,veh_state.y),(veh_state.nose_x,veh_state.nose_y)], [(veh_state.nose_x,veh_state.nose_y),(cl_pt[0],cl_pt[1])])
+                        dist_to_pt = math.hypot(veh_state.nose_x-cl_pt[0], veh_state.nose_y-cl_pt[1])
+                        if dist_to_pt < 3 or not (angle_bet_lines < math.pi/2 or 2*math.pi-angle_bet_lines < math.pi/2):
+                            continue
+                        else:
+                            fcl_X.append(cl_pt[0])
+                            fcl_Y.append(cl_pt[1])
+                else:
+                    scl = cl_map[seg]
+                    for cl_pt in zip(scl[0],scl[1]):
+                        angle_bet_lines = utils.angle_between_lines_2pi([(fcl_X[-2],fcl_Y[-2]),(fcl_X[-1],fcl_Y[-1])], [(fcl_X[-1],fcl_Y[-1]),(cl_pt[0],cl_pt[1])])
+                        dist_to_pt = math.hypot(fcl_X[-1]-cl_pt[0], fcl_Y[-1]-cl_pt[1])
+                        if dist_to_pt < 3 or not (angle_bet_lines < math.pi/2 or 2*math.pi-angle_bet_lines < math.pi/2):
+                            continue
+                        else:
+                            fcl_X.append(cl_pt[0])
+                            fcl_Y.append(cl_pt[1])
+            cl_X,cl_Y = fcl_X,fcl_Y
+            gridpts_X = []
+            gridpts_Y = []
+            gridpts_X = cl_X
+            gridpts_Y = cl_Y
+            self.centerline_map[k] = [(gridpts_X,gridpts_Y)]
+        
+
+        
+    def build_centerlines(self):
+        ct, N = 0, len(self.agent_list_def)
+        for time_ts,ag_def in self.agent_list_def.items():
+            ct += 1
+            log.info('building centerline '+str(ct)+'/'+str(N))
+            for ag_tup,cl in ag_def.items(): 
+                agent_id, ra_id = ag_tup[0], ag_tup[1]
+                principle_agent = agent_id if ra_id == 0 else ra_id
+                parentDirectory = os.path.abspath(os.path.join(os.getcwd(), os.pardir, 'game_theoretic_planner_cache'))
+                constants.L3_ACTION_CACHE = os.path.join(parentDirectory,'l3_action_trajectories_'+constants.CURRENT_FILE_ID)
+                ''' get the agents who have greater than 1 relevent agent '''
+                file_key = os.path.join(constants.L3_ACTION_CACHE, str(agent_id)+'-'+str(ra_id)+'_'+str(time_ts).replace('.', ','))
+                if os.path.exists(file_key):
+                    ag_info = utils.pickle_load(file_key)
+                else:
+                    ag_info = utils.setup_vehicle_state(principle_agent,time_ts)
+                    utils.pickle_dump_to_dir( file_key, ag_info )
+                ag_info.nose_x = ag_info.x + (constants.CAR_LENGTH/2)*np.cos(ag_info.yaw)
+                ag_info.nose_y = ag_info.y + (constants.CAR_LENGTH/2)*np.sin(ag_info.yaw)
+                self.construct_centerline(ag_info)
+                this_cls = [v for k,v in self.centerline_map.items() if ag_info.current_segment in k]
+                '''
+                for this_cl in this_cls:
+                    for lines in this_cl:
+                        knot_pts = (lines[0],lines[1])
+                        plt.plot(lines[0][1:],lines[1][1:],'bx')
+                        plt.plot(lines[0][:2],lines[1][:2],'bo')
+                plt.show()
+                '''       
+                ag_def[ag_tup] = this_cls
+        return self.agent_list_def  
+
 class PathInfo:
     
     def __init__(self,traj_plan):
@@ -53,33 +184,20 @@ class PathInfo:
         generate_boundary = self.traj_plan.generate_boundary
         if segment_name in self.segments:
             self.segments[segment_name]['waypoints'] = waypts
-            seg_type = constants.SEGMENT_MAP[segment_name]
-            if seg_type == 'exit-lane' and self.veh_state.task == 'STRAIGHT':
-                seg_type = 'DEFAULT'
-            if seg_type in constants.LATERAL_LATTICE_TOLERANCE:
-                lat_tol = constants.LATERAL_LATTICE_TOLERANCE[seg_type]
+            lat_tol_check_key = constants.SEGMENT_MAP[segment_name]
+            if lat_tol_check_key == 'exit-lane' and self.veh_state.task == 'STRAIGHT':
+                lat_tol_check_key = 'DEFAULT'
+            if lat_tol_check_key in constants.LATERAL_LATTICE_TOLERANCE:
+                lat_tol = constants.LATERAL_LATTICE_TOLERANCE[lat_tol_check_key]
             else:
                 lat_tol = constants.LATERAL_LATTICE_TOLERANCE['DEFAULT']
-            if 'turn' in segment_name:
-                if segment_name[-1] == '1':
-                    lat1,lat2 = utils.add_parallel(waypts, 2, 0)
-                else:
-                    if 'rt' in segment_name:
-                        lat1,lat2 = utils.add_parallel(waypts, -1, 0)
-                    else:
-                        lat1,lat2 = utils.add_parallel(waypts, -2, 0)
-                self.segments[segment_name]['lateral_waypoints'] = [lat1]
-            else:
-                self.segments[segment_name]['lateral_waypoints'] = [waypts]
-            
+            self.segments[segment_name]['lateral_waypoints'] = [waypts]
             if self.traj_plan.trajectory_type == 'GAUSSIAN':
                 self.segments[segment_name]['gaussian_waypoints'] = []
                 X = get_truncated_normal(mean=0, sd=lat_tol/2, low=0, upp=lat_tol)
-                for d in X.rvs(2):
+                for d in X.rvs(4):
                     pl1,pl2 = utils.add_parallel(waypts, d)
                     self.segments[segment_name]['gaussian_waypoints'].append(pl1)
-                for d in X.rvs(2):
-                    pl1,pl2 = utils.add_parallel(waypts, d)
                     self.segments[segment_name]['gaussian_waypoints'].append(pl2)
             
             if generate_boundary:
@@ -92,7 +210,7 @@ class PathInfo:
 class TrajectoryPlan:
     
     def insert_baseline_trajectory(self,table_name,traj_info_id,traj_info_dict,max_traj_id=None):
-        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_generated_trajectories_'+constants.CURRENT_FILE_ID+'.db')
+        conn = sqlite3.connect(constants.DB_DIR+constants.CURRENT_FILE_ID+'\\uni_weber_generated_trajectories_'+constants.CURRENT_FILE_ID+'.db')
         c = conn.cursor()
         if max_traj_id is None:
             q_string = "select MAX("+table_name+".TRAJECTORY_ID) FROM "+table_name
@@ -152,14 +270,14 @@ class TrajectoryPlan:
             ins_list.extend(list(zip([traj_id]*slice_len,[traj_info_id]*slice_len,[round(x,5) for x in tx],[round(x,5) for x in rx],[round(x,5) for x in ry],[round(x,5) for x in ryaw],[round(x,5) for x in rv],[round(x,5) for x in ra],[round(x,5) for x in rj])))
             traj_id += 1
         new_max_trajid = traj_id-1
-        #i_string = 'INSERT INTO '+table_name+' VALUES (?,?,?,?,?,?,?,?,?)'
+        i_string = 'INSERT INTO '+table_name+' VALUES (?,?,?,?,?,?,?,?,?)'
         #n=1000
         #chunks = [ins_list[i:i+n] for i in range(0, len(ins_list), n)]
         #for chunk in chunks:
         #c.executemany(i_string,ins_list)
         #conn.commit()
         #conn.close()
-        #log.info('inserted '+table_name+' with info id'+str(traj_info_id)+ ' and time_ts '+str(i_string_data[5]))
+        log.info('inserted '+table_name+' with info id'+str(traj_info_id)+ ' and time_ts '+str(i_string_data[5]))
         return ins_list,new_max_trajid,i_string_data
 
     
@@ -246,7 +364,7 @@ class TrajectoryPlan:
                     assign_zero = True
                 if assign_zero:
                     segment_tags[idx] = (segment_tags[idx][0],(0.0,0.0),0)
-        ''' if the vehicle is in entry lane then assign current speed till it reaches the start of the scene '''
+        ''' if the vehicle is in entry lane then assign current speed till it reaches the scene '''
         if constants.SEGMENT_MAP[self.veh_state.current_segment] in constants.ENTRY_LANES:
             entry_lane_idx = None
             for s_t_idx,s_t in enumerate(segment_tags):
@@ -258,7 +376,7 @@ class TrajectoryPlan:
                     segment_tags[i_el_ct] = (segment_tags[i_el_ct][0],(self.veh_state.speed,0.0),0)
                 
         indx = [idx for idx,s in enumerate(segment_tags) if s[1]!= None]
-        num_tries = 100
+        num_tries = 20
         acc_lim = constants.MAX_LONG_ACC_NORMAL if self.veh_state.l2_action == 'NORMAL' else constants.MAX_LONG_ACC_AGGR
         jerk_lim = constants.MAX_TURN_JERK_NORMAL if self.veh_state.l2_action == 'NORMAL' else constants.MAX_TURN_JERK_AGGR
         all_velocity_profiles = dict()
@@ -277,21 +395,11 @@ class TrajectoryPlan:
                 #    continue
                 v_x = []
                 for idx,s in enumerate(segment_tags):
-                    if idx == 0:
-                        v_x.append(self.veh_state.speed)
-                    else:
-                        if s[1]!= None:
-                            if s[1][0] == 0:
-                                v_x.append(0)
-                            else:
-                                
-                                if self.veh_state.l1_action not in constants.WAIT_ACTIONS:
-                                    ''' vehicle needs to accelerate '''
-                                    #target_vel = scipy.stats.truncnorm.rvs(a=self.veh_state.speed, b=np.inf, loc=s[1][0], scale=s[1][1])
-                                    target_vel = np.random.uniform(v_x[-1],s[1][1])
-                                    v_x.append(target_vel)
-                                else:
-                                    v_x.append(np.random.uniform(max(s[1][0]+inc,0),s[1][1]/2))
+                    if s[1]!= None:
+                        if s[1][0] == 0:
+                            v_x.append(0)
+                        else:
+                            v_x.append(np.random.normal(max(s[1][0]+inc,0),s[1][1]/2))
                 cs_v = CubicSpline(indx,v_x)
                 regen_vx = [max(float(cs_v(x)),0.0) if float(cs_v(x)) > .05 else 0.0 for x in np.arange(len(segment_tags))]
                 
@@ -306,48 +414,45 @@ class TrajectoryPlan:
                         else:
                             if zero_index:
                                 Y[y_val_idx] = 0.0 
+                cs_d_a = cs_v.derivative()
+                Y_prime = [float(cs_d_a(x)) for x in X]
+                cs_d2_a = cs_d_a.derivative()
+                Y_2prime = [float(cs_d2_a(x)) for x in X]
+                #if max(Y_prime) < acc_lim+inc and min(Y_prime) > -acc_lim-inc and max(Y_2prime) < jerk_lim+inc and min(Y_2prime) > -jerk_lim-inc:
                 max_coeff = np.max(np.abs(cs_v.c[-1,:]))
-                candidate_profiles.append(((hpx, hpy, regen_vx), max_coeff, None, None))
+                candidate_profiles.append(((hpx, hpy, regen_vx), max_coeff, (max([abs(x) for x in Y_prime]),max([abs(x) for x in Y_2prime]))))
+                    #log.info('velocity profile generation candidate found: '+str(tr_i))
+                #else:
+                #    f=1
+                    #log.info('rejected acc lim'+str(max(Y_prime))+','+str(min(Y_prime))+' jerk lim '+str(max(Y_2prime))+','+str(min(Y_2prime)))
             if len(candidate_profiles) > 0:
+                candidate_profiles.sort(key=lambda tup: (tup[2][0],tup[2][1],tup[1]))
                 all_velocity_profiles[inc] = candidate_profiles
             else:
                 all_velocity_profiles[inc] = None
         '''
-        plt.figure()
-        for inc_step,all_candidate_profiles in all_velocity_profiles.items():
-            for idx,candidate_profiles in enumerate(all_candidate_profiles):
-                plt.plot(np.arange(len(candidate_profiles[0][2])), candidate_profiles[0][2],'blue')
+        plt.plot(X, [y[1] for y in candidate_profiles[0][0]],'blue')
+        plt.plot(X, [y[1] for y in candidate_profiles[-1][0]],'red')
+        plt.show()
+        plt.plot(X,[y[1] for y in candidate_profiles[0][1]],'blue')
+        plt.plot(X,[y[1] for y in candidate_profiles[-1][1]],'red')
+        plt.show()
+        plt.plot(X,[y[1] for y in candidate_profiles[0][2]],'blue')
+        plt.plot(X,[y[1] for y in candidate_profiles[-1][2]],'red')
+        plt.show()
         '''
+        
         ''' generate the trajectories and set them in path_info'''
         all_trajs = []
         for inc_step,all_candidate_profiles in all_velocity_profiles.items():
-            if all_candidate_profiles is None:
+            if candidate_profiles is None:
                 path_f = path_g
                 path_X,path_Y = utils.fresnet_to_map(self.veh_state.x, self.veh_state.y, [x[0] for x in path_f], [x[1] for x in path_f], self.veh_state.yaw)
                 path_m = list(zip(path_X,path_Y))
                 res = self.generate_baseline_trajectory(self.veh_state, path_m, inc_step)
                 time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr = res[0], res[1], res[2], res[3], res[4], res[5], res[6]
                 all_trajs.append(('baseline', [time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr]))
-                
             else:
-                regeneration_success = False
-                for idx,candidate_profiles in enumerate(all_candidate_profiles):
-                    res = self.regenerate_path(candidate_profiles[0][0],candidate_profiles[0][1],candidate_profiles[0][2])
-                    if res is not None:
-                        time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr = res[0], res[1], res[2], res[3], res[4], res[5], res[6]
-                        all_trajs.append(('regenerated', [time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr]))
-                        log.info('generated'+str((self.veh_state.l1_action,self.veh_state.l2_action))+' within limits after '+ str(idx+1) + ' tries')
-                        regeneration_success = True
-                        break
-                if not regeneration_success:
-                    path_f = path_g
-                    path_X,path_Y = utils.fresnet_to_map(self.veh_state.x, self.veh_state.y, [x[0] for x in path_f], [x[1] for x in path_f], self.veh_state.yaw)
-                    path_m = list(zip(path_X,path_Y))
-                    res = self.generate_baseline_trajectory(self.veh_state, path_m, inc_step)
-                    time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr = res[0], res[1], res[2], res[3], res[4], res[5], res[6]
-                    all_trajs.append(('baseline', [time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr]))
-                    log.info('generated'+str((self.veh_state.l1_action,self.veh_state.l2_action))+' with alternate model')
-                '''
                 generated_with_lims = False
                 if not (self.veh_state.l2_action != 'NORMAL' and self.veh_state.l1_action in constants.WAIT_ACTIONS):
                     for idx,candidate_profiles in enumerate(all_candidate_profiles):
@@ -356,50 +461,12 @@ class TrajectoryPlan:
                             time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr = res[0], res[1], res[2], res[3], res[4], res[5], res[6]
                             all_trajs.append(('regenerated', [time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr]))
                             generated_with_lims = True
-                            log.info('generated'+str((self.veh_state.l1_action,self.veh_state.l2_action))+' with limits acc: '+str(candidate_profiles[2][0])+' jerk:'+str(candidate_profiles[2][1]))
                             break
-                        else:
-                            log.info('skipping'+str((self.veh_state.l1_action,self.veh_state.l2_action))+' with limits acc: '+str(candidate_profiles[2][0])+' jerk:'+str(candidate_profiles[2][1]))
-                    if not generated_with_lims:
-                        path_f = path_g
-                        path_X,path_Y = utils.fresnet_to_map(self.veh_state.x, self.veh_state.y, [x[0] for x in path_f], [x[1] for x in path_f], self.veh_state.yaw)
-                        path_m = list(zip(path_X,path_Y))
-                        res = self.generate_baseline_trajectory(self.veh_state, path_m, inc_step)
-                        time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr = res[0], res[1], res[2], res[3], res[4], res[5], res[6]
-                        all_trajs.append(('baseline', [time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr]))
-                else:
-                    for idx,candidate_profiles in enumerate(all_candidate_profiles):
-                        if candidate_profiles[2][0] < acc_lim+inc_step and candidate_profiles[2][1] < jerk_lim+inc_step:
-                            res = self.regenerate_path(candidate_profiles[0][0],candidate_profiles[0][1],candidate_profiles[0][2])
-                            time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr = res[0], res[1], res[2], res[3], res[4], res[5], res[6]
-                            all_trajs.append(('regenerated', [time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr]))
-                            generated_with_lims = True
-                            log.info('generated'+str((self.veh_state.l1_action,self.veh_state.l2_action))+' with limits acc: '+str(candidate_profiles[2][0])+' jerk:'+str(candidate_profiles[2][1]))
-                            break
-                        else:
-                            log.info('skipping'+str((self.veh_state.l1_action,self.veh_state.l2_action))+' with limits acc: '+str(candidate_profiles[2][0])+' jerk:'+str(candidate_profiles[2][1]))
-                    if not generated_with_lims:
-                        path_f = path_g
-                        path_X,path_Y = utils.fresnet_to_map(self.veh_state.x, self.veh_state.y, [x[0] for x in path_f], [x[1] for x in path_f], self.veh_state.yaw)
-                        path_m = list(zip(path_X,path_Y))
-                        res = self.generate_baseline_trajectory(self.veh_state, path_m, inc_step)
-                        time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr = res[0], res[1], res[2], res[3], res[4], res[5], res[6]
-                        all_trajs.append(('baseline', [time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr]))
-                '''       
-                '''
-                elif not generated_with_lims or (self.veh_state.l2_action != 'NORMAL' and self.veh_state.l1_action in constants.WAIT_ACTIONS):
+                if not generated_with_lims or (self.veh_state.l2_action != 'NORMAL' and self.veh_state.l1_action in constants.WAIT_ACTIONS):
                     if self.veh_state.l2_action != 'NORMAL' and self.veh_state.l1_action in constants.WAIT_ACTIONS:
-                        for idx,candidate_profiles in enumerate(all_candidate_profiles):
-                            if candidate_profiles[2][0] < acc_lim+inc_step and candidate_profiles[2][1] < jerk_lim+inc_step:
-                                res = self.regenerate_path(candidate_profiles[0][0],candidate_profiles[0][1],candidate_profiles[0][2])
-                                time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr = res[0], res[1], res[2], res[3], res[4], res[5], res[6]
-                                all_trajs.append(('regenerated', [time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr]))
-                                generated_with_lims = True
-                                break
-                        
                         sorted_profile = sorted(all_candidate_profiles, key=lambda tup: (-tup[2][1],-tup[2][0],tup[1]))
                         if max(sorted_profile[0][0][2]) < 35:
-                            log.info('generated'+str((self.veh_state.l1_action,self.veh_state.l2_action))+' with limits acc: '+str(sorted_profile[0][2][0])+' jerk:'+str(sorted_profile[0][2][1]))
+                            #log.info('generated_with_lims with limits acc: '+str(sorted_profile[0][2][0])+' jerk:'+str(sorted_profile[0][2][1]))
                             res = self.regenerate_path(sorted_profile[0][0][0],sorted_profile[0][0][1],sorted_profile[0][0][2])
                             time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr = res[0], res[1], res[2], res[3], res[4], res[5], res[6]
                             all_trajs.append(('baseline', [time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr]))
@@ -410,10 +477,8 @@ class TrajectoryPlan:
                             res = self.generate_baseline_trajectory(self.veh_state, path_m, inc_step)
                             time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr = res[0], res[1], res[2], res[3], res[4], res[5], res[6]
                             all_trajs.append(('baseline', [time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr]))
-                        
                     else:
                         if max(all_candidate_profiles[0][0][2]) < 35:
-                            log.info('generated'+str((self.veh_state.l1_action,self.veh_state.l2_action))+' with limits acc: '+str(all_candidate_profiles[0][2])+' jerk:'+str(all_candidate_profiles[0][2]))
                             res = self.regenerate_path(all_candidate_profiles[0][0][0],all_candidate_profiles[0][0][1],all_candidate_profiles[0][0][2])
                             time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr = res[0], res[1], res[2], res[3], res[4], res[5], res[6]
                             all_trajs.append(('regenerated', [time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr]))
@@ -426,28 +491,28 @@ class TrajectoryPlan:
                             all_trajs.append(('baseline', [time_arr,x_arr,y_arr,yaw_profile,v_arr,a_arr,j_arr]))
                     
                     '''
-                '''
-                plt.figure()
-                plt.title('vel profile wrt time')
-                plt.plot(time_arr,v_arr)
-                plt.show()
-                '''    
+                    plt.figure()
+                    plt.title('beyond limits')
+                    plt.plot(time_arr,v_arr)
+                    plt.show()
+                    '''
+                    generated_with_lims = True
             
     
         '''
-        #if self.veh_state.l1_action in constants.WAIT_ACTIONS and self.veh_state.current_time > 30:
-        plt.figure()
-        for _type, res in all_trajs:
-            plt.title(self.veh_state.l1_action + ' ' + str(_type))
-            #_x,_y = utils.fresnet_to_map(self.veh_state.x, self.veh_state.y, res[1], res[2], self.veh_state.yaw)
-            _x,_y = res[1], res[2]
-            visualizer.plot_traffic_regions()
-            plt.plot(_x,_y,'black')
-        plt.figure()
-        for _type, res in all_trajs:
-            plt.title(self.veh_state.l1_action + ' ' + str(_type))
-            plt.plot(res[0],res[4])
-        plt.show()
+        if self.veh_state.l1_action in constants.WAIT_ACTIONS and self.veh_state.current_time > 30:
+            plt.figure()
+            for _type, res in all_trajs:
+                plt.title(self.veh_state.l1_action + ' ' + str(_type))
+                #_x,_y = utils.fresnet_to_map(self.veh_state.x, self.veh_state.y, res[1], res[2], self.veh_state.yaw)
+                _x,_y = res[1], res[2]
+                visualizer.plot_traffic_regions()
+                plt.plot(_x,_y,'black')
+            plt.figure()
+            for _type, res in all_trajs:
+                plt.title(self.veh_state.l1_action + ' ' + str(_type))
+                plt.plot(res[0],res[4])
+            plt.show()
         '''
         if 'proceed' in self.veh_state.l1_action:
             brk = 1
@@ -462,9 +527,6 @@ class TrajectoryPlan:
     def regenerate_path(self,hpx,hpy,vx):
         if self.veh_state.l1_action in constants.WAIT_ACTIONS and self.veh_state.current_time > 30:
             brk=1
-        acc_lim = constants.MAX_LONG_ACC_NORMAL if self.veh_state.l2_action == 'NORMAL' else constants.MAX_LONG_ACC_AGGR
-        jerk_lim = constants.MAX_TURN_JERK_NORMAL if self.veh_state.l2_action == 'NORMAL' else constants.MAX_TURN_JERK_AGGR
-        const_acc_val = 0.5 if self.veh_state.l2_action == 'NORMAL' else 0.7
         hpx_f,hpy_f = utils.map_to_fresnet(self.veh_state.x, self.veh_state.y, hpx, hpy, self.veh_state.yaw)
         TX = np.arange(constants.LP_FREQ, constants.OTH_AGENT_L3_ACT_HORIZON, constants.LP_FREQ)
         if vx is None:
@@ -501,40 +563,21 @@ class TrajectoryPlan:
             s_x = [0] + [p2-p1 for p1,p2 in list(zip(hpx_p[:-1],hpx_p[1:]))]
             s_y = [0] + [p2-p1 for p1,p2 in list(zip(hpy_p[:-1],hpy_p[1:]))]
             t_x = [0]
-            dist_arr = [0]
             for indx,s in enumerate(zip(s_x,s_y)):
                 dist = math.hypot(s[0], s[1])
                 if indx > 0:
                     v,u = vx_p[indx], vx_p[indx-1]
                     t = abs((2*dist)/(v+u)) if v+u != 0 else 0.1
                     t_x.append(t_x[-1]+t)
-                    dist_arr.append(dist_arr[-1]+dist)
-                    
-            T_f = math.sqrt((const_acc_val+(2*dist_arr[-1]))/const_acc_val) - 1
-            indx = np.arange(len(s_x))
-            cs_t = interp1d([0,np.random.uniform(T_f/2-.5,T_f/2+.6),T_f],[indx[0],indx[-1]/2,indx[-1]],bounds_error=False,fill_value='extrapolate',kind='quadratic')
-            cs_t_inv = interp1d([indx[0],indx[-1]/2,indx[-1]],[0,np.random.uniform(T_f/2-.5,T_f/2+.6),T_f],bounds_error=False,fill_value='extrapolate',kind='quadratic')
-            #cs_t = interp1d(t_x,indx,bounds_error=False,fill_value='extrapolate')
             s_x = [0] + [sum(s_x[:i+1]) for i in np.arange(1,len(s_x))]
             s_y = [0] + [sum(s_y[:i+1]) for i in np.arange(1,len(s_y))]
-            
+            indx = np.arange(len(s_x))
             cs_x = CubicSpline(indx,s_x)
             cs_y = CubicSpline(indx,s_y)
             cs_v = CubicSpline(indx,vx_p)
             cs_acc = cs_v.derivative()
             cs_j = cs_acc.derivative()
-            
-            cs_v_t = CubicSpline([cs_t_inv(x) for x in indx],vx_p)
-            cs_acc_t = cs_v_t.derivative()
-            cs_j_t = cs_acc_t.derivative()
-            
-            cs_acc_t_arr = [cs_acc_t(x) for x in TX]
-            cs_j_t_arr = [cs_j_t(x) for x in TX]
-            
-            if max([abs(x) for x in cs_acc_t_arr]) > acc_lim and max([abs(x) for x in cs_j_t_arr]) > jerk_lim:
-                return None
-            
-            
+            cs_t = interp1d(t_x,indx,bounds_error=False,fill_value='extrapolate')
             ref_x = np.arange(indx[1],indx[-1]+.1,.1)
             
             for t in TX:
@@ -568,23 +611,17 @@ class TrajectoryPlan:
                 acc_arr.append(a)
                 jerk_arr.append(j)
                 yaw_arr.append(yaw_arr[-1])
-        if max([abs(x) for x in acc_arr]) > acc_lim and max([abs(x) for x in jerk_arr]) > jerk_lim:
-            return None       
+                
             
-        
-            
+            '''        
+            if self.veh_state.l1_action in constants.WAIT_ACTIONS and self.veh_state.current_time > 30:
+                plt.figure()
+                plt.plot(hpx_f,hpy_f,'x')
+                plt.plot([x[0] for x in path],[x[1] for x in path],'black')
+                #plt.show()
+            '''
         x_arr, y_arr = utils.fresnet_to_map(self.veh_state.x, self.veh_state.y, [x[0] for x in path],[x[1] for x in path], self.veh_state.yaw)
         time_arr = [x+self.veh_state.current_time for x in time_arr]
-        '''
-        plt.figure()
-        plt.plot(hpx,hpy,'x')
-        visualizer.plot_traffic_regions()
-        plt.plot(x_arr,y_arr,'black')
-        plt.figure()
-        plt.plot(np.arange(len(vx)),vx,'o-')
-        #plt.plot([x[0] for x in path],[x[1] for x in path],'black')
-        plt.show()
-        '''
         return [time_arr,x_arr,y_arr,yaw_arr,vel_arr,acc_arr,jerk_arr]
         
     
@@ -896,6 +933,7 @@ class TrajectoryPlan:
         veh_state.set_current_l2_action(l2_action)
         if l1_action == 'wait-for-pedestrian' and veh_state.id == 9:
             brk=1
+        
         self.construct_trajectories(veh_state)
         '''
         clipped_res = utils.clip_trajectory_to_viewport(res)
@@ -903,7 +941,7 @@ class TrajectoryPlan:
             res =  clipped_res
         '''
         '''
-        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+        conn_trajdb = sqlite3.connect(constants.DB_DIR+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
         c = conn.cursor()
         q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point'"
         c.execute(q_string)
@@ -1235,7 +1273,7 @@ def get_boundary_states(veh_state,l1_action,l2_action):
         return get_proceed_states(veh_state, l2_action)
     
 def get_stopline(init_segment):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect(constants.DB_DIR+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "SELECT X_POSITIONS,Y_POSITIONS FROM TRAFFIC_REGIONS_DEF WHERE NAME = '"+init_segment+"' and REGION_PROPERTY='exit_boundary' and SHAPE='line'"
     c.execute(q_string)
@@ -1277,7 +1315,7 @@ def get_exitline_from_direction(direction,veh_state):
     return get_exitline(exit_segment)
 
 def get_exitline(exit_segment):
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
+    conn = sqlite3.connect(constants.DB_DIR+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "SELECT X_POSITIONS,Y_POSITIONS FROM TRAFFIC_REGIONS_DEF WHERE NAME = '"+exit_segment+"' and REGION_PROPERTY='exit_boundary' and SHAPE='line'"
     c.execute(q_string)
@@ -1503,7 +1541,7 @@ def get_proceed_states(veh_state,l2_action):
     
 def get_lane_boundary(boundary_lane_spec):
     lane_name,lane_property = boundary_lane_spec.split('|')
-    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\uni_weber.db')
+    conn = sqlite3.connect(constants.DB_DIR+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
     c = conn.cursor()
     q_string = "SELECT X_POSITIONS,Y_POSITIONS FROM TRAFFIC_REGIONS_DEF WHERE NAME = '"+lane_name+"' and REGION_PROPERTY='"+lane_property+"' and SHAPE='line'"
     c.execute(q_string)

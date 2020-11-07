@@ -6,12 +6,13 @@ Created on Feb 6, 2020
 import csv
 import numpy as np
 import sqlite3
-from all_utils import utils
+from all_utils import utils, stat_utils
 import sys
 import constants
 import ast
 import math
 import pickle
+from visualizer import visualizer
 import os.path
 from os import listdir
 from os.path import isfile, join
@@ -28,6 +29,7 @@ from motion_planners.planning_objects import TrajectoryDef
 from collections import OrderedDict
 from all_utils import db_utils
 import concurrent.futures
+from matplotlib.patches import Ellipse
 import time
 import threading
 
@@ -110,8 +112,24 @@ class CostEvaluation():
                     }
         
         return ns_dicts,eq,br     
-
-        
+    
+    ''' same as eval_inhibitory; just that the min dist matrix is alredy provided'''
+    def eval_inhibitory_from_distmat(self,traj_dict_list, all_possible_payoffs, strategy_tuple, dist_mat):
+        disp_arr_x,disp_arr_y = [],[] 
+        num_agents = len(strategy_tuple)
+        act_code_m = np.empty(shape=(num_agents,num_agents),dtype=(int,2))
+        for i in np.arange(num_agents):
+            for j in np.arange(num_agents):
+                act_code_m[i,j] = (int(strategy_tuple[i].split('-')[0][-4:-2]), int(strategy_tuple[j].split('-')[0][-4:-2]))
+        all_possible_payoffs_inh = dict(all_possible_payoffs)
+        for traj_idx_tuple in all_possible_payoffs.keys():
+            distgap_parm_matrix = np.apply_along_axis(self.get_dist_gap_params,axis=2,arr=act_code_m)
+            payoff_m = exp_dist_payoffs(dist_mat, distgap_parm_matrix)
+            #payoffs = dist_payoffs(dist) + constants.L2_ACTION_PAYOFF_ADDITIVE
+            payoffs = np.amin(payoff_m,axis=1)
+            all_possible_payoffs_inh[traj_idx_tuple] = payoffs
+        return all_possible_payoffs_inh
+    
     ''' given a strategy combination, evaluate the vector of payoffs for each agent.'''
     def eval_inhibitory(self,traj_dict_list, all_possible_payoffs, strategy_tuple):
         disp_arr_x,disp_arr_y = [],[] 
@@ -229,10 +247,10 @@ class CostEvaluation():
         return all_possible_payoffs_inh_ped
        
     def calc_l3_payoffs(self,eq,strategy_tuple,l3_utility_dict=None):
-        if eq.eval_config.l3_eq is not None and l3_utility_dict is None:
+        if (eq.eval_config.l3_eq is not None and eq.eval_config.l3_eq != 'SAMPLING_EQ') and l3_utility_dict is None:
             raise ValueError('L3 utility dict cannot be None when L3 Equilibria is set to None')
     
-        if eq.eval_config.l3_eq is None:
+        if eq.eval_config.l3_eq is None or eq.eval_config.l3_eq == 'SAMPLING_EQ':
             ''' payoffs will be calculated just from the baselines '''
             baseline_ids = [[int(x.split('-')[1])] for x in strategy_tuple]
             all_possible_payoffs = {k:np.zeros(shape=len(k)) for k in list(itertools.product(*[v for v in baseline_ids]))}
@@ -250,6 +268,8 @@ class CostEvaluation():
                         brk=1
             
         all_possible_payoffs_inh,all_possible_payoffs_exc = 0,0
+        
+        
         
         
         '''
@@ -290,6 +310,164 @@ class CostEvaluation():
                     all_possible_payoffs[k] = all_possible_payoffs[k] + all_possible_payoffs_inh[k]
         
         return all_possible_payoffs
+    
+    
+    def calc_l3_sampling_eq_payoffs(self,eq,strategy_tuple,l3_utility_dict=None):
+        num_agents = eq.eval_config.num_agents
+        if (eq.eval_config.l3_eq is not None and eq.eval_config.l3_eq != 'SAMPLING_EQ') and l3_utility_dict is None:
+            raise ValueError('L3 utility dict cannot be None when L3 Equilibria is set to None')
+        ag_indexes = dict()
+        if eq.eval_config.l3_eq is None or eq.eval_config.l3_eq == 'SAMPLING_EQ':
+            ''' payoffs will be calculated just from the baselines '''
+            baseline_ids = [[int(x.split('-')[1])] for x in strategy_tuple]
+            all_possible_payoffs = {k:np.zeros(shape=len(k)) for k in list(itertools.product(*[v for v in baseline_ids]))}
+            traj_dict_list = [{t:eq.l1l2_trajectory_cache[k[0]] for t in k} for k in baseline_ids]
+        else:
+            all_possible_payoffs = l3_utility_dict
+            traj_ids = list(all_possible_payoffs.keys())
+            traj_dict_list = [dict() for n in np.arange(eq.eval_config.num_agents)]
+            for k in traj_ids:
+                for ag_idx,t in enumerate(k):
+                    t_id = int(t.split('-')[1])
+                    try:
+                        traj_dict_list[ag_idx].update({t:eq.l3_trajectory_cache[int(strategy_tuple[ag_idx].split('-')[1])][t_id]})
+                    except KeyError:
+                        brk=1
+            
+        all_possible_payoffs_inh,all_possible_payoffs_exc = 0,0
+        
+        this_time = self.eq_context.curr_time
+        ''' time: {(ag,ra) : [all_pts]} '''
+        position_distr = OrderedDict()
+        for idx,s in enumerate(strategy_tuple):
+            ag_key = (int(s[3:6]),int(s[6:9]))
+            ag_indexes[ag_key] = idx
+            act = utils.get_l1_action_string(int(s[9:11]))
+            traj_id = int(s.split('-')[1])
+            traj = traj_dict_list[idx][traj_id]
+            #plt.plot(traj[:,2],traj[:,3])
+            step_dist = []
+            for t_steps in np.arange(0,(constants.PLAN_HORIZON_SECS+1)*(1/constants.LP_FREQ),1/constants.LP_FREQ):
+                if int(round(t_steps/10)) not in position_distr:
+                    position_distr[int(round(t_steps/10))] = dict()
+                if t_steps > 0:
+                    if (round(t_steps/10),act) in self.eq_context.eval_config.traj_errs:
+                        traj_err = self.eq_context.eval_config.traj_errs[(round(t_steps/10),act)]
+                    elif (round(t_steps/10)-.1,act) in self.eq_context.eval_config.traj_errs:
+                        traj_err = self.eq_context.eval_config.traj_errs[(round(t_steps/10)-.1,act)]
+                    else:
+                        traj_err = [0]
+                    d = np.diff(traj[:int(t_steps),2:4], axis=0)
+                    segdists = np.sqrt((d ** 2).sum(axis=1))
+                    step_dist.append((max(sum(segdists)-traj_err[0],0),sum(segdists)+traj_err[0]))
+                    if t_steps > traj.shape[0]:
+                        break
+                    f=1
+                else:
+                    step_dist.append((0,0))
+            
+            cls = self.eq_context.eval_config.centerline_defs[this_time][ag_key]
+            for cl in cls:
+                dists_added = []
+                cl_x,cl_y = cl[0][0],cl[0][1]
+                p_line_lat1, p_line_lat2 = utils.add_parallel(list(zip(cl_x,cl_y)), 1, 1)
+                for time_idx,dist in enumerate(step_dist):
+                    if ag_key not in position_distr[time_idx]:
+                        position_distr[time_idx][ag_key] = []
+                    for l in [p_line_lat1,list(zip(cl_x,cl_y)),p_line_lat2]:
+                        if dist[0] not in dists_added:
+                            if dist[0] > 0:
+                                point = utils.find_point_along_line([x[0] for x in l],[x[1] for x in l], None, dist[0])
+                            else:
+                                point = tuple(l[0])
+                            position_distr[time_idx][ag_key].append(point)
+                        #plt.plot([point[0]],[point[1]],'o')
+                        if dist[1] not in dists_added:
+                            if dist[1] > 0:
+                                point = utils.find_point_along_line([x[0] for x in l],[x[1] for x in l], None, dist[1])
+                            else:
+                                point = tuple(l[0])
+                            position_distr[time_idx][ag_key].append(point)
+                        #plt.plot([point[0]],[point[1]],'o')
+                #plt.show() 
+        wass_dist_dict = {k:None for k,v in position_distr.items()}
+        for k,v in position_distr.items():
+            #plt.title(k)
+            #ax = plt.gca()
+            #visualizer.visualizer.plot_traffic_regions()
+            for k1,v1 in v.items():
+                mean, cov = stat_utils.get_distribution_params(v1)
+                position_distr[k][k1] = (mean,cov)
+                #plt.plot([x[0] for x in v1],[x[1] for x in v1],'o')
+                #maj_axs, min_axs, phi_hat, C = stat_utils.construct_min_bounding_ellipse(v1)
+                #el = Ellipse(xy=C, width=maj_axs, height=min_axs, angle=np.rad2deg(phi_hat), fill=False)
+                #ax.add_patch(el)
+            #plt.show()
+            dist_mat = np.full((num_agents,num_agents), np.inf)
+            for ag_key_1 in v.keys():
+                for ag_key_2 in v.keys():
+                    if ag_key_1 != ag_key_2:
+                        ag_1_act = utils.get_l1_action_string(int(strategy_tuple[ag_indexes[ag_key_1]][9:11]))
+                        ag_2_act = utils.get_l1_action_string(int(strategy_tuple[ag_indexes[ag_key_2]][9:11]))
+                        if ag_1_act in constants.WAIT_ACTIONS and ag_2_act in constants.WAIT_ACTIONS:
+                            dist_mat[ag_indexes[ag_key_1],ag_indexes[ag_key_2]] = np.inf
+                        elif ag_1_act not in constants.WAIT_ACTIONS and ag_2_act not in constants.WAIT_ACTIONS:
+                            wass_dist = stat_utils.calc_wasserstein_distance_multivariate(v[ag_key_1], v[ag_key_2])
+                            dist_mat[ag_indexes[ag_key_1],ag_indexes[ag_key_2]] = wass_dist
+                        else:
+                            if ag_1_act in constants.WAIT_ACTIONS:
+                                dist_mat[ag_indexes[ag_key_1],ag_indexes[ag_key_2]] = np.inf
+                            else:
+                                dist_mat[ag_indexes[ag_key_1],ag_indexes[ag_key_2]] = 10
+                    else:
+                        dist_mat[ag_indexes[ag_key_1],ag_indexes[ag_key_2]] = np.inf
+            wass_dist_dict[k] = dist_mat
+        wass_dist_dict = np.stack(wass_dist_dict.values(), axis = 2)
+        min_wass_dist = np.amin(wass_dist_dict, axis=(2,1))
+        all_possible_payoffs_inh1 = self.eval_inhibitory_from_distmat(traj_dict_list, all_possible_payoffs, strategy_tuple, min_wass_dist)
+        f=1
+        
+        '''
+        if len(eval_config.traj_dict) > 0:
+            traj_dict_list = [{t:np.vstack(eval_config.traj_dict[k[0]]) for t in k} for k in eval_config.strat_traj_ids]
+        else:
+            traj_dict_list = all_utils.load_traj_from_db(chosen_trajectory_ids,baseline_only)
+        '''
+        
+        
+        if constants.INHIBITORY:
+            #if N_size > 300:
+            #    logging.info(str(u_ct)+'/'+str(N_size)+' evaluating inhibitory')
+            #future_inh = executor.submit(self.eval_inhibitory, traj_dict_list, all_possible_payoffs, strategy_tuple)
+            all_possible_payoffs_inh = all_possible_payoffs_inh1
+        if constants.EXCITATORY:
+            #if N_size > 300:
+            #    logging.info(str(u_ct)+'/'+str(N_size)+' evaluating excitatory')
+            #future_exc = executor.submit(self.eval_excitatory, traj_dict_list, all_possible_payoffs, strategy_tuple)
+            all_possible_payoffs_exc = self.eval_excitatory(traj_dict_list, all_possible_payoffs, strategy_tuple)
+        if constants.INHIBITORY_PEDESTRIAN:
+            #if N_size > 300:
+            #    logging.info(str(u_ct)+'/'+str(N_size)+' evaluating pedestrian_inhibitory')
+            #future_pedinh = executor.submit(self.eval_pedestrian_inhibitory, traj_dict_list, all_possible_payoffs, strategy_tuple)
+            all_possible_payoffs_inh_ped = self.eval_pedestrian_inhibitory(traj_dict_list, all_possible_payoffs, strategy_tuple)
+        #all_possible_payoffs_inh = future_inh.result()
+        #all_possible_payoffs_exc = future_exc.result()
+        #all_possible_payoffs_inh_ped = future_pedinh.result()
+        for k,v in all_possible_payoffs.items():
+            if constants.INHIBITORY and constants.EXCITATORY:
+                all_possible_payoffs[k] = all_possible_payoffs[k] + (constants.INHIBITORY_PAYOFF_WEIGHT * all_possible_payoffs_inh[k])
+                all_possible_payoffs[k] = all_possible_payoffs[k] + (constants.EXCITATORY_PAYOFF_WEIGHT * all_possible_payoffs_exc[k])
+                all_possible_payoffs[k] = ((1-constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT) * all_possible_payoffs[k]) + (constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT * all_possible_payoffs_inh_ped[k])
+            else:
+                if constants.EXCITATORY:
+                    all_possible_payoffs[k] = all_possible_payoffs[k] +  all_possible_payoffs_exc[k]
+                if constants.INHIBITORY:
+                    all_possible_payoffs[k] = all_possible_payoffs[k] + all_possible_payoffs_inh[k]
+            all_possible_payoffs[k] = np.vstack((all_possible_payoffs_inh[k],all_possible_payoffs_exc[k],all_possible_payoffs_inh_ped[k])) 
+        return all_possible_payoffs
+    
+    
+    
     
     def calc_maxmin_payoff(self,s_traj,r_traj,s_act_key,r_act_key):
         #start_time =time.time()

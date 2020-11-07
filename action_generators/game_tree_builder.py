@@ -113,7 +113,7 @@ def push_trajectories_to_db():
         c.execute("SELECT * FROM GENERATED_TRAJECTORY_INFO")
         res = c.fetchall()
         traj_info_dict = {(row[2],row[3],row[4],row[5],row[6]):row[1] for row in res}
-    all_files = os.listdir(os.path.join(constants.ROOT_DIR, constants.TEMP_TRAJ_CACHE))
+    all_files = os.listdir(os.path.join(constants.CACHE_DIR, constants.TEMP_TRAJ_CACHE))
     all_files.sort()
     N = len(all_files)
     boundary_ins_list,baseline_ins_list,gaussian_ins_list = [],[],[]
@@ -122,7 +122,7 @@ def push_trajectories_to_db():
     traj_info_ins_list = []
     for idx,file in enumerate(all_files):
         log.info(str(idx)+'/'+str(N))
-        filename = os.path.join(constants.ROOT_DIR,constants.TEMP_TRAJ_CACHE,file)
+        filename = os.path.join(constants.CACHE_DIR,constants.TEMP_TRAJ_CACHE,file)
         traj_plan = utils.pickle_load(filename)
         if not constants.TRAJECTORY_TYPE == 'GAUSSIAN':
             i_string_boundary = 'INSERT INTO '+'GENERATED_BOUNDARY_TRAJECTORY'+' VALUES (?,?,?,?,?,?,?,?,?)'
@@ -194,7 +194,7 @@ def generate_action_plans(param_list):
     pedestrian_info = utils.setup_pedestrian_info(time_ts)
     vehicles_info = utils.get_vehicles_info(time_ts)
     scene_state = SceneState(pedestrian_info,vehicles_info)
-    ag_file_key = os.path.join(constants.ROOT_DIR,constants.L3_ACTION_CACHE,str(veh_state.id)+'-0_'+str(time_ts).replace('.', ','))
+    ag_file_key = os.path.join(constants.CACHE_DIR,constants.L3_ACTION_CACHE,str(veh_state.id)+'-0_'+str(time_ts).replace('.', ','))
     if os.path.exists(ag_file_key):
         veh_state = utils.pickle_load(ag_file_key)
         veh_state = copy.deepcopy(veh_state)
@@ -564,9 +564,9 @@ def generate_lattice_boundary_trajectories():
         curr_ag_id = traj_info_det['ag_id'] if traj_info_det['ra_id']==0 else traj_info_det['ra_id']
         time_ts = traj_info_det['time_ts'] 
         if traj_info_det['time_ts']==0:
-            ag_file_key = os.path.join(constants.ROOT_DIR,constants.L3_ACTION_CACHE,str(curr_ag_id)+'-0_'+str(traj_info_det['time_ts'])+',0')
+            ag_file_key = os.path.join(constants.CACHE_DIR,constants.L3_ACTION_CACHE,str(curr_ag_id)+'-0_'+str(traj_info_det['time_ts'])+',0')
         else:
-            ag_file_key = os.path.join(constants.ROOT_DIR,constants.L3_ACTION_CACHE,str(curr_ag_id)+'-0_'+str(traj_info_det['time_ts']).replace('.', ','))
+            ag_file_key = os.path.join(constants.CACHE_DIR,constants.L3_ACTION_CACHE,str(curr_ag_id)+'-0_'+str(traj_info_det['time_ts']).replace('.', ','))
         if curr_ag_id==2 and time_ts==12.012:
             brk=1
         if os.path.exists(ag_file_key):
@@ -598,7 +598,7 @@ def main():
     constants.TEMP_TRAJ_CACHE = 'temp_traj_cache_'+constants.CURRENT_FILE_ID+'_'+constants.TRAJECTORY_TYPE
     constants.L3_ACTION_CACHE = 'l3_action_trajectories_'+constants.CURRENT_FILE_ID
     constants.setup_logger()
-    #generate_hopping_plans()
+    generate_hopping_plans()
     push_trajectories_to_db()
     #utils.remove_files(constants.TEMP_TRAJ_CACHE)
 if __name__ == '__main__':    

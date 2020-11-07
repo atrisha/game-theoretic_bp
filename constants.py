@@ -186,6 +186,7 @@ LP_FREQ = 0.1
 PLAN_FREQ = 1
 DATASET_FPS = 30
 OTH_AGENT_L3_ACT_HORIZON = 5
+PLAN_HORIZON_SECS = 5
 
 colors = ['k','g','r','c','m','b','w']
 BEFORE_CROSSWALK = 'BEFORE_CROSSWALK' 
@@ -204,7 +205,7 @@ L1_ACTION_CODES = {'wait-for-oncoming':1,
                    'yield-to-merging':10,
                    'wait-for-pedestrian':11}
 
-WAIT_ACTIONS = ['wait-for-oncoming','decelerate-to-stop','wait_for_lead_to_cross','wait-on-red','yield-to-merging','wait-for-pedestrian']
+WAIT_ACTIONS = ['yield-to-merging','wait_for_lead_to_cross','wait-for-oncoming','decelerate-to-stop','wait-on-red','wait-for-pedestrian']
 
 L1_ACTION_CODES_2_NAME = {1:'wait',
                    2:'proceed-turn',
@@ -280,6 +281,11 @@ EXCITATORY = True
 INHIBITORY_PEDESTRIAN = True
 L1_EQ_TYPE = None
 L3_EQ_TYPE = None
+
+''' only one of the following two can be True'''
+BUILD_L3_TREE = True
+BUILD_FROM_L3_TREE = False
+
 TRAJECTORY_TYPE = None
 
 

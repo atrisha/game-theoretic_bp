@@ -201,7 +201,24 @@ def calc_equilibria(curr_time,traj_det,payoff_type,status_str,param_str,emp_acti
 
 
 
-            
+def get_tress_in_cache(cache_dir):
+    cache_acts = dict()
+    all_files = os.listdir(cache_dir)
+    for f in all_files:
+        #if f[:3] == constants.CURRENT_FILE_ID:
+        track_id = int(f.split('_')[0])
+        time_ts = f.split('_')[1].replace(',','.')
+        precision = len(time_ts.split('.')[1]) if '.' in time_ts else None
+        if precision is not None:
+            time_ts = round(float(time_ts), precision)
+        else:
+            time_ts = float(time_ts)
+        if time_ts in cache_acts:
+            cache_acts[time_ts].append(track_id)
+        else:
+            cache_acts[time_ts] = [track_id]
+    return cache_acts
+    
 
 
                 
@@ -1067,7 +1084,7 @@ def build_results_tree():
 ''' this method calculates the equilibria_core based on the trajectories that were generated in the hopping plans.
 Assumes that the trajectories are already present in the cache.'''
 def calc_eqs_for_hopping_trajectories():
-    db_utils.reduce_relev_agents()
+    #db_utils.reduce_relev_agents()
     update_only = True
     eval_config = EvalConfig()
     eval_config.set_l1_eq_type(constants.L1_EQ_TYPE)
@@ -1075,9 +1092,14 @@ def calc_eqs_for_hopping_trajectories():
     eval_config.set_traj_type(constants.TRAJECTORY_TYPE)
     param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ constants.TRAJECTORY_TYPE if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
     if update_only:
-        eval_config.set_update_only(True)
-        eq_acts_in_db = get_equil_action_in_db(param_str)
-        eval_config.set_eq_acts_in_db(eq_acts_in_db)
+        if not constants.BUILD_L3_TREE and not constants.BUILD_FROM_L3_TREE:
+            eval_config.set_update_only(True)
+            eq_acts_in_db = get_equil_action_in_db(param_str)
+            eval_config.set_eq_acts_in_db(eq_acts_in_db)
+        else:
+            eval_config.set_update_only(True)
+            eq_acts_in_db = get_tress_in_cache("F:\\Spring2017\workspaces\\game_theoretic_planner_cache\\l3_trees\\"+constants.CURRENT_FILE_ID)
+            eval_config.set_eq_acts_in_db(eq_acts_in_db)
     else:
         eval_config.set_update_only(False)
         eval_config.set_eq_acts_in_db(None)
@@ -1106,7 +1128,7 @@ def main():
     constants.setup_logger()
     
     calc_eqs_for_hopping_trajectories()
-    
+    '''
     eval_config = EvalConfig()
     eval_config.set_l1_eq_type(constants.L1_EQ_TYPE)
     eval_config.set_l3_eq_type(constants.L3_EQ_TYPE)
@@ -1117,7 +1139,7 @@ def main():
     
     build_analysis_table(False,True)
     #build_analysis_table(True,False)
-
+    '''
 def generate_results_file():
     constants.CURRENT_FILE_ID = sys.argv[1]
     constants.TRAJECTORY_TYPE = sys.argv[2]

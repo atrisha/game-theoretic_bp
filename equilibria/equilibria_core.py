@@ -11,6 +11,7 @@ import datetime
 import os
 import constants
 import logging
+from collections import OrderedDict
 logging.basicConfig(format='%(levelname)-8s %(filename)s: %(message)s',level=logging.INFO)
 
 class EquilibriaCore:
@@ -20,6 +21,7 @@ class EquilibriaCore:
         self.pay_off_dict = pay_off_dict
         self.N = N
         self.sv_actions = sv_actions
+        self.player_actions = [list(set([k[i] for k in pay_off_dict.keys()])) for i in np.arange(num_players)]
         self.isl1agent = is_l1agent
         #self.bidirec_payoff_dict = bidict(pay_off_dict).inverse
 
@@ -181,16 +183,31 @@ class EquilibriaCore:
                 if v[i]==br_payoffs[i]:
                     eq_dict[k] = v
         return eq_dict
+    
+    def transform_to_nfg_format(self,file_loc,all_agents):
+        file_str = ''
+        file_str += 'NFG 1 R "'+str(self.num_players)+' player game" { '+' '.join(['"'+str(i)+'"' for i in all_agents])+' } \n'
+        file_str += '{\n'
+        for i in np.arange(self.num_players):
+            file_str += '{ '
+            file_str += ' '.join(['"'+a+'"' for a in self.player_actions[i]])
+            file_str += '} \n'
+        file_str += '}\n'
+        file_str += '""\n'
+        file_str += '{\n'
+        for i in [x[::-1] for x in list(itertools.product(*[v for v in reversed(self.player_actions)]))]:
+            file_str += '{ "" '
+            file_str += str(self.pay_off_dict[i])[1:-1]
+            file_str += '}\n'
+        file_str += '}\n'
+        file_str += str(np.arange(1,len(self.pay_off_dict)+1))[1:-1]
+        text_file = open(file_loc, "w")
+        text_file.write(file_str)
+        text_file.close()
+        
         
         
 
-def calc_pure_strategy_nash_equilibrium_exhaustive2(pay_off_dict,all_eqs=False):
-    num_players = 2
-    for k,v in pay_off_dict.items():
-        for i in np.arange(num_players):
-            p_k = i
-        
-                
 
 def calc_best_response(pay_off_dict):
     num_players = len(list(pay_off_dict.values())[0]) 
@@ -409,10 +426,10 @@ prisoners_dilemma = {('p1s1','p2s1'):[-1,-1],
                      ('p1s2','p2s1'):[0,-3],
                      ('p1s2','p2s2'):[-2,-2]}
 
-game_of_chicken2 = {('go','go'):[0,0],
-                     ('go','wait'):[7,2],
-                     ('wait','go'):[2,5],
-                     ('wait','wait'):[4,4]}
+game_of_chicken2 = {('go1','go2'):[0,0],
+                     ('go1','wait2'):[7,2],
+                     ('wait1','go2'):[2,5],
+                     ('wait1','wait2'):[4,4]}
 
 game_of_chicken = {('go','go'):[1,-1],
                      ('go','wait'):[-1,1],
@@ -441,14 +458,18 @@ toy_merge = {(('wait', 'cancel'), ('slow', 'cont. speed')): [10, 20],
 br_b = calc_best_response_with_beliefs(toy_merge,dict())
 br = calc_best_response(toy_merge)
 '''
-eq = EquilibriaCore(2,game_of_chicken,len(game_of_chicken),None,None)
+'''
+eq = EquilibriaCore(2,game_of_chicken2,len(game_of_chicken),None,None)
+eq.transform_to_nfg_format()
 ne_all = eq.calc_pure_strategy_nash_equilibrium_exhaustive()
+
 #ne = calc_pure_strategy_nash_equilibrium_exhaustive(game_of_chicken)
 #print(br)
 print()
-print('all toy1')
 for k,v in ne_all.items():
     print(k,v)
+'''
+
 '''
 ne_all = calc_pure_strategy_nash_equilibrium_exhaustive(pay_off_dict,True)
 #ne = calc_pure_strategy_nash_equilibrium_exhaustive(game_of_chicken)

@@ -21,6 +21,7 @@ import copy
 import math
 import datetime
 import time
+from motion_planners.motion_planner import Centerlines
 
 log = constants.eq_logger
 
@@ -519,7 +520,7 @@ class Equilibria:
             belief_dict = {tuple(x.split('-')[0] for x in k):v for k,v in zip(all_action_combinations,all_belief_combinations)}
         utility_dict = {k:np.zeros(shape=len(k)) for k in all_action_combinations}
         self.eval_config.set_num_agents(len(all_action_combinations[0]))
-        if self.eval_config.l3_eq is None:
+        if self.eval_config.l3_eq is None or self.eval_config.l3_eq == 'SAMPLING_EQ':
             self.l1l2_trajectory_cache = utils.load_trajs_for_traj_info_id(all_baseline_ids,True,self.eval_config.traj_type)
         logging.info('building payoff dict...DONE')
         if 'BELIEF' in self.eval_config.l1_eq:
@@ -536,7 +537,10 @@ class Equilibria:
             ct +=1
             logging.info('processing '+str(ct)+'/'+str(N)+' l1l2')
             cost_ev = CostEvaluation(self)
-            l3_payoff = cost_ev.calc_l3_payoffs(self,l1l2_strat)
+            if self.eval_config.l3_eq == 'SAMPLING_EQ':
+                l3_payoff = cost_ev.calc_l3_sampling_eq_payoffs(self,l1l2_strat)
+            else:
+                l3_payoff = cost_ev.calc_l3_payoffs(self,l1l2_strat)
             assert(len(l3_payoff)==1)
             ''' the l1l2 payoff table is constructed with the payoffs from lower levels '''
             payoffdict[tuple([k.split('-')[0] for k in l1l2_strat])] = next(iter(l3_payoff.values()))
@@ -714,7 +718,11 @@ class Equilibria:
         
     
     def calc_equilibrium(self):
-        self.calc_l1l2_equilibrium()
+        if self.eval_config.l3_eq == 'SAMPLING_EQ':
+            sampling_eq = SamplingEquilibria(self)
+            sampling_eq.calc_l1l2_equilibrium()
+        else:
+            self.calc_l1l2_equilibrium()
         
     
     
@@ -804,7 +812,25 @@ class EvalConfig:
         strat_traj_ids = []
         self.direction = direction
         self.traj_metadata = db_utils.get_traj_metadata(direction,self.traj_type)
+        self.agent_list_def = {k:dict() for k in self.traj_metadata.keys()}
+        for k,v in self.agent_list_def.items():
+            for ag_id in list(self.traj_metadata[k].keys()):
+                self.agent_list_def[k][(ag_id,0)] = None
+                if 'relev_agents' in self.traj_metadata[k][ag_id]:
+                    for ra_id in list(self.traj_metadata[k][ag_id]['relev_agents'].keys()):
+                        self.agent_list_def[k][(ag_id,ra_id)] = None
         self.time_list = []
+        cls = Centerlines(self.agent_list_def)
+        self.centerline_defs = cls.build_centerlines()
+        conn_traj = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_generated_trajectories_'+constants.CURRENT_FILE_ID+'.db')
+        c_traj = conn_traj.cursor()
+        q_string = "select * from TRAJECTORY_ERRORS"
+        c_traj.execute(q_string)
+        res = c_traj.fetchall()
+        self.traj_errs = {(row[1],row[0]):row[2:] for row in res}
+        conn_traj.close()
+        
+        
 
     def set_l3_traj_dict(self,traj_dict):
         self.traj_dict = traj_dict
@@ -842,5 +868,47 @@ class EvalConfig:
     def set_update_only(self,update_only):
         self.update_only = update_only
         
+  
+class SamplingEquilibria:
     
+    def __init__(self, eq_context):
+        self.eq_context = eq_context        
         
+        
+    def calc_l1l2_equilibrium(self):
+        ct,N = 0,len(self.eq_context.eval_config.traj_metadata)
+        for time_ts,m_data in self.eq_context.eval_config.traj_metadata.items():
+            ct += 1
+            self.eq_context.curr_time = time_ts
+            pedestrian_info = utils.setup_pedestrian_info(time_ts)
+            self.eq_context.eval_config.set_pedestrian_info(pedestrian_info)
+            self.eq_context.l1l2_trajectory_cache = dict()
+            self.eq_context.l3_trajectory_cache = dict()
+            equilibra_dict = dict()
+            equilibra_dict[time_ts] = dict()
+            for sv_id,sv_det in m_data.items():
+                if self.eq_context.eval_config.update_only and time_ts in self.eq_context.eval_config.eq_acts_in_db:
+                    if sv_id in self.eq_context.eval_config.eq_acts_in_db[time_ts]:
+                        log.info("equilibrium already in db....continuing "+str(ct)+"/"+str(N))
+                        continue
+                if len(sv_det[sv_id]) == 0:
+                    log.info("no info on sv....continuing "+str(ct)+"/"+str(N))
+                    continue
+                equilibra_dict[time_ts][sv_id] = dict()
+                l1l2_utility_dict,sv_actions,belief_dict = self.eq_context.build_l1l2_utility_table(sv_det,time_ts)
+                
+                logging.info('calculating utilities...')
+                u_ct = 0
+                N_payoff_table = len(l1l2_utility_dict)
+                dict_proc = DictProcessor.fromFlattenedDict(l1l2_utility_dict, self.eq_context.assign_utility_to_table, {}, 100)
+                payoffdict = dict_proc.execute()
+                #payoffdict = self.eq_context.assign_utility_to_table(l1l2_utility_dict,{})
+                ''' release this '''    
+                l1l2_utility_dict = None
+                logging.info('calculating utilities...DONE')
+                ''' release this '''    
+                l1l2_utility_dict = None
+                logging.info('calculating utilities...DONE')
+                utils.pickle_dump_to_dir("F:\\Spring2017\\workspaces\\game_theoretic_planner_cache\\l3_trees\\"+constants.CURRENT_FILE_ID+'\\'+str(sv_id)+'_'+str(time_ts).replace('.', ','), payoffdict)
+                logging.info(self.eq_context.eval_config.direction+" "+str(time_ts)+"-"+str(sv_id)+":"+str(ct)+'/'+str(N)+":"+str(N_payoff_table))
+    

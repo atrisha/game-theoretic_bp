@@ -86,9 +86,9 @@ def solve_lp(obj,constr,num_params):
     
     for c in constr:
         if num_params == 3:
-            prob += w_1*c[0] + w_2*c[1] + w_3*c[2] <= 0
+            prob += w_1*c[0] + w_2*c[1] + w_3*c[2] >= 0
         else:
-            prob += w_1*c[0] + w_2*c[1] <= 0
+            prob += w_1*c[0] + w_2*c[1] >= 0
         
     if num_params == 3:
         prob += w_1 + w_2 + w_3 == 1
@@ -115,9 +115,9 @@ def solve_lp(obj,constr,num_params):
     
     for c in constr:
         if num_params == 3:
-            prob += w_1*c[0] + w_2*c[1] + w_3*c[2] <= 0
+            prob += w_1*c[0] + w_2*c[1] + w_3*c[2] >= 0
         else:
-            prob += w_1*c[0] + w_2*c[1] <= 0
+            prob += w_1*c[0] + w_2*c[1] >= 0
         
     if num_params == 3:
         prob += w_1 + w_2 + w_3 == 1

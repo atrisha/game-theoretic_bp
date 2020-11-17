@@ -23,9 +23,12 @@ from sklearn import tree
 from all_utils.lp_utils import solve_lp
 import csv
 import os
+
 import constants
 from subprocess import check_output
 import math
+
+
 
 class Rules():
     
@@ -127,64 +130,16 @@ class L1ModelCore():
     def load_emp_and_rule_acts(self):
         #confusion_dict = dict()
         ct,N = 0,len(self.file_keys)
-        self.emp_acts_dict, self.rule_acts_dict = dict(), dict()
+        self.emp_acts_dict, self.rule_acts_dict, self.all_agent_obj_dict = dict(), dict(), dict()
         for file_str in self.file_keys:
             ct +=1
+            #if ct > 20:
+            #    continue
             print('processing',ct,'/',N)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
             emp_acts,rule_acts = self.get_emp_and_rule_actions(file_str,payoff_dict)
             self.emp_acts_dict[file_str] = emp_acts
             self.rule_acts_dict[file_str] = rule_acts
-            '''
-            all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
-            if len(rule_acts) == 0 or len(emp_acts) == 0:
-                continue
-            for emp_act in emp_acts:
-                for ag_idx in np.arange(len(all_agents)):
-                    if all_agents[ag_idx][1] != 0:
-                        continue
-                    emp_act_str = utils.get_l1_action_string(int(emp_act[ag_idx][9:11]))
-                    if emp_act_str not in confusion_dict:
-                        confusion_dict[emp_act_str] = []
-                    if emp_act[ag_idx] in [x[ag_idx] for x in rule_acts]:
-                        confusion_dict[emp_act_str].append(emp_act_str)
-                    else:
-                        non_eq_len = 0
-                        for eq_act in set([x[ag_idx] for x in rule_acts]):
-                            eq_act_str = utils.get_l1_action_string(int(eq_act[9:11]))
-                            if eq_act_str != emp_act_str:
-                                confusion_dict[emp_act_str].append(eq_act_str)
-                                non_eq_len += 1
-                            else:
-                                confusion_dict[emp_act_str].append(emp_act_str)
-                        
-                        confusion_dict[emp_act_str] += [emp_act_str]*(non_eq_len-1)
-        confusion_key_list = list(confusion_dict.keys())
-        confusion_matrix = []
-        for k in confusion_key_list:
-            confusion_arr = []
-            ctr = Counter(confusion_dict[k])
-            _sum = sum(ctr.values())
-            for p_k in confusion_key_list:
-                th_prob = ctr[p_k]/_sum
-                confusion_arr.append(th_prob)
-            confusion_matrix.append(confusion_arr)
-        df_cm = pd.DataFrame(confusion_matrix, index = confusion_key_list,
-                      columns = confusion_key_list)
-        plt.figure()
-        chart = sn.heatmap(df_cm, annot=True)
-        sn.set(font_scale=.75)
-        plt.xticks(rotation=75)
-        plt.yticks(rotation=0)
-        plt.xlabel('Equilibrium action', labelpad=15)
-        plt.ylabel('Empirical action')
-        b, t = plt.ylim() # discover the values for bottom and top
-        b += 0.5 # Add 0.5 to the bottom
-        t -= 0.5 # Subtract 0.5 from the top
-        plt.ylim(b, t)
-        plt.savefig('sample.png', bbox_inches='tight')
-        plt.show()
-        '''
             
     def get_emp_and_rule_actions(self,file_str,payoff_dict):
         time_ts = file_str.split('_')[1].replace(',','.')
@@ -213,6 +168,7 @@ class L1ModelCore():
                         break
         emp_acts, rule_acts = [],[]
         self.agent_object_dict = agent_object_dict
+        self.all_agent_obj_dict[file_str] = agent_object_dict
         for ag in all_agents:
             ag_obj = agent_object_dict[ag]
             rule_action, emp_action = None, None
@@ -250,7 +206,7 @@ class InverseGameLearningModel(L1ModelCore):
         return all_solns
     
     
-    def transform_utilities(self):
+    def convert_to_nfg(self):
         
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
         c = conn.cursor()
@@ -261,11 +217,11 @@ class InverseGameLearningModel(L1ModelCore):
             sys.exit('UTILITY_WEIGHTS weights table is not populated ')
         weights_dict = dict()
         for row in res:
-            if row[11] is not None:
+            if row[12] is not None:
                 if tuple(row[3:11]) not in weights_dict:
-                    weights_dict[tuple(row[3:11])] = [row[11:]]
+                    weights_dict[tuple(row[3:11])] = [row[12:]]
                 else:
-                    weights_dict[tuple(row[3:11])].append(row[11:])
+                    weights_dict[tuple(row[3:11])].append(row[12:])
         weights_dict = {k: np.mean(np.asarray(v), axis=0) for k,v in weights_dict.items()}
         ct,N = 0,len(self.file_keys)
         ''' UTILITY_WEIGHTS TABLE also stores the agent state info information, so we can retrieve that instead of building it again '''
@@ -309,10 +265,18 @@ class InverseGameLearningModel(L1ModelCore):
                         else:
                             ag_orig_payoff = np.append(orig_payoff[:,ag_idx], 0)
                     if self.mixed_weights:
-                        ag_orig_payoff = ag_orig_payoff/sum(ag_orig_payoff)
+                        if np.sum(high_weights) != 0:
+                            high_weights = high_weights/np.sum(high_weights)
+                        if np.sum(low_weights) != 0:
+                            low_weights = low_weights/np.sum(low_weights)
+                        
                     else:
-                        #ag_orig_payoff = np.where(ag_orig_payoff == max(ag_orig_payoff), 1, 0)
-                        ag_orig_payoff = np.exp(10*ag_orig_payoff)/sum(np.exp(10*ag_orig_payoff))
+                        #high_weights = np.where(high_weights == max(high_weights), 1, 0)
+                        if np.sum(np.exp(10*high_weights)) != 0:
+                            high_weights = np.exp(10*high_weights)/np.sum(np.exp(10*high_weights))
+                        #low_weights = np.where(low_weights == max(low_weights), 1, 0)
+                        if np.sum(np.exp(10*high_weights)) != 0:
+                            low_weights = np.exp(10*low_weights)/np.sum(np.exp(10*low_weights))
                     high_weighted_payoffs = high_weights @ ag_orig_payoff
                     low_weighted_payoffs = low_weights @ ag_orig_payoff
                     low_bounds_transformed_payoffs[k][ag_idx] = low_weighted_payoffs[0]
@@ -408,7 +372,7 @@ class InverseGameLearningModel(L1ModelCore):
                       columns = confusion_key_list)
         plt.figure()
         chart = sn.heatmap(df_cm, annot=True)
-        sn.set(font_scale=.75)
+        sn.set(font_scale=.50)
         plt.xticks(rotation=75)
         plt.yticks(rotation=0)
         plt.xlabel('Equilibrium action', labelpad=15)
@@ -427,7 +391,7 @@ class InverseGameLearningModel(L1ModelCore):
         ct,N = 0,len(self.file_keys)
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
         c = conn.cursor()
-        q_string = "INSERT INTO UTILITY_WEIGHTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        q_string = "INSERT INTO UTILITY_WEIGHTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         ins_list = []
         for file_str in self.file_keys:
             ct +=1
@@ -602,7 +566,187 @@ class InverseQlkRGameLearningModel(InverseGameLearningModel):
         c.executemany(q_string,ins_list)
         conn.commit()
         conn.close()
+
+
+class InverseCorrelatedEquilibriaLearningModel(InverseGameLearningModel):
     
+    def formulate_and_solve_lp_qlkr(self,all_agents,obj_mat,constr_mat,on_rule,this_idx,file_str):
+        all_solns = []
+        for idx,ag in enumerate(all_agents):
+            if idx == this_idx:
+                if on_rule:
+                    all_solns.append((ag,[(0,0),(0,0),(0,0),(1,1)]))
+                else:
+                    num_params = 2 if self.all_agent_obj_dict[file_str][ag].relev_pedestrians is None else 3
+                    solns = solve_lp(obj_mat, constr_mat, num_params)
+                    all_solns.append((ag,solns))
+        return all_solns
+    
+    
+    def build_emp_distribution(self):
+        ct,N = 0,len(self.file_keys)
+        emp_act_distr = dict()
+        for file_str in self.file_keys:
+            ct +=1
+            print('processing',ct,'/',N)
+            #if ct > 20:
+            #    continue
+            
+            time_ts = file_str.split('_')[1].replace(',','.')
+            time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
+            payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
+            all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
+            num_players = len(all_agents)
+            emp_acts,rule_acts = self.emp_acts_dict[file_str], self.rule_acts_dict[file_str]
+            player_actions = [list(set([k[i] for k in payoff_dict.keys()])) for i in np.arange(num_players)]
+            player_actions = [''.join(list(set([ str(y[9:11]) for y in x ]))) for x in player_actions]
+            if len(all_agents) < 2:
+                continue
+            if num_players not in emp_act_distr:
+                emp_act_distr[num_players] = dict()
+            game_in_dict = False
+            for k in emp_act_distr[len(all_agents)].keys():
+                game_act_code = k
+                if set(game_act_code) == set(player_actions):
+                    game_in_dict = True
+                    for e_a in emp_acts:
+                        strat_code = tuple([str(x[9:11]) for x in e_a])
+                        emp_act_distr[len(all_agents)][k].append(strat_code)
+            if not game_in_dict:
+                if len(emp_acts) > 0:
+                    emp_act_distr[len(all_agents)][tuple(player_actions)] = []
+                    for e_a in emp_acts:
+                        strat_code = tuple([str(x[9:11]) for x in e_a])
+                        emp_act_distr[len(all_agents)][tuple(player_actions)].append(strat_code)
+        for k,v in emp_act_distr.items():
+            key_list = list(v.keys())
+            for k in key_list:
+                ctr = Counter(v[k])
+                _sum = sum(ctr.values())
+                for ctr_k in ctr.keys():
+                    ctr[ctr_k] = ctr[ctr_k]/_sum
+                v[k] = ctr
+        self.emp_act_distr = emp_act_distr
+    
+    def calculate_and_insert_weights(self):
+        ct,N = 0,len(self.file_keys)
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
+        c = conn.cursor()
+        q_string = "INSERT INTO UTILITY_WEIGHTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        ins_list = []
+        for file_str in self.file_keys:
+            ct +=1
+            print('processing',ct,'/',N)
+            time_ts = file_str.split('_')[1].replace(',','.')
+            time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
+            payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
+            all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
+            num_players = len(all_agents)
+            player_actions = [list(set([k[i] for k in payoff_dict.keys()])) for i in np.arange(num_players)]
+            player_action_codes = [''.join(list(set([ str(y[9:11]) for y in x ]))) for x in player_actions]
+            if len(all_agents) < 2:
+                continue
+            if tuple(player_action_codes) not in self.emp_act_distr[num_players]:
+                ''' we haven't seen this game matrix before, so continue'''
+                continue
+                    
+            emp_acts,rule_acts = self.emp_acts_dict[file_str], self.rule_acts_dict[file_str]
+            agents_on_rule = [[False]*len(all_agents)]*len(emp_acts)
+            if len(emp_acts) > 0 and len(rule_acts) > 0:
+                for emp_idx,e in enumerate(emp_acts):
+                    for i in np.arange(len(all_agents)):
+                        if e[i] in [x[i] for x in rule_acts]:
+                            agents_on_rule[emp_idx][i] = True
+                        else:
+                            emp_act_str = utils.get_l1_action_string(int(e[i][9:11]))
+                            all_rule_str = set([utils.get_l1_action_string(int(x[i][9:11])) for x in rule_acts])
+                            if emp_act_str in constants.WAIT_ACTIONS and len(all_rule_str & set(constants.WAIT_ACTIONS)) > 0:
+                                agents_on_rule[emp_idx][i] = True
+            self.agents_on_rule = agents_on_rule
+            for idx,ag in enumerate(all_agents):
+                act_tups = []
+                replaced_p_a = list(player_actions) 
+                replaced_p_a[idx] = [None]*len(replaced_p_a[idx])
+                
+                obj_strats = []
+                for this_ag_strat in player_actions[idx]:
+                    other_agent_act_combinations = list(set(itertools.product(*[v for idx_2,v in enumerate(replaced_p_a)])))
+                    for idx_2,s in enumerate(other_agent_act_combinations):
+                        _s = list(s)
+                        _s[idx] = this_ag_strat
+                        other_agent_act_combinations[idx_2] = tuple(_s)
+                    prob_vect_for_game = self.emp_act_distr[num_players][tuple(player_action_codes)]
+                    prob_vect = []
+                    for all_s in other_agent_act_combinations:
+                        s_code = tuple([x[9:11] for x  in list(all_s)])
+                        if s_code in prob_vect_for_game:
+                            prob_vect.append(prob_vect_for_game[s_code])
+                        else:
+                            prob_vect.append(0)
+                    _sum = sum(prob_vect)
+                    if _sum == 0:
+                        continue
+                    prob_vect = [x/_sum for x in prob_vect]
+                    obj_util_forall_acts = [y[:,idx] for y in [payoff_dict[x] for x in other_agent_act_combinations if x in payoff_dict]]
+                    obj_utils = sum([obj_util_forall_acts[x]*prob_vect[x] for x in np.arange(len(prob_vect))])
+                    constr_list = None
+                    for this_ag_oth_strat in player_actions[idx]:
+                        if this_ag_strat != this_ag_oth_strat:
+                            other_agent_act_combinations = list(set(itertools.product(*[v for idx_2,v in enumerate(replaced_p_a)])))
+                            for idx_2,s in enumerate(other_agent_act_combinations):
+                                _s = list(s)
+                                _s[idx] = this_ag_oth_strat
+                                other_agent_act_combinations[idx_2] = tuple(_s)
+                            constr_util_forall_acts = [y[:,idx] for y in [payoff_dict[x] for x in other_agent_act_combinations if x in payoff_dict]]
+                            constr_utils = sum([constr_util_forall_acts[x]*prob_vect[x] for x in np.arange(len(prob_vect))])
+                            constr_diff = obj_utils - constr_utils
+                            if np.any(constr_diff):
+                                if constr_list is None:
+                                    constr_list = np.array(constr_diff).reshape((1,3)) 
+                                else:
+                                    constr_list = np.append(constr_list, constr_diff.reshape((1,3)), 0)
+                    if constr_list is None:
+                        continue
+                    constr_list = np.unique(constr_list, axis=0)
+                    if any([x[idx] for x in self.agents_on_rule]):
+                        on_rule = True
+                    else:
+                        on_rule = False
+                    solns = self.formulate_and_solve_lp_qlkr(all_agents,obj_utils,constr_list,on_rule,idx,file_str)
+                    for s in solns:
+                        ag_id = s[0][0] if s[0][1] == 0 else s[0][1]
+                        ag_obj = self.all_agent_obj_dict[file_str][s[0]]
+                        leading_veh_id = ag_obj.leading_vehicle.id if ag_obj.leading_vehicle is not None else None
+                        relev_agents = []
+                        for a in all_agents:
+                            if a[1] != 0 and a[1] != leading_veh_id:
+                                relev_agents.append(a[1])
+                        relev_agents = 'Y'  if len(relev_agents)>0 else 'N'
+                        next_signal_change = utils.get_time_to_next_signal(time_ts, ag_obj.direction, ag_obj.signal)
+                        if next_signal_change[0] is not None:
+                            if next_signal_change[0] < 10:
+                                time_to_change = 'LT 10'
+                            elif 10 <= next_signal_change[0] <= 30:
+                                time_to_change = '10-30'
+                            else:
+                                time_to_change = 'GT 30'
+                        else:
+                            time_to_change = None
+                        if ag_obj.speed < .3:
+                            speed_fact = 'NEAR STATIONARY'
+                        elif .3 <= ag_obj.speed < 3:
+                            speed_fact = 'SLOW'
+                        elif 3 <= ag_obj.speed <= 14:
+                            speed_fact = 'MEDIUM'
+                        else:
+                            speed_fact = 'HIGH'
+                            
+                        #ag_state_info = (ag_obj.signal, str((int(next_signal_change[0]),next_signal_change[1])), ag_obj.current_segment, int(ag_obj.speed), leading_veh_id, len(relev_agents), 'Y' if ag_obj.relev_pedestrians is not None else 'N')
+                        ins_list.append((int(self.file_id), ag_id, time_ts, ag_obj.signal, next_signal_change[1], time_to_change, ag_obj.current_segment, speed_fact, 'Y' if leading_veh_id is not None else 'N', relev_agents, 'Y' if ag_obj.relev_pedestrians is not None else 'N','CorrEq', s[1][0][0], s[1][1][0], s[1][2][0], s[1][3][0], s[1][0][1], s[1][1][1], s[1][2][1], s[1][3][1]))
+                        print(file_str,ct,'/',N)
+        c.executemany(q_string,ins_list)
+        conn.commit()
+        conn.close()
             
 '''
 def read_l3_tree():
@@ -635,12 +779,22 @@ def read_l3_tree():
 with_baseline_weights = False
 mixed_weights = False
 l1_model = InverseGameLearningModel('769',with_baseline_weights,mixed_weights)
-l1_model.transform_utilities()
+#l1_model.calculate_and_insert_weights()
+l1_model.convert_to_nfg()
 l1_model.invoke_pure_strat_nash_eq_calc()
 l1_model.calc_confusion_matrix()
 '''
 
+'''
 with_baseline_weights = False
 mixed_weights = False
 l1_model = InverseQlkRGameLearningModel('769',with_baseline_weights,mixed_weights)        
 l1_model.calculate_and_insert_weights()
+'''
+'''
+with_baseline_weights = False
+mixed_weights = False
+l1_model = InverseCorrelatedEquilibriaLearningModel('769',with_baseline_weights,mixed_weights)
+l1_model.build_emp_distribution()
+l1_model.calculate_and_insert_weights()
+'''

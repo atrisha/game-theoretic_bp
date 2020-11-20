@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from pulp import LpMaximize, LpProblem, LpVariable
 import pulp as pl
 from pulp.constants import LpMinimize
+from pulp import *
 
 def demo():
 
@@ -71,6 +72,40 @@ def demo():
         
     print(f"\nThis will yield a total profit of {model.objective.value()}")
     
+
+def solve_lp_multivar(varstr_list,obj_coeff,constr_list):
+    var_list = []
+    for v in varstr_list:
+        w = LpVariable(v,0,1)
+        var_list.append(w)
+        exec(v+'=w')
+    prob = LpProblem("max_bounds", LpMaximize)
+    opt_expr = ''
+    for idx,lpv in enumerate(varstr_list):
+        opt_expr += str(varstr_list[idx])+'*'+str(sum(obj_coeff[idx]))+'+'
+    opt_expr = eval(opt_expr[:-1])
+    prob += opt_expr
+    f=1
+    
+    for constr in constr_list:
+        constr_expr = ''
+        constr_expr = '+'.join([str(v)+'*'+str(c) for v,c in zip(constr[0],constr[1])])
+        constr_expr += '>= 0'
+        constr_expr = eval(constr_expr)
+        prob += constr_expr
+    eq_constr = '+'.join(varstr_list) + '== 1'
+    eq_constr = eval(eq_constr)
+    prob += eq_constr
+    pl.LpSolverDefault.msg = False
+    status = prob.solve()
+    if status != -1:
+        solns = [x.varValue for x in var_list]
+    else:
+        solns = None
+    return solns
+            
+    
+
 def solve_lp(obj,constr,num_params):
     
     w_1 = LpVariable("w1", 0, 1)

@@ -343,8 +343,10 @@ for par in p:
     plt.plot(a,dist_payoffs_exp(a,par[0],par[1]),color='red')
 plt.show()
 '''
-import os
-print(os.path.join(os.path.abspath(__file__),"CACHE"))
+a = np.asarray([1,1,1])
+b = np.asarray([2,2,2])
+c = a@b
+print(c)
     
     
     

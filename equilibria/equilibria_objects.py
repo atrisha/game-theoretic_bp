@@ -903,10 +903,6 @@ class SamplingEquilibria:
                 dict_proc = DictProcessor.fromFlattenedDict(l1l2_utility_dict, self.eq_context.assign_utility_to_table, {}, 100)
                 payoffdict = dict_proc.execute()
                 #payoffdict = self.eq_context.assign_utility_to_table(l1l2_utility_dict,{})
-                ''' release this '''    
-                l1l2_utility_dict = None
-                logging.info('calculating utilities...DONE')
-                ''' release this '''    
                 l1l2_utility_dict = None
                 logging.info('calculating utilities...DONE')
                 utils.pickle_dump_to_dir("F:\\Spring2017\\workspaces\\game_theoretic_planner_cache\\l3_trees\\"+constants.CURRENT_FILE_ID+'\\'+str(sv_id)+'_'+str(time_ts).replace('.', ','), payoffdict)

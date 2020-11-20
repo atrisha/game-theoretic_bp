@@ -102,12 +102,15 @@ class EquilibriaCore:
                 if p[i] < res_dict[i][s[i]]:
                     res_dict[i][s[i]] = p[i]
         eq_strat = [None]*num_players
+        
         self.sv_action_payoffs = []
         for k,v in res_dict.items():
             eq_strat[k] = max(v.items(), key=operator.itemgetter(1))[0]
+            '''
             if next(iter(v.keys()))[6:9] == '000':
                 for sv_action in self.sv_actions:
                     self.sv_action_payoffs.append(round(v[sv_action],6))
+            '''
         eq_strat = tuple(eq_strat)
         eq_res = {eq_strat:payoff_dict[eq_strat]}
         if self.isl1agent:

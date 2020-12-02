@@ -13,6 +13,9 @@ import numpy.linalg as la
 from scipy.linalg import sqrtm
 import math
 from itertools import combinations
+import visualizer
+import constants
+log = constants.common_logger
 
 def square_distance(x,y): return sum([(xi-yi)**2 for xi, yi in zip(x,y)]) 
 
@@ -90,11 +93,38 @@ def construct_min_bounding_ellipse(points):
 def get_distribution_params(points):
     points = list(set(points))
     try:
+        
+        #plt.title(k)
+        #ax = plt.gca()
+        #visualizer.visualizer.plot_traffic_regions()
+        #plt.plot([x[0] for x in points],[x[1] for x in points],'o')
+        '''
         A,C = mvee(points)
         u, s, vh = la.svd(A)
         phi_hat = np.arccos(vh[0,0]) if vh[0,0] == vh[1,1] else np.arccos(vh[0,1])  
+        log.info(phi_hat)
         min_axs = 1/math.sqrt(s[0])*2
         maj_axs = 1/math.sqrt(s[1])*2
+        plt.plot([x[0] for x in points],[x[1] for x in points],'o')
+        el = Ellipse(xy=C, width=maj_axs, height=min_axs, angle=np.rad2deg(phi_hat), fill=False, color='blue')
+        ax.add_patch(el)
+        '''
+        if len(points) > 3:
+            A,C = mvee(points)
+            u, s, vh = la.svd(A)
+            phi_hat = np.arccos(vh[0,0]) if vh[0,0] == vh[1,1] else np.arccos(vh[0,1])  
+            min_axs = 1/math.sqrt(s[0])*2
+            maj_axs = 1/math.sqrt(s[1])*2
+        else:
+            maximal_pts, maj_axs = get_maximal_points(points)
+            C = (np.mean([maximal_pts[0][0],maximal_pts[1][0]]), np.mean([maximal_pts[0][1],maximal_pts[1][1]]))
+            phi_hat = math.atan((maximal_pts[1][1]-maximal_pts[0][1])/( maximal_pts[1][0] - maximal_pts[0][0]))
+            #log.info(str(maximal_pts))
+            #log.info(phi_hat)
+            min_axs = min(maj_axs/2,1)
+            #el = Ellipse(xy=C, width=maj_axs, height=min_axs, angle=np.rad2deg(phi_hat), fill=False, color='green')
+            #ax.add_patch(el) 
+        #plt.show()  
     except np.linalg.LinAlgError:
         maximal_pts, maj_axs = get_maximal_points(points)
         C = (np.mean([maximal_pts[0][0],maximal_pts[1][0]]), np.mean([maximal_pts[0][1],maximal_pts[1][1]]))
@@ -126,6 +156,9 @@ def calc_hellinger_distance_multivariate(dist_1,dist_2):
 def calc_wasserstein_distance_multivariate(dist_1,dist_2):
     mu_1, sigma_1, mu_2, sigma_2 = np.asarray(dist_1[0]), np.asarray(dist_1[1]), np.asarray(dist_2[0]), np.asarray(dist_2[1])
     mean_part = np.linalg.norm(mu_1-mu_2)**2
-    trace_part = np.trace( sigma_1 + sigma_2 - (2*sqrtm(sigma_1@sigma_2)) ) 
+    try:
+        trace_part = np.trace( sigma_1 + sigma_2 - (2*sqrtm(sigma_1@sigma_2)) )
+    except ValueError:
+        trace_part = 0 
     wasserstein_dist = math.sqrt( mean_part + trace_part)
     return wasserstein_dist

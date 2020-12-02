@@ -32,13 +32,37 @@ import concurrent.futures
 from matplotlib.patches import Ellipse
 import time
 import threading
+from distributed.worker import weight
 
 log = constants.common_logger
 
 
 
 
-
+def calc_time_gap(ag_obj,ra_obj,strat):
+    ttc = None
+    if (ag_obj.leading_vehicle is not None and ag_obj.leading_vehicle.id == ra_obj.id) or ag_obj.task == ra_obj.task:
+        ttc =  np.inf
+    else:
+        ag_time_to_collision_region,ra_time_to_collision_region = None
+        if ag_obj.task == 'LEFT_TURN' or ag_obj.task == 'RIGHT_TURN' :
+            if ag_obj.origin_pt is not None and ag_obj.segment_seq[0] in constants.TURN_TIME_MAP:
+                slope,intercept = utils.get_slope_intercept(constants.TURN_TIME_MAP[ag_obj.segment_seq[0]])
+                dist_from_origin_pt = math.hypot(ag_obj.x-ag_obj.origin_pt[0], ag_obj.y-ag_obj.origin_pt[1])
+                ag_time_to_collision_region = slope*dist_from_origin_pt + intercept
+        if ra_obj.task == 'LEFT_TURN' or ra_obj.task == 'RIGHT_TURN' :
+            if ra_obj.origin_pt is not None and ra_obj.segment_seq[0] in constants.TURN_TIME_MAP:
+                slope,intercept = utils.get_slope_intercept(constants.TURN_TIME_MAP[ra_obj.segment_seq[0]])
+                dist_from_origin_pt = math.hypot(ra_obj.x-ra_obj.origin_pt[0], ra_obj.y-ra_obj.origin_pt[1])
+                ra_time_to_collision_region = slope*dist_from_origin_pt + intercept
+        if ag_obj.task == 'STRAIGHT':
+            ''' ra_obj has to be left or right turning, so find the common conflict region '''
+        if ra_obj.task == 'STRAIGHT':
+            ''' ag_obj has to be left or right turning, so find the common conflict region '''
+            
+            f=1
+    return ttc    
+    
 
 
 
@@ -160,6 +184,18 @@ class CostEvaluation():
                             s_x,r_x,s_y,r_y = s_x[0::9],r_x[0::9],s_y[0::9],r_y[0::9]
                         _d = np.hypot(s_x-r_x,s_y-r_y)
                         dist_among_agents[i,j] = min(_d)
+                        
+                        ag_1_act,ag_2_act = utils.get_l1_action_string(act_code_m[i,j][0]), utils.get_l1_action_string(act_code_m[i,j][0])
+                        if ag_1_act in constants.WAIT_ACTIONS and ag_2_act in constants.WAIT_ACTIONS:
+                            dist_among_agents[i,j] = np.inf
+                        elif ag_1_act not in constants.WAIT_ACTIONS and ag_2_act not in constants.WAIT_ACTIONS:
+                            dist_among_agents[i,j] = dist_among_agents[i,j]
+                        else:
+                            if ag_1_act in constants.WAIT_ACTIONS:
+                                dist_among_agents[i,j] = np.inf
+                            else:
+                                dist_among_agents[i,j] = 10
+                                
             ''' to be safe, make the matrix symmetric '''
             dist_among_agents = np.minimum(dist_among_agents,dist_among_agents.T)
             ''' find the minimum distance for a vehicle action given all other agent actions '''
@@ -308,7 +344,7 @@ class CostEvaluation():
                     all_possible_payoffs[k] = all_possible_payoffs[k] +  all_possible_payoffs_exc[k]
                 if constants.INHIBITORY:
                     all_possible_payoffs[k] = all_possible_payoffs[k] + all_possible_payoffs_inh[k]
-        
+            all_possible_payoffs[k] = np.vstack((all_possible_payoffs_inh[k],all_possible_payoffs_exc[k],all_possible_payoffs_inh_ped[k])) 
         return all_possible_payoffs
     
     
@@ -356,10 +392,14 @@ class CostEvaluation():
                     elif (round(t_steps/10)-.1,act) in self.eq_context.eval_config.traj_errs:
                         traj_err = self.eq_context.eval_config.traj_errs[(round(t_steps/10)-.1,act)]
                     else:
-                        traj_err = [0]
+                        traj_err = (0,0,0)
                     d = np.diff(traj[:int(t_steps),2:4], axis=0)
                     segdists = np.sqrt((d ** 2).sum(axis=1))
-                    step_dist.append((max(sum(segdists)-traj_err[0],0),sum(segdists)+traj_err[0]))
+                    ''' cap the max trajectory error to 10 meters'''
+                    try:
+                        step_dist.append((max(sum(segdists)-min(10,traj_err[1]),0),sum(segdists)+min(10,traj_err[1])))
+                    except IndexError:
+                        f=1
                     if t_steps > traj.shape[0]:
                         break
                     f=1
@@ -471,8 +511,10 @@ class CostEvaluation():
     
     def calc_maxmin_payoff(self,s_traj,r_traj,s_act_key,r_act_key):
         #start_time =time.time()
+        s_code = int(s_act_key[3:6])
         if constants.INHIBITORY and r_traj is not None:
             s_act_code,r_act_code = int(s_act_key.split('-')[0][-4:-2]),int(r_act_key.split('-')[0][-4:-2])
+            
             distgap_parms = self.get_dist_gap_params((s_act_code, r_act_code))
             slice_len = int(min(5*constants.PLAN_FREQ/constants.LP_FREQ,s_traj.shape[0],r_traj.shape[0]))
             s_traj,r_traj = s_traj[:slice_len],r_traj[:slice_len]
@@ -483,6 +525,16 @@ class CostEvaluation():
                 s_x,r_x,s_y,r_y = s_x[0::9],r_x[0::9],s_y[0::9],r_y[0::9]
             _d = np.hypot(s_x-r_x,s_y-r_y)
             min_dist = np.amin(_d)
+            ag_1_act,ag_2_act = utils.get_l1_action_string(s_act_code), utils.get_l1_action_string(r_act_code)
+            if ag_1_act in constants.WAIT_ACTIONS and ag_2_act in constants.WAIT_ACTIONS:
+                min_dist = np.inf
+            elif ag_1_act not in constants.WAIT_ACTIONS and ag_2_act not in constants.WAIT_ACTIONS:
+                min_dist = min_dist
+            else:
+                if ag_1_act in constants.WAIT_ACTIONS:
+                    min_dist = np.inf
+                else:
+                    min_dist = 10
             inh_payoff = exp_dist_payoffs(min_dist,distgap_parms)
         else:
             inh_payoff = 1
@@ -515,8 +567,10 @@ class CostEvaluation():
         #end_time = time.time()
         #exec_time = str((end_time-start_time))
         #log.info('pedestrian '+exec_time+'s')
-        final_payoff = ( (1-constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT) * ((constants.INHIBITORY_PAYOFF_WEIGHT*inh_payoff) + (constants.EXCITATORY_PAYOFF_WEIGHT*exc_payoff)) ) + \
-                            (constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT*ped_inh_payoff)
+        weights = self.eq_context.weights_info[s_code]
+        #final_payoff = ( (1-constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT) * ((constants.INHIBITORY_PAYOFF_WEIGHT*inh_payoff) + (constants.EXCITATORY_PAYOFF_WEIGHT*exc_payoff)) ) + \
+        #                    (constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT*ped_inh_payoff)
+        final_payoff = weights[0]*inh_payoff + weights[1]*exc_payoff + weights[2]*ped_inh_payoff 
         return final_payoff
 
 def eval_trajectory_viability(traj_id_list):

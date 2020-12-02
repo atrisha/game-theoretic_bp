@@ -206,6 +206,7 @@ L1_ACTION_CODES = {'wait-for-oncoming':1,
                    'wait-for-pedestrian':11}
 
 WAIT_ACTIONS = ['yield-to-merging','wait_for_lead_to_cross','wait-for-oncoming','decelerate-to-stop','wait-on-red','wait-for-pedestrian']
+PROCEED_ACTIONS = ['proceed-turn','track_speed','follow_lead','follow_lead_into_intersection','cut-in']
 
 L1_ACTION_CODES_2_NAME = {1:'wait',
                    2:'proceed-turn',
@@ -248,6 +249,23 @@ MAX_L3_ACTIONS = 10
 
 VEH_CATEGORIES = "('Car','Medium Vehicle','Heavy Vehicle','Motorcycle','Bus')"
 #VEH_CATEGORIES = "('Bus')"
+TURN_TIME_MAP = {'ln_w_4':[(0,7.17),(50,0)],
+                 'ln_s_4':[(0,5.3),(25,0)],
+                 'ln_n_1':[(0,8),(45,0)],
+                 'ln_e_1':[(17,11),(60,0)],
+                 'ln_w_1':[(10,10),(55,0)],
+                 'ln_s_1':[(0,8),(40,0)],
+                 'ln_s_2':[(0,8),(40,0)]}
+
+CROSS_PATH_CONFLICTS = {('L_S_W','L_N_S'):['l_n_s_l','l_n_s_r'],
+                        ('L_E_S','L_W_E'):['l_w_e_l','l_w_e_r'],
+                        ('L_N_E','L_S_N'):['l_s_n_l','l_s_n_r'],
+                        ('L_W_N','L_E_W'):['l_e_w_l','l_e_w_r']}
+
+MERGE_PATH_CONFLICTS = {('L_E_S','L_W_S'):['ln_s_-1','ln_s_-2'],
+                        ('L_N_E','L_S_E'):['ln_e_-1','ln_e_-2'],
+                        ('L_W_S','L_N_S'):['ln_s_-1','ln_s_-2'],
+                        ('L_S_E','L_W_E'):['ln_e_-1','ln_e_-2']}
 
 RESULTS = None
 
@@ -263,6 +281,8 @@ MAX_FP = 6
 INHIBITORY_PAYOFF_WEIGHT = 0.5
 EXCITATORY_PAYOFF_WEIGHT = 0.5
 INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT = 0.5
+
+WEIGHTS_FLAG = None
 
 
 ''' This is kept here so that we don't have to query the db everytime'''
@@ -282,9 +302,8 @@ INHIBITORY_PEDESTRIAN = True
 L1_EQ_TYPE = None
 L3_EQ_TYPE = None
 
-''' only one of the following two can be True'''
+
 BUILD_L3_TREE = True
-BUILD_FROM_L3_TREE = False
 
 TRAJECTORY_TYPE = None
 

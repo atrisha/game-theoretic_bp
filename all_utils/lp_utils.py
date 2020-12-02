@@ -131,7 +131,10 @@ def solve_lp(obj,constr,num_params):
         prob += w_1 + w_2== 1
     #print(prob)
     pl.LpSolverDefault.msg = False
-    status = prob.solve()
+    try:
+        status = prob.solve()
+    except:
+        status = -1
     if status != -1:
         
         #for variable in prob.variables():
@@ -160,7 +163,10 @@ def solve_lp(obj,constr,num_params):
         prob += w_1 + w_2== 1
     #print(prob)
     pl.LpSolverDefault.msg = False
-    status = prob.solve()
+    try:
+        status = prob.solve()
+    except:
+        status = -1
     if status != -1:
         if num_params == 3:
             low_bounds = [w_1.varValue,w_2.varValue,w_3.varValue,0]

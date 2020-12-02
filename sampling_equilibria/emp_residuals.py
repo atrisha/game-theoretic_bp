@@ -201,7 +201,8 @@ class ResidualGeneration:
         return emp_res_dict
       
     
-if __name__ == '__main__':  
+def insert_trajectory_errors():
+    ins_list = []
     emp_res_dict = dict()
     for file_id in constants.ALL_FILE_IDS:
         res_gen = ResidualGeneration(file_id)
@@ -233,11 +234,26 @@ if __name__ == '__main__':
         plt.plot(X,[mean_vals[i]+std_vals[i] for i in np.arange(len(mean_vals))],'-',c='red')
         
         
-        mean_vals = [np.median(x) for x in Y]
+        med_vals = [np.median(x) for x in Y]
         plt.plot(X,mean_vals,'-',c='blue')
+        act = ast.literal_eval(act)
+        for idx,x in enumerate(X):
+            ins_list.append((act[0],round(x/10,1),mean_vals[idx],med_vals[idx],std_vals[idx]))
+        for file_id in constants.ALL_FILE_IDS:
+            print('inserting',file_id)
+            conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_generated_trajectories_'+file_id+'.db')
+            c = conn.cursor()
+            q_string = "DELETE FROM TRAJECTORY_ERRORS"
+            c.execute(q_string)
+            conn.commit()
+            i_string = 'INSERT INTO TRAJECTORY_ERRORS VALUES (?,?,?,?,?)'
+            c.executemany(i_string,ins_list)
+            conn.commit()
+    
         plt.plot([x[0] for x in all_pts],[x[1] for x in all_pts],'.')
         plt.title(act)
-        plt.show()
+        #plt.show()
     f=1
-           
-    
+       
+if __name__ == '__main__':  
+    insert_trajectory_errors()

@@ -192,10 +192,29 @@ class L1L2UtilityProcessor:
         else:
             l3_utility_dict_chunk,sv_traj_action_dict = self.build_l3_utility_table(self.sv_det,self.time_ts,self.l1l2_utility_dict)
         ct_2,chunk_N = 0, len(l3_utility_dict_chunk)
-        
+        all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(l3_utility_dict_chunk.keys())[0]]
+        all_agents = [x[0] if x[1] == 0 else x[1] for x in all_agents]
+        weights_info = {x:None for x in all_agents}
+        for ag_id in all_agents:
+            if (int(CURRENT_FILE_ID),ag_id,self.time_ts) in self.eq_context.eval_config.agent_info_map:
+                ag_info_vect = self.eq_context.eval_config.agent_info_map[(int(CURRENT_FILE_ID),ag_id,self.time_ts)]
+                if ag_info_vect in self.eq_context.eval_config.weights_map:
+                    if constants.WEIGHTS_FLAG == 'high':
+                        weights_info[ag_id] = self.eq_context.eval_config.weights_map[ag_info_vect][0:3]
+                    elif constants.WEIGHTS_FLAG == 'low':
+                        weights_info[ag_id] = self.eq_context.eval_config.weights_map[ag_info_vect][4:7]
+                    else:
+                        weights_info[ag_id] = np.asarray([0.25,0.25,0.5])
+                else:
+                    weights_info[ag_id] = np.asarray([0.25,0.25,0.5])
+            else:
+                weights_info[ag_id] = np.asarray([0.25,0.25,0.5])
+            weights_info[ag_id] = weights_info[ag_id]/np.sum(weights_info[ag_id])
+        self.eq_context.weights_info = weights_info
         for l1l2_strat,l3_utility_dict in l3_utility_dict_chunk.items():
             ct_2 += 1
             #if self.eq_context.eval_config.l3_eq == 'MAXMIN' or self.eq_context.eval_config.l3_eq == 'BR':
+            
             maxmin_obj = L3Calculation(l3_utility_dict,self.eq_context,l1l2_strat,self.eq_context.eval_config.l3_eq)
             start_time = time.time()
             l3_eq_obj = maxmin_obj.calc_maxmin_eq()
@@ -625,6 +644,14 @@ class Equilibria:
                             all_l3_eq.update(l1l2_processor_obj.all_l3_eq)
                             payoffdict.update(l1l2_processor_obj.l1l2_payoffdict)
                 logging.info(self.eval_config.direction+" "+str(time_ts)+"-"+str(sv_id)+":"+str(ct)+'/'+str(N)+":"+str(N_payoff_table))
+                if self.eval_config.l3_eq is not None:
+                    if constants.WEIGHTS_FLAG is None:
+                        utils.pickle_dump_to_dir("F:\\Spring2017\\workspaces\\game_theoretic_planner_cache\\l3_trees_"+str(self.eval_config.traj_type)+"_"+str(self.eval_config.l3_eq)+"\\"+constants.CURRENT_FILE_ID+'\\'+str(sv_id)+'_'+str(time_ts).replace('.', ','), payoffdict)
+                    else:
+                        utils.pickle_dump_to_dir("F:\\Spring2017\\workspaces\\game_theoretic_planner_cache\\l3_trees_"+str(self.eval_config.traj_type)+"_"+str(self.eval_config.l3_eq)+"\\"+constants.CURRENT_FILE_ID+'\\'+str(sv_id)+'_'+str(time_ts).replace('.', ',')+'_'+constants.WEIGHTS_FLAG, payoffdict)
+                else:
+                    utils.pickle_dump_to_dir("F:\\Spring2017\\workspaces\\game_theoretic_planner_cache\\l3_trees_"+str(self.eval_config.traj_type)+"_NA\\"+constants.CURRENT_FILE_ID+'\\'+str(sv_id)+'_'+str(time_ts).replace('.', ','), payoffdict)
+                '''
                 all_eq = []
                 l1_agent = False
                 if self.eval_config.l1_eq == 'NASH':
@@ -711,7 +738,7 @@ class Equilibria:
             self.set_equilibria_dict(equilibra_dict)
             self.insert_to_db()
         #return equilibra_dict
-                
+        '''
                     
     def set_equilibria_dict(self,eq_dict):
         self.equilibria_dict = eq_dict
@@ -829,6 +856,11 @@ class EvalConfig:
         res = c_traj.fetchall()
         self.traj_errs = {(row[1],row[0]):row[2:] for row in res}
         conn_traj.close()
+        if self.traj_type == 'BOUNDARY':
+            model_type = 'maxmax' if self.l3_eq == 'BR' else 'maxmin'
+            self.weights_map = utils.load_weights_map(model_type)
+            self.agent_info_map = utils.load_agent_info_map()
+            
         
         
 
@@ -900,9 +932,9 @@ class SamplingEquilibria:
                 logging.info('calculating utilities...')
                 u_ct = 0
                 N_payoff_table = len(l1l2_utility_dict)
-                dict_proc = DictProcessor.fromFlattenedDict(l1l2_utility_dict, self.eq_context.assign_utility_to_table, {}, 100)
-                payoffdict = dict_proc.execute()
-                #payoffdict = self.eq_context.assign_utility_to_table(l1l2_utility_dict,{})
+                #dict_proc = DictProcessor.fromFlattenedDict(l1l2_utility_dict, self.eq_context.assign_utility_to_table, {}, 100)
+                #payoffdict = dict_proc.execute()
+                payoffdict = self.eq_context.assign_utility_to_table(l1l2_utility_dict,{})
                 l1l2_utility_dict = None
                 logging.info('calculating utilities...DONE')
                 utils.pickle_dump_to_dir("F:\\Spring2017\\workspaces\\game_theoretic_planner_cache\\l3_trees\\"+constants.CURRENT_FILE_ID+'\\'+str(sv_id)+'_'+str(time_ts).replace('.', ','), payoffdict)

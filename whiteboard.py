@@ -214,15 +214,14 @@ def debug_traj():
     plt.show()
 
 
-'''
 import scipy.special
 import constants
 def dist_payoffs(dist_arr):
     return scipy.special.erf((dist_arr - constants.DIST_COST_MEAN) / (constants.DIST_COST_SD * math.sqrt(2)))
 
-plt.plot(np.arange(0,50,.1),dist_payoffs(np.arange(0,50,.1)))
+plt.plot(np.arange(0,15,.1),dist_payoffs(np.arange(0,15,.1)))
 plt.show()
-'''
+
 
 
 '''    

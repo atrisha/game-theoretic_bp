@@ -11,6 +11,7 @@ import constants
 from all_utils import utils
 from all_utils.utils import kph_to_mps
 import matplotlib.animation as animation
+from distributed.profile import process
 log = constants.common_logger
 from collections import OrderedDict
 from collections import Counter
@@ -20,6 +21,7 @@ import seaborn as sn
 import pandas as pd
 import ast
 from matplotlib import rcParams
+import scipy.stats as st
 
 def show_l3_payoff_hist():
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+'769'+'\\uni_weber_'+'769'+'.db')
@@ -123,6 +125,126 @@ def plot_velocity(vel_list,agent_id,horizon,ag_idx,ax4):
         ax4.plot(X,v_signal,color=constants.colors[ag_idx])
     if vel_list is not None:
         ax4.plot([x[0] for x in vel_list],[x[1] for x in vel_list],color=constants.colors[ag_idx],ls='--')
+        
+def plot_turn_times(direction):
+    vel_list = []
+    turn_time_list = []
+    for file_id in constants.ALL_FILE_IDS: 
+        #if int(file_id) > 769:
+        #    continue
+        print('processing',file_id)
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
+        c = conn.cursor()
+        q_string = "select * from TRAJECTORY_MOVEMENTS"
+        c.execute(q_string)
+        res = c.fetchall()  
+        prep_turn_tag = 'prep-right-turn' if direction == 'right' else 'prep-left-turn'
+        exec_turn_tag = 'exec-right-turn' if direction == 'right' else 'exec-left-turn'
+        right_turn_list = []
+        entry_pt_map = dict()
+        for row in res:
+            if row[-1] is not None:
+                segment_seq = ast.literal_eval(row[-1])
+                if len(list(set([constants.SEGMENT_MAP[x] for x in segment_seq if x in constants.SEGMENT_MAP]) & set([prep_turn_tag,exec_turn_tag]))) > 0:
+                    right_turn_list.append(row[1])
+                    entry_lane = segment_seq[0]
+                    if file_id != '769':
+                        conn.close()
+                        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+'769'+'\\uni_weber_'+'769'+'.db')
+                        c = conn.cursor()
+                    q_string = "select * from TRAFFIC_REGIONS_DEF WHERE name='"+entry_lane+"' and TRAFFIC_REGIONS_DEF.REGION_PROPERTY='entry_boundary'"
+                    c.execute(q_string)
+                    res_reg = c.fetchone()
+                    x_pts = np.mean(ast.literal_eval(res_reg[4]))
+                    y_pts = np.mean(ast.literal_eval(res_reg[5]))
+                    entry_pt_map[row[1]] = (x_pts,y_pts,entry_lane)
+        conn.close()
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
+        c = conn.cursor()
+        
+        
+        q_string = "SELECT \
+                        TRAJECTORIES_0"+file_id+".track_id,\
+                        TRAJECTORIES_0"+file_id+".speed, \
+                        TRAJECTORIES_0"+file_id+".time, \
+                        TRAJECTORIES_0"+file_id+"_EXT.ASSIGNED_SEGMENT,\
+                        TRAJECTORIES_0"+file_id+".X,\
+                        TRAJECTORIES_0"+file_id+".Y\
+                    FROM \
+                        TRAJECTORIES_0"+file_id+"\
+                    INNER JOIN TRAJECTORIES_0"+file_id+"_EXT ON TRAJECTORIES_0"+file_id+".track_id = TRAJECTORIES_0"+file_id+"_EXT.track_id and TRAJECTORIES_0"+file_id+".time = TRAJECTORIES_0"+file_id+"_EXT.time order by TRAJECTORIES_0"+file_id+"_EXT.track_id,TRAJECTORIES_0"+file_id+"_EXT.time"
+        c.execute(q_string)
+        res = c.fetchall() 
+        processed = [] 
+        turn_time_from_org_map = dict()
+        for idx,row in enumerate(res):
+            if idx < len(res)-1:
+                if row[0] not in right_turn_list:
+                    continue
+                else:
+                    if file_id == '777':
+                        f=1
+                    if row[0] not in processed:
+                        start_ts,end_ts = None,None
+                        processed.append(row[0])
+                    if row[3] is not None and row[3] in constants.SEGMENT_MAP and constants.SEGMENT_MAP[row[3]] == prep_turn_tag:
+                        if res[idx+1][3] is not None and res[idx+1][3] in constants.SEGMENT_MAP and constants.SEGMENT_MAP[res[idx+1][3]] == exec_turn_tag:
+                            vel_list.append(utils.kph_to_mps(row[1]))
+                            if start_ts is None:
+                                start_ts = row[2]
+                    if row[3] is not None and row[3] in constants.SEGMENT_MAP and constants.SEGMENT_MAP[row[3]] == exec_turn_tag:
+                        if res[idx+1][3] is not None and res[idx+1][3] in constants.SEGMENT_MAP and constants.SEGMENT_MAP[res[idx+1][3]] != exec_turn_tag:
+                            if start_ts is not None:
+                                this_turn_time = row[2] - start_ts
+                                turn_time_list.append(this_turn_time)
+                            turn_time_from_org_map[entry_pt_map[row[0]][2]][row[0]] = [(x[0],row[2]-x[1],True) for x in turn_time_from_org_map[entry_pt_map[row[0]][2]][row[0]]]
+                             
+                    if row[3] is not None and row[3] in constants.SEGMENT_MAP and constants.SEGMENT_MAP[row[3]] != 'exit-lane':
+                        dist_from_entry = math.hypot(row[4]-entry_pt_map[row[0]][0], row[5]-entry_pt_map[row[0]][1])
+                        if entry_pt_map[row[0]][2] not in turn_time_from_org_map:
+                            turn_time_from_org_map[entry_pt_map[row[0]][2]] = dict()
+                        if row[0] not in turn_time_from_org_map[entry_pt_map[row[0]][2]]:
+                            turn_time_from_org_map[entry_pt_map[row[0]][2]][row[0]] = []
+                        turn_time_from_org_map[entry_pt_map[row[0]][2]][row[0]].append((dist_from_entry,row[2],False))
+                            
+        f=1              
+    
+    plt.hist(vel_list, density=True, bins=30, label = 'Data')        
+    plt.title('Velocities (mps) '+direction)    
+    mn, mx = plt.xlim()
+    plt.xlim(mn, mx)
+    kde_xs = np.linspace(mn, mx, 301)
+    kde = st.gaussian_kde(vel_list)
+    plt.plot(kde_xs, kde.pdf(kde_xs), label="PDF")
+    plt.legend(loc="upper left")
+    plt.ylabel('Probability')
+    plt.xlabel('Data')
+    
+    plt.figure()
+    plt.hist(turn_time_list, density=True, bins=30, label = 'Data')        
+    plt.title('Turn times (s) '+direction)    
+    mn, mx = plt.xlim()
+    plt.xlim(mn, mx)
+    kde_xs = np.linspace(mn, mx, 301)
+    kde = st.gaussian_kde(turn_time_list)
+    plt.plot(kde_xs, kde.pdf(kde_xs), label="PDF")
+    plt.legend(loc="upper left")
+    plt.ylabel('Probability')
+    plt.xlabel('Data')
+    print(np.mean(turn_time_list),np.std(turn_time_list))
+    
+    
+    for k,v in turn_time_from_org_map.items():
+        plt.figure()
+        plt.title(k)
+        X_pts,Y_pts = [],[]
+        for k1,v1 in v.items():
+            X_pts.extend([x[0] for x in v1 if x[2]])
+            Y_pts.extend([x[1] for x in v1 if x[2]])
+        plt.plot(X_pts,Y_pts,'.')
+    
+    plt.show()
+    f=1
 
 def plot_all_paths(veh_state):
     import ast
@@ -682,7 +804,7 @@ def plot_confusion_matrix():
     plt.show()
             
 if __name__ == '__main__':   
-    plot_confusion_matrix() 
+    plot_turn_times('left') 
     
 
       

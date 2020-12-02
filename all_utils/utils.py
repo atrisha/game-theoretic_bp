@@ -1628,6 +1628,11 @@ def get_relevant_crosswalks(veh_state):
         relev_crosswalks = (ast.literal_eval(res[1]), ast.literal_eval(res[2])) 
         return relev_crosswalks
     
+def get_slope_intercept(pts):
+    x1,y1,x2,y2 = pts[0][0],pts[0][1],pts[1][0],pts[1][1]
+    a = (y2 - y1) / (x2 - x1)
+    b = y1 - a * x1     
+    return a,b
 
 def unreadable(act_str):
     tokens = act_str.split('|')
@@ -1890,6 +1895,41 @@ def get_agents_for_task(task_str):
     agents = [int(x[0]) for x in res]
     return agents
     #return [149]
+    
+def load_weights_map(model_type,l3_model_type):
+    weights_dict = dict()
+    for file_id in constants.ALL_FILE_IDS[:5]:
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
+        c = conn.cursor()
+        q_string = "select * from UTILITY_WEIGHTS where model_type='"+model_type+"' and l3_model_type='"+l3_model_type+"'"
+        c.execute(q_string)
+        res = c.fetchall()
+        for row in res:
+            if tuple(row[3:11]) not in weights_dict:
+                weights_dict[tuple(row[3:11])] = [row[13:]]
+            else:
+                weights_dict[tuple(row[3:11])].append(row[13:])
+    for k in list(weights_dict.keys()):
+        _v = [x for x in weights_dict[k] if all([y is not None for y in x])]
+        mean_weights = np.mean(np.asarray(_v), axis=0)
+        if not np.any(np.isnan(mean_weights)):
+            weights_dict[k] = mean_weights
+        else:
+            del weights_dict[k]
+    return weights_dict
+
+def load_agent_info_map(file_id=None):
+    if file_id is None:
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
+    else:
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
+    c = conn.cursor()
+    q_string = "select * from UTILITY_WEIGHTS"
+    c.execute(q_string)
+    res = c.fetchall()
+    agent_info = {tuple(row[:3]):tuple(row[3:11]) for row in res}
+    return agent_info
+           
 
 ''' this function interpolates track information only for real trajectories '''
 def interpolate_track_info(veh_state,forward,backward,partial_track=None):

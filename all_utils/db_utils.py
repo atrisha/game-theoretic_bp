@@ -19,10 +19,24 @@ import os
 from os import listdir
 from collections import OrderedDict
 import itertools
-from _functools import reduce
+import io
 log = constants.common_logger
 
 
+
+def adapt_array(arr):
+    """
+    http://stackoverflow.com/a/31312102/190597 (SoulNibbler)
+    """
+    out = io.BytesIO()
+    np.save(out, arr)
+    out.seek(0)
+    return sqlite3.Binary(out.read())
+
+def convert_array(text):
+    out = io.BytesIO(text)
+    out.seek(0)
+    return np.load(out)
 
 
 

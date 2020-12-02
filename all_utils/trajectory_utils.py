@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 log = constants.common_logger
 from visualizer import visualizer
 import numpy as np
+from equilibria.cost_evaluation import *
 
 class TrajectoryUtils:
     
@@ -395,15 +396,75 @@ class TrajectoryUtils:
         conn.commit()
         conn.close()               
         
-    
+def add_missing_attributes(veh_state):
+    if not hasattr(veh_state, 'relev_crosswalks'):
+        relev_crosswalks = utils.get_relevant_crosswalks(veh_state)
+        veh_state.set_relev_crosswalks(relev_crosswalks)
+    #veh_state.has_oncoming_vehicle = False
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
+    c = conn.cursor()
+    if constants.SEGMENT_MAP[veh_state.segment_seq[0]] =='left-turn-lane' or constants.SEGMENT_MAP[veh_state.segment_seq[0]] == 'right-turn-lane' \
+        or constants.SEGMENT_MAP[veh_state.segment_seq[0]] == 'through-lane-entry':
+            q_string = "select * from TRAFFIC_REGIONS_DEF WHERE name='"+veh_state.segment_seq[0]+"' and TRAFFIC_REGIONS_DEF.REGION_PROPERTY='entry_boundary'"
+            c.execute(q_string)
+            res_reg = c.fetchone()
+            x_pts = np.mean(ast.literal_eval(res_reg[4]))
+            y_pts = np.mean(ast.literal_eval(res_reg[5]))
+            veh_state.origin_pt = (x_pts,y_pts)
+    else:
+        veh_state.origin_pt = None
+    return veh_state
+
+def assign_true_utils():
+    ''' this will assign utils for l1 games that is independent of l3 game solutions.
+    A heuristic is used to assign the three utils: vehicle inhibitory (time gap), excitatory, and pedestrian inhibitory'''
+    ''' Since we already have the l1 tree data in <cache_dir>/l3_trees_BASELINE_NA, that has the agent, relevant agents, and actions information,
+    we can get it from there instead of loading it from the database '''
+    file_id = '769'
+    constants.CURRENT_FILE_ID = file_id
+    constants.L3_ACTION_CACHE = os.path.join(constants.CACHE_DIR,'l3_action_trajectories_'+constants.CURRENT_FILE_ID)
+    l3_cache_str = constants.CACHE_DIR+"l3_trees_BASELINE_NA\\"+file_id    
+    file_keys = os.listdir(l3_cache_str)
+    for file_str in file_keys:
+        print('processing',file_id,file_str)
+        time_ts = file_str.split('_')[1].replace(',','.')
+        time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
+        payoff_dict = utils.pickle_load(os.path.join(l3_cache_str,file_str))
+        all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
+        num_players = len(all_agents)
+        agent_obj_map = dict()
+        for ag_idx,ag in enumerate(all_agents):
+            if ag[1] == 0:
+                ag_file_key = os.path.join(constants.L3_ACTION_CACHE, str(ag[0])+'-0_'+str(time_ts).replace('.', ','))
+                agent_id = ag[0]
+            else:
+                ag_file_key = os.path.join(constants.L3_ACTION_CACHE, str(ag[0])+'-'+str(ag[1])+'_'+str(time_ts).replace('.', ','))
+                agent_id = ag[1]
+            if os.path.exists(ag_file_key):
+                ag_info = utils.pickle_load(ag_file_key)
+            else:
+                ag_info = utils.setup_vehicle_state(agent_id,time_ts)
+            ag_info = add_missing_attributes(ag_info)
+            agent_obj_map[agent_id] = ag_info
+            all_agents[ag_idx] = agent_id
+        for strat in payoff_dict.keys():
+            ttc = np.full((num_players,num_players), fill_value=np.inf)
+            for i in np.arange(num_players):
+                for j in np.arange(num_players):
+                    if i!=j:
+                        ttc[i,j] = calc_time_gap(agent_obj_map[all_agents[i]], agent_obj_map[all_agents[j]], strat)
+        f=1
 
 
 
 def main():
     import sys
-    constants.CURRENT_FILE_ID = '769'
-    constants.L3_ACTION_CACHE = 'l3_action_trajectories_'+constants.CURRENT_FILE_ID
-    traj_util_obj = TrajectoryUtils()
-    traj_util_obj.assign_l1_actions()
-    #traj_util_obj.update_l1_action_in_eq_data('all')
-#main()
+    for f in constants.ALL_FILE_IDS:
+        constants.CURRENT_FILE_ID = f
+        constants.L3_ACTION_CACHE = 'l3_action_trajectories_'+constants.CURRENT_FILE_ID
+        traj_util_obj = TrajectoryUtils()
+        traj_util_obj.assign_l1_actions()
+        #traj_util_obj.update_l1_action_in_eq_data('all')
+
+if __name__ == '__main__':
+    assign_true_utils()

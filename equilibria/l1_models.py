@@ -25,11 +25,75 @@ import csv
 import os
 from scipy.optimize import NonlinearConstraint, LinearConstraint, minimize, Bounds
 import constants
-from subprocess import check_output
+from subprocess import check_output, CalledProcessError
 import math
+import json
 
-
-
+class L1_Model_Config():
+    
+    def __init__(self):
+        self.update_only = False
+        self.model_type = None
+        self.emp_acts_dict = None
+        self.rule_acts_dict = None
+        self.agent_object_dict = None
+        
+    def set_run_type(self,run_type):
+        self.run_type = run_type
+        
+    def set_l1_model_type(self,l1_model_type):
+        self.l1_model_type = l1_model_type
+    
+    def set_baseline_weights_flag(self, with_baseline_weights):
+        self.with_baseline_weights = with_baseline_weights
+        
+    def set_mixed_weights_flag(self, mixed_weights):
+        self.mixed_weights = mixed_weights
+        
+    def set_update_only(self,update_only):
+        ''' Only used for inserting weights'''
+        self.update_only = update_only
+        
+    def set_l3_model_def(self,sampling_type,soln_type):
+        self.l3_sampling = sampling_type
+        self.l3_soln = soln_type
+        
+    def set_lzero_behavior(self,lzero_behavior):
+        ''' Only used for Ql1 models'''
+        self.lzero_behavior = lzero_behavior
+        
+    def set_file_id(self,file_id):
+        self.file_id = file_id
+        
+    def set_l3_weights_estimation_model_type(self,model_type):
+        self.model_type = model_type
+        
+    def get_model_parms_str(self):
+        model_parms=[]
+        if self.l3_soln is not None:
+            model_parms.append('l3_soln='+str(self.l3_soln))
+        else:
+            model_parms.append('l3_soln=NA')
+        if self.l3_sampling is not None:
+            model_parms.append('l3_sampling='+str(self.l3_sampling))
+        else:
+            model_parms.append('l3_sampling=NA')
+        if self.mixed_weights is not None:
+            model_parms.append('mixed_weights='+str(self.mixed_weights))
+        else:
+            model_parms.append('mixed_weights=NA')
+        if self.with_baseline_weights is not None:
+            model_parms.append('baseline_weights='+str(self.with_baseline_weights))
+        else:
+            model_parms.append('baseline_weights=NA')
+        if self.l1_model_type == 'Ql1':
+            if self.lzero_behavior is not None:
+                model_parms.append('lzero_behavior='+str(self.lzero_behavior))
+            else:
+                model_parms.append('lzero_behavior=NA')
+        
+        return ','.join(model_parms)
+        
 class Rules():
     
     def __init__(self, file_id):
@@ -88,11 +152,17 @@ class Rules():
 
 class L1ModelCore():
     
-    def __init__(self,file_id,with_baseline_weights,mixed_weights):
-        self.mixed_weights = mixed_weights
-        self.with_baseline_weights = with_baseline_weights
-        self.file_id = file_id
-        self.l3_cache_str = "F:\\Spring2017\\workspaces\\game_theoretic_planner_cache\\l3_trees\\"+self.file_id
+    def __init__(self,l1_model_config):
+        self.l1_model_config = l1_model_config
+        self.mixed_weights = l1_model_config.mixed_weights
+        self.with_baseline_weights = l1_model_config.with_baseline_weights
+        self.file_id = l1_model_config.file_id
+        file_id = l1_model_config.file_id
+        update_only = l1_model_config.update_only
+        model_type = l1_model_config.model_type
+        self.l3_cache_str = constants.CACHE_DIR+"l3_trees_"+l1_model_config.l3_sampling+"_"+l1_model_config.l3_soln+"\\"+self.file_id
+        if l1_model_config.l3_sampling == 'BOUNDARY':
+            self.file_keys = [x for x in self.file_keys if x[-3:]!='low']
         self.weighted_l3_cache_str = "F:\\Spring2017\\workspaces\\game_theoretic_planner_cache\\weighted_l3_trees\\"+self.file_id
         self.nash_eq_res_cache = "F:\\Spring2017\\workspaces\\game_theoretic_planner_cache\\nash_eq_res\\"+self.file_id
         if not os.path.exists(self.weighted_l3_cache_str):
@@ -116,8 +186,25 @@ class L1ModelCore():
         self.rule_obj = Rules(file_id)
         file_keys = os.listdir(self.l3_cache_str)
         self.file_keys = file_keys
+        if self.l1_model_config.run_type == 'calculate_and_insert_weights':
+            if update_only:
+                q_string = "select * from UTILITY_WEIGHTS where MODEL_TYPE = '"+self.l1_model_config.l1_model_type+"' and L3_MODEL_TYPE = '"+self.l1_model_config.model_type+"'"
+                c.execute(q_string)
+                res = c.fetchall()   
+                files_in_db = [str(x[1])+'_'+str.replace(str(x[2]),'.',',') for x in res]
+                self.file_keys = [x for x in self.file_keys if x not in files_in_db]
+            else:
+                q_string = "delete from UTILITY_WEIGHTS where MODEL_TYPE = '"+self.l1_model_config.l1_model_type+"' and L3_MODEL_TYPE = '"+self.l1_model_config.model_type+"'"
+                c.execute(q_string)
+                conn.commit()
+            
         self.load_state_info()
-        self.load_emp_and_rule_acts()
+        if self.l1_model_config.emp_acts_dict is None or self.l1_model_config.rule_acts_dict is None or self.l1_model_config.agent_object_dict is None:
+            self.load_emp_and_rule_acts()
+        else:
+            self.emp_acts_dict = self.l1_model_config.emp_acts_dict
+            self.rule_acts_dict = self.l1_model_config.rule_acts_dict
+            self.agent_object_dict = self.l1_model_config.agent_object_dict
     
     def load_state_info(self):
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
@@ -130,16 +217,20 @@ class L1ModelCore():
     def load_emp_and_rule_acts(self):
         #confusion_dict = dict()
         ct,N = 0,len(self.file_keys)
-        self.emp_acts_dict, self.rule_acts_dict, self.all_agent_obj_dict = dict(), dict(), dict()
+        self.emp_acts_dict, self.rule_acts_dict, self.agent_object_dict = dict(), dict(), dict()
         for file_str in self.file_keys:
             ct +=1
             #if ct > 20:
             #    continue
-            print('processing',ct,'/',N)
+            print('processing',self.file_id,ct,'/',N,file_str)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
-            emp_acts,rule_acts = self.get_emp_and_rule_actions(file_str,payoff_dict)
+            emp_acts,rule_acts,agent_object_dict = self.get_emp_and_rule_actions(file_str,payoff_dict)
             self.emp_acts_dict[file_str] = emp_acts
             self.rule_acts_dict[file_str] = rule_acts
+            self.agent_object_dict[file_str] = agent_object_dict
+        self.l1_model_config.emp_acts_dict = self.emp_acts_dict
+        self.l1_model_config.rule_acts_dict = self.rule_acts_dict
+        self.l1_model_config.agent_object_dict = self.agent_object_dict
             
     def get_emp_and_rule_actions(self,file_str,payoff_dict):
         time_ts = file_str.split('_')[1].replace(',','.')
@@ -167,8 +258,6 @@ class L1ModelCore():
                         agent_object_dict[ag].has_oncoming_vehicle = True
                         break
         emp_acts, rule_acts = [],[]
-        self.agent_object_dict = agent_object_dict
-        self.all_agent_obj_dict[file_str] = agent_object_dict
         for ag in all_agents:
             ag_obj = agent_object_dict[ag]
             rule_action, emp_action = None, None
@@ -180,13 +269,14 @@ class L1ModelCore():
             rule_acts.append([self.file_id+str(ag[0]).zfill(3)+str(ag[1]).zfill(3)+str(constants.L1_ACTION_CODES[x]).zfill(2)+'02' for x in rule_action])
         emp_acts = list(itertools.product(*emp_acts))
         rule_acts = list(itertools.product(*rule_acts))
-        return (emp_acts,rule_acts)
+        return (emp_acts,rule_acts,agent_object_dict)
      
 class InverseNashEqLearningModel(L1ModelCore):
     
     def solve(self):
         self.convert_to_nfg()
         self.invoke_pure_strat_nash_eq_calc()
+        self.calc_confusion_matrix()
     
     def add_missing_attributes(self,veh_state):
         if not hasattr(veh_state, 'relev_crosswalks'):
@@ -196,7 +286,7 @@ class InverseNashEqLearningModel(L1ModelCore):
         
     
             
-    def formulate_and_solve_lp(self,all_agents,all_obj_mat,all_constr_mat,on_rule_list):
+    def formulate_and_solve_lp(self,all_agents,all_obj_mat,all_constr_mat,on_rule_list,file_str):
         all_solns = []
         for idx,ag in enumerate(all_agents):
             if on_rule_list[idx]:
@@ -204,7 +294,7 @@ class InverseNashEqLearningModel(L1ModelCore):
             else:
                 obj_mat = all_obj_mat[:,idx]
                 constr_mat = [x[:,idx] for x in all_constr_mat]
-                num_params = 2 if self.agent_object_dict[ag].relev_pedestrians is None else 3
+                num_params = 2 if self.agent_object_dict[file_str][ag].relev_pedestrians is None else 3
                 solns = solve_lp(obj_mat, constr_mat, num_params)
                 all_solns.append((ag,solns))
         return all_solns
@@ -214,47 +304,33 @@ class InverseNashEqLearningModel(L1ModelCore):
         
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
         c = conn.cursor()
-        q_string = "SELECT * FROM UTILITY_WEIGHTS where MODEL_TYPE='NASH'"
-        c.execute(q_string)
-        res = c.fetchall()
-        if len(res) == 0:
-            sys.exit('UTILITY_WEIGHTS weights table is not populated ')
-        weights_dict = dict()
-        for row in res:
-            if row[12] is not None:
-                if tuple(row[3:11]) not in weights_dict:
-                    weights_dict[tuple(row[3:11])] = [row[12:]]
-                else:
-                    weights_dict[tuple(row[3:11])].append(row[12:])
-        weights_dict = {k: np.mean(np.asarray(v), axis=0) for k,v in weights_dict.items()}
         ct,N = 0,len(self.file_keys)
         ''' UTILITY_WEIGHTS TABLE also stores the agent state info information, so we can retrieve that instead of building it again '''
-        q_string = "SELECT * FROM UTILITY_WEIGHTS where MODEL_TYPE='NASH'"
-        c.execute(q_string)
-        res = c.fetchall()
-        agent_info = {tuple(row[:3]):tuple(row[3:11]) for row in res}
+        weights_dict = utils.load_weights_map(self.l1_model_config.l1_model_type,self.l1_model_config.model_type)
+        ag_info_map = utils.load_agent_info_map(self.file_id)
         for file_str in self.file_keys:
             ct +=1
-            print('processing',ct,'/',N)
+            print('processing',self.file_id,ct,'/',N)
             time_ts = file_str.split('_')[1].replace(',','.')
             time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
             all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
+            num_players = len(all_agents)
             if len(all_agents) < 2:
                 continue
             low_bounds_transformed_payoffs = {k:[None]*len(all_agents) for k in payoff_dict}
             high_bounds_transformed_payoffs = {k:[None]*len(all_agents) for k in payoff_dict} 
             #emp_acts,rule_acts = self.get_emp_and_rule_actions(file_str,payoff_dict)
             emp_acts,rule_acts = self.emp_acts_dict[file_str], self.rule_acts_dict[file_str]
+            self.weights_info = [[] for i in range(num_players)]
             for ag_idx,ag in enumerate(all_agents):
                 ag_id = ag[0] if ag[1]==0 else ag[1]
-                agent_info_key = (int(self.file_id),ag_id,time_ts)
-                ag_state_key = agent_info[agent_info_key] if agent_info_key in agent_info else None
-                if (ag_state_key is not None and ag_state_key in weights_dict) and not self.with_baseline_weights:
-                    ag_weights = weights_dict[ag_state_key]
+                ag_info_key = (int(self.file_id),ag_id,time_ts)
+                if (ag_info_key in ag_info_map and ag_info_map[ag_info_key] in weights_dict) and not self.l1_model_config.with_baseline_weights:
+                    ag_weights = weights_dict[ag_info_map[ag_info_key]]
                 else:
                     ag_weights = np.asarray([0.25, 0.25,  0.5, 0, 0.25, 0.25, 0.5, 0])
-                    print('default weights assigned')
+                self.weights_info[ag_idx] = ag_weights
                 for k in payoff_dict.keys():
                     orig_payoff = payoff_dict[k]
                     if len(rule_acts) == 0:
@@ -303,23 +379,37 @@ class InverseNashEqLearningModel(L1ModelCore):
         ct,N = 0,len(nfg_file_keys)
         for file_str in nfg_file_keys:
             ct +=1
-            print('processing',ct,'/',N)
-            out = check_output('"C:\\Program Files (x86)\\Gambit\\gambit-enumpure.exe" -q "'+self.weighted_l3_cache_str+'\\'+file_str+'"', shell=True).decode()
-            outfile_loc = os.path.join(self.nash_eq_res_cache,file_str.split('.')[0]+'.ne')
-            text_file = open(outfile_loc, "w")
-            text_file.write(out)
-            text_file.close()
+            print('processing',self.file_id,ct,'/',N)
+            try:
+                out = check_output('"C:\\Program Files (x86)\\Gambit\\gambit-enumpure.exe" -q "'+self.weighted_l3_cache_str+'\\'+file_str+'"', shell=True).decode()
+                outfile_loc = os.path.join(self.nash_eq_res_cache,file_str.split('.')[0]+'.ne')
+                returncode = 0
+            except CalledProcessError:
+                returncode = 1
+            if returncode == 0:
+                text_file = open(outfile_loc, "w")
+                text_file.write(out)
+                text_file.close()
             
     def calc_confusion_matrix(self):
         ct,N = 0,len(self.file_keys)
         confusion_dict,confusion_dict_N = dict(),dict()
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
+        c = conn.cursor()
+        ins_string = 'INSERT INTO L1_SOLUTIONS VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+        ins_list = []
+        weights_dict = utils.load_weights_map(self.l1_model_config.l1_model_type,self.l1_model_config.model_type)
+        ag_info_map = utils.load_agent_info_map(self.file_id)
         for file_str in self.file_keys:
             ct +=1
-            print('processing',ct,'/',N)
+            print('processing',self.file_id,ct,'/',N)
+            
             time_ts = file_str.split('_')[1].replace(',','.')
             time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
             all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
+            num_players = len(all_agents)
+            self.weights_info = [[] for i in range(num_players)]
             player_actions = [list(set([k[i] for k in payoff_dict.keys()])) for i in np.arange(len(all_agents))]
             all_acts = [x for sublist in player_actions for x in sublist]
             if len(all_agents) < 2:
@@ -341,11 +431,42 @@ class InverseNashEqLearningModel(L1ModelCore):
                         ne_tuple = tuple([x for i,x in enumerate(all_acts) if int(code_str[i]) == 1])
                         if ne_tuple not in ne_list:
                             ne_list.append(ne_tuple)
+                f=1
+                opt_strat = ne_list
+                opt_strat = list(set(opt_strat))
+                model_parms_str = self.l1_model_config.get_model_parms_str()
+                emp_utils, rule_utils, soln_utils = None, None, None
+                if len(emp_acts) > 0:
+                    emp_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in emp_acts]
+                    emp_utils = np.asarray(emp_utils)
+                    assert emp_utils.shape == (len(emp_acts),3,num_players) , str(emp_utils.shape) + str((len(emp_acts),3,num_players))
+                if len(rule_acts) > 0:
+                    rule_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in rule_acts]
+                    rule_utils = np.asarray(rule_utils)
+                    assert rule_utils.shape == (len(rule_acts),3,num_players) , str(rule_utils.shape) + str((len(rule_acts),3,num_players))
+                if len(opt_strat) > 0:
+                    soln_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in opt_strat]
+                    soln_utils = np.asarray(soln_utils)
+                    assert soln_utils.shape == (len(opt_strat),3,num_players) , str(soln_utils.shape) + str((len(opt_strat),3,num_players))
+                for idx,ag in enumerate(all_agents):
+                    ag_id = ag[0] if ag[1]==0 else ag[1]
+                    ag_id = ag[0] if ag[1]==0 else ag[1]
+                    ag_info_key = (int(self.file_id),ag_id,time_ts)
+                    if (ag_info_key in ag_info_map and ag_info_map[ag_info_key] in weights_dict) and not self.l1_model_config.with_baseline_weights:
+                        ag_weights = weights_dict[ag_info_map[ag_info_key]]
+                    else:
+                        ag_weights = np.asarray([0.25, 0.25,  0.5, 0, 0.25, 0.25, 0.5, 0])
+                    self.weights_info[idx] = ag_weights
+                
+                    soln_vect = (int(self.file_id),ag_id,time_ts,self.l1_model_config.l1_model_type,model_parms_str,str(emp_acts) if emp_acts is not None else None,str(rule_acts) if rule_acts is not None else None,str(opt_strat) if opt_strat is not None else None,json.dumps(emp_utils.tolist()) if emp_utils is not None else None,json.dumps(rule_utils.tolist()) if rule_utils is not None else None,json.dumps(soln_utils.tolist()) if soln_utils is not None else None,json.dumps(self.weights_info[idx].tolist()) if self.weights_info[idx] is not None else None)
+                    #soln_vect = (int(self.file_id),ag_id,time_ts,'Ql1',model_parms_str,str(emp_acts) if emp_acts is not None else None,str(rule_acts) if rule_acts is not None else None,str(opt_strat) if opt_strat is not None else None,emp_utils,rule_utils,soln_utils,weights_info[idx])
+                    ins_list.append(soln_vect)
+                
                 if len(ne_list) > 0 and len(emp_acts) > 0:
                     for emp_act in emp_acts:
                         for ag_idx in np.arange(len(all_agents)):
-                            if all_agents[ag_idx][1] != 0:
-                                continue
+                            #if all_agents[ag_idx][1] != 0:
+                            #    continue
                             emp_act_str = utils.get_l1_action_string(int(emp_act[ag_idx][9:11]))
                             if emp_act_str not in confusion_dict:
                                 confusion_dict[emp_act_str] = []
@@ -376,6 +497,9 @@ class InverseNashEqLearningModel(L1ModelCore):
                 th_prob = ctr[p_k]/_sum
                 confusion_arr.append(th_prob)
             confusion_matrix.append(confusion_arr)
+        c.executemany(ins_string,ins_list)
+        conn.commit()
+        conn.close()
         df_cm = pd.DataFrame(confusion_matrix, index = [x+'('+str(confusion_dict_N[x])+')' for x in confusion_key_list],
                       columns = confusion_key_list)
         plt.figure()
@@ -390,8 +514,8 @@ class InverseNashEqLearningModel(L1ModelCore):
         t -= 0.5 # Subtract 0.5 from the top
         plt.ylim(b, t)
         plt.savefig('NASH_'+str(self.with_baseline_weights)+'_'+str(self.mixed_weights)+'.png', bbox_inches='tight')
-        plt.show()
-        f=1
+        #plt.show()
+        
         
     
     
@@ -399,18 +523,18 @@ class InverseNashEqLearningModel(L1ModelCore):
         ct,N = 0,len(self.file_keys)
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
         c = conn.cursor()
-        q_string = "INSERT INTO UTILITY_WEIGHTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        q_string = "INSERT INTO UTILITY_WEIGHTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         ins_list = []
         for file_str in self.file_keys:
             ct +=1
-            #print('processing',ct,'/',N)
+            #print('processing',self.file_id,ct,'/',N)
             time_ts = file_str.split('_')[1].replace(',','.')
             time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
             all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
             if len(all_agents) < 2:
                 continue
-            emp_acts,rule_acts = self.get_emp_and_rule_actions(file_str,payoff_dict)
+            emp_acts,rule_acts = self.emp_acts_dict[file_str], self.rule_acts_dict[file_str]
             agents_on_rule = [[False]*len(all_agents)]*len(emp_acts)
             if len(emp_acts) > 0 and len(rule_acts) > 0:
                 for emp_idx,e in enumerate(emp_acts):
@@ -433,10 +557,10 @@ class InverseNashEqLearningModel(L1ModelCore):
             else:
                 for emp_idx,obj_utils in enumerate(obj_utils):
                     constr_utils = [v-obj_utils for k,v in payoff_dict.items() if k not in emp_acts]
-                    solns = self.formulate_and_solve_lp(all_agents,obj_utils,constr_utils,self.agents_on_rule[emp_idx])
+                    solns = self.formulate_and_solve_lp(all_agents,obj_utils,constr_utils,self.agents_on_rule[emp_idx],file_str)
                     for s in solns:
                         ag_id = s[0][0] if s[0][1] == 0 else s[0][1]
-                        ag_obj = self.agent_object_dict[s[0]]
+                        ag_obj = self.agent_object_dict[file_str][s[0]]
                         leading_veh_id = ag_obj.leading_vehicle.id if ag_obj.leading_vehicle is not None else None
                         relev_agents = []
                         for a in all_agents:
@@ -463,7 +587,7 @@ class InverseNashEqLearningModel(L1ModelCore):
                             speed_fact = 'HIGH'
                             
                         #ag_state_info = (ag_obj.signal, str((int(next_signal_change[0]),next_signal_change[1])), ag_obj.current_segment, int(ag_obj.speed), leading_veh_id, len(relev_agents), 'Y' if ag_obj.relev_pedestrians is not None else 'N')
-                        ins_list.append((int(self.file_id), ag_id, time_ts, ag_obj.signal, next_signal_change[1], time_to_change, ag_obj.current_segment, speed_fact, 'Y' if leading_veh_id is not None else 'N', relev_agents, 'Y' if ag_obj.relev_pedestrians is not None else 'N','NASH', s[1][0][0], s[1][1][0], s[1][2][0], s[1][3][0], s[1][0][1], s[1][1][1], s[1][2][1], s[1][3][1]))
+                        ins_list.append((int(self.file_id), ag_id, time_ts, ag_obj.signal, next_signal_change[1], time_to_change, ag_obj.current_segment, speed_fact, 'Y' if leading_veh_id is not None else 'N', relev_agents, 'Y' if ag_obj.relev_pedestrians is not None else 'N','NASH',self.l1_model_config.model_type, s[1][0][0], s[1][1][0], s[1][2][0], s[1][3][0], s[1][0][1], s[1][1][1], s[1][2][1], s[1][3][1]))
                         print(file_str,ct,'/',N)
         c.executemany(q_string,ins_list)
         conn.commit()
@@ -486,51 +610,38 @@ class InverseQlkRGameLearningModel(InverseNashEqLearningModel):
     def solve(self):
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
         c = conn.cursor()
-        q_string = "SELECT * FROM UTILITY_WEIGHTS where MODEL_TYPE='QlkR'"
-        c.execute(q_string)
-        res = c.fetchall()
-        if len(res) == 0:
-            sys.exit('UTILITY_WEIGHTS weights table is not populated ')
-        weights_dict = dict()
-        for row in res:
-            if row[12] is not None:
-                if tuple(row[3:11]) not in weights_dict:
-                    weights_dict[tuple(row[3:11])] = [row[12:]]
-                else:
-                    weights_dict[tuple(row[3:11])].append(row[12:])
-        weights_dict = {k: np.mean(np.asarray(v), axis=0) for k,v in weights_dict.items()}
-        q_string = "SELECT * FROM UTILITY_WEIGHTS where MODEL_TYPE='QlkR'"
-        c.execute(q_string)
-        res = c.fetchall()
-        agent_info = {tuple(row[:3]):tuple(row[3:11]) for row in res}
+        ins_string = 'INSERT INTO L1_SOLUTIONS VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+        ins_list = []
         self.confusion_dict, self.confusion_dict_N = dict(), dict()
+        weights_dict = utils.load_weights_map(self.l1_model_config.l1_model_type,self.l1_model_config.model_type)
+        ag_info_map = utils.load_agent_info_map(self.file_id)
         ct,N = 0,len(self.file_keys)
         for file_str in self.file_keys:
             ct +=1
             #if ct > 20:
             #    continue
-            print('processing',ct,'/',N)
+            print('processing',self.file_id,ct,'/',N)
             time_ts = file_str.split('_')[1].replace(',','.')
             time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
             all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
             if len(all_agents) < 2:
                 continue
-            emp_acts,rule_acts = self.get_emp_and_rule_actions(file_str,payoff_dict)
+            emp_acts,rule_acts = self.emp_acts_dict[file_str], self.rule_acts_dict[file_str]
             if len(rule_acts) == 0:
                 continue
             num_players = len(all_agents)
             player_actions = [list(set([k[i] for k in payoff_dict.keys()])) for i in np.arange(num_players)]
             player_acts_solns = [[] for i in range(num_players)]
+            weights_info = [[] for i in range(num_players)]
             for idx,ag in enumerate(all_agents):
                 ag_id = ag[0] if ag[1]==0 else ag[1]
-                agent_info_key = (int(self.file_id),ag_id,time_ts)
-                ag_state_key = agent_info[agent_info_key] if agent_info_key in agent_info else None
-                if (ag_state_key is not None and ag_state_key in weights_dict) and not self.with_baseline_weights:
-                    ag_weights = weights_dict[ag_state_key]
+                ag_info_key = (int(self.file_id),ag_id,time_ts)
+                if (ag_info_key in ag_info_map and ag_info_map[ag_info_key] in weights_dict) and not self.l1_model_config.with_baseline_weights:
+                    ag_weights = weights_dict[ag_info_map[ag_info_key]]
                 else:
                     ag_weights = np.asarray([0.25, 0.25,  0.5, 0, 0.25, 0.25, 0.5, 0])
-                    print('default weights assigned')
+                weights_info[idx] = ag_weights
                 low_bounds_transformed_payoffs = {k:[None]*len(all_agents) for k in payoff_dict}
                 high_bounds_transformed_payoffs = {k:[None]*len(all_agents) for k in payoff_dict} 
                 for k in payoff_dict.keys():
@@ -556,6 +667,7 @@ class InverseQlkRGameLearningModel(InverseNashEqLearningModel):
                     low_weighted_payoffs = low_weights @ ag_orig_payoff
                     low_bounds_transformed_payoffs[k][idx] = low_weighted_payoffs[0]
                     high_bounds_transformed_payoffs[k][idx] = high_weighted_payoffs[0]
+                opt_strat = []
                 for r in rule_acts:
                     this_player_strats = []
                     for this_player_action in player_actions[idx]:
@@ -563,18 +675,40 @@ class InverseQlkRGameLearningModel(InverseNashEqLearningModel):
                         _r[idx] = this_player_action
                         this_player_strats.append(tuple(_r))
                     this_player_payoffdict = {k:v[idx] for k,v in high_bounds_transformed_payoffs.items() if k in this_player_strats}
-                    s_star, v_star = self.keywithmaxval(this_player_payoffdict)
-                    for s in s_star:
-                        this_s_act_code = s[idx][9:11]
-                        if this_s_act_code not in player_acts_solns[idx]: 
-                            player_acts_solns[idx].append(this_s_act_code)
+                    if len(this_player_payoffdict) > 0:
+                        s_star, v_star = self.keywithmaxval(this_player_payoffdict)
+                        opt_strat.extend(s_star)
+                        for s in s_star:
+                            this_s_act_code = s[idx][9:11]
+                            if this_s_act_code not in player_acts_solns[idx]: 
+                                player_acts_solns[idx].append(this_s_act_code)
                     this_player_payoffdict = {k:v[idx] for k,v in low_bounds_transformed_payoffs.items() if k in this_player_strats}
-                    s_star, v_star = self.keywithmaxval(this_player_payoffdict)
-                    for s in s_star:
-                        this_s_act_code = s[idx][9:11]
-                        if this_s_act_code not in player_acts_solns[idx]: 
-                            player_acts_solns[idx].append(this_s_act_code)
+                    if len(this_player_payoffdict) > 0:
+                        s_star, v_star = self.keywithmaxval(this_player_payoffdict)
+                        opt_strat.extend(s_star)
+                        for s in s_star:
+                            this_s_act_code = s[idx][9:11]
+                            if this_s_act_code not in player_acts_solns[idx]: 
+                                player_acts_solns[idx].append(this_s_act_code)
                 this_player_emp_acts = list(set([x[idx][9:11] for x in emp_acts]))
+                opt_strat = list(set(opt_strat))
+                model_parms_str = self.l1_model_config.get_model_parms_str()
+                emp_utils, rule_utils, soln_utils = None, None, None
+                if len(emp_acts) > 0:
+                    emp_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in emp_acts]
+                    emp_utils = np.asarray(emp_utils)
+                    assert emp_utils.shape == (len(emp_acts),3,num_players) , str(emp_utils.shape) + str((len(emp_acts),3,num_players))
+                if len(rule_acts) > 0:
+                    rule_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in rule_acts]
+                    rule_utils = np.asarray(rule_utils)
+                    assert rule_utils.shape == (len(rule_acts),3,num_players) , str(rule_utils.shape) + str((len(rule_acts),3,num_players))
+                if len(opt_strat) > 0:
+                    soln_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in opt_strat]
+                    soln_utils = np.asarray(soln_utils)
+                    assert soln_utils.shape == (len(opt_strat),3,num_players) , str(soln_utils.shape) + str((len(opt_strat),3,num_players))
+                soln_vect = (int(self.file_id),ag_id,time_ts,self.l1_model_config.l1_model_type,model_parms_str,str(emp_acts) if emp_acts is not None else None,str(rule_acts) if rule_acts is not None else None,str(opt_strat) if opt_strat is not None else None,json.dumps(emp_utils.tolist()) if emp_utils is not None else None,json.dumps(rule_utils.tolist()) if rule_utils is not None else None,json.dumps(soln_utils.tolist()) if soln_utils is not None else None,json.dumps(weights_info[idx].tolist()) if weights_info[idx] is not None else None)
+                #soln_vect = (int(self.file_id),ag_id,time_ts,'Ql1',model_parms_str,str(emp_acts) if emp_acts is not None else None,str(rule_acts) if rule_acts is not None else None,str(opt_strat) if opt_strat is not None else None,emp_utils,rule_utils,soln_utils,weights_info[idx])
+                ins_list.append(soln_vect)
                 for e_a in this_player_emp_acts:
                     if e_a not in self.confusion_dict:
                         self.confusion_dict[e_a] = []
@@ -589,7 +723,9 @@ class InverseQlkRGameLearningModel(InverseNashEqLearningModel):
                         ''' since the mis-prediction is multi-valued we need to add N-1 true values to the count for proper normalization'''
                         self.confusion_dict[e_a] += [e_a]*(len(player_acts_solns[idx])-1)
                         self.confusion_dict_N[e_a] += 1
-        
+        c.executemany(ins_string,ins_list)
+        conn.commit()
+        conn.close()
             
                         
     def calc_confusion_matrix(self,model_str=None):
@@ -625,7 +761,7 @@ class InverseQlkRGameLearningModel(InverseNashEqLearningModel):
                     
     
     
-    def formulate_and_solve_lp_qlkr(self,all_agents,all_obj_mat,all_constr_mat,on_rule_list,this_idx):
+    def formulate_and_solve_lp_qlkr(self,all_agents,all_obj_mat,all_constr_mat,on_rule_list,this_idx,file_str):
         all_solns = []
         for idx,ag in enumerate(all_agents):
             if idx == this_idx:
@@ -634,7 +770,7 @@ class InverseQlkRGameLearningModel(InverseNashEqLearningModel):
                 else:
                     obj_mat = all_obj_mat[:,idx]
                     constr_mat = [x[:,idx] for x in all_constr_mat]
-                    num_params = 2 if self.agent_object_dict[ag].relev_pedestrians is None else 3
+                    num_params = 2 if self.agent_object_dict[file_str][ag].relev_pedestrians is None else 3
                     solns = solve_lp(obj_mat, constr_mat, num_params)
                     all_solns.append((ag,solns))
         return all_solns
@@ -644,18 +780,18 @@ class InverseQlkRGameLearningModel(InverseNashEqLearningModel):
         ct,N = 0,len(self.file_keys)
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
         c = conn.cursor()
-        q_string = "INSERT INTO UTILITY_WEIGHTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        q_string = "INSERT INTO UTILITY_WEIGHTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         ins_list = []
         for file_str in self.file_keys:
             ct +=1
-            #print('processing',ct,'/',N)
+            #print('processing',self.file_id,ct,'/',N)
             time_ts = file_str.split('_')[1].replace(',','.')
             time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
             all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
             if len(all_agents) < 2:
                 continue
-            emp_acts,rule_acts = self.get_emp_and_rule_actions(file_str,payoff_dict)
+            emp_acts,rule_acts = self.emp_acts_dict[file_str], self.rule_acts_dict[file_str]
             agents_on_rule = [[False]*len(all_agents)]*len(emp_acts)
             if len(emp_acts) > 0 and len(rule_acts) > 0:
                 for emp_idx,e in enumerate(emp_acts):
@@ -692,10 +828,10 @@ class InverseQlkRGameLearningModel(InverseNashEqLearningModel):
                 else:
                     for emp_idx,obj_utils in enumerate(obj_utils):
                         constr_utils = [v-obj_utils for k,v in payoff_dict.items() if k not in act_tups]
-                        solns = self.formulate_and_solve_lp_qlkr(all_agents,obj_utils,constr_utils,self.agents_on_rule[emp_idx],idx)
+                        solns = self.formulate_and_solve_lp_qlkr(all_agents,obj_utils,constr_utils,self.agents_on_rule[emp_idx],idx,file_str)
                         for s in solns:
                             ag_id = s[0][0] if s[0][1] == 0 else s[0][1]
-                            ag_obj = self.agent_object_dict[s[0]]
+                            ag_obj = self.agent_object_dict[file_str][s[0]]
                             leading_veh_id = ag_obj.leading_vehicle.id if ag_obj.leading_vehicle is not None else None
                             relev_agents = []
                             for a in all_agents:
@@ -722,7 +858,7 @@ class InverseQlkRGameLearningModel(InverseNashEqLearningModel):
                                 speed_fact = 'HIGH'
                                 
                             #ag_state_info = (ag_obj.signal, str((int(next_signal_change[0]),next_signal_change[1])), ag_obj.current_segment, int(ag_obj.speed), leading_veh_id, len(relev_agents), 'Y' if ag_obj.relev_pedestrians is not None else 'N')
-                            ins_list.append((int(self.file_id), ag_id, time_ts, ag_obj.signal, next_signal_change[1], time_to_change, ag_obj.current_segment, speed_fact, 'Y' if leading_veh_id is not None else 'N', relev_agents, 'Y' if ag_obj.relev_pedestrians is not None else 'N','QlkR', s[1][0][0], s[1][1][0], s[1][2][0], s[1][3][0], s[1][0][1], s[1][1][1], s[1][2][1], s[1][3][1]))
+                            ins_list.append((int(self.file_id), ag_id, time_ts, ag_obj.signal, next_signal_change[1], time_to_change, ag_obj.current_segment, speed_fact, 'Y' if leading_veh_id is not None else 'N', relev_agents, 'Y' if ag_obj.relev_pedestrians is not None else 'N','QlkR',self.l1_model_config.model_type, s[1][0][0], s[1][1][0], s[1][2][0], s[1][3][0], s[1][0][1], s[1][1][1], s[1][2][1], s[1][3][1]))
                             print(file_str,ct,'/',N)
         c.executemany(q_string,ins_list)
         conn.commit()
@@ -762,11 +898,11 @@ class InverseMaxMaxResponse(InverseQlkRGameLearningModel):
         ct,N = 0,len(self.file_keys)
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
         c = conn.cursor()
-        q_string = "INSERT INTO UTILITY_WEIGHTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        q_string = "INSERT INTO UTILITY_WEIGHTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         ins_list = []
         for file_str in self.file_keys:
             ct +=1
-            print('processing',ct,'/',N)
+            print('processing',self.file_id,ct,'/',N,file_str)
             time_ts = file_str.split('_')[1].replace(',','.')
             time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
@@ -775,7 +911,7 @@ class InverseMaxMaxResponse(InverseQlkRGameLearningModel):
             player_actions = [list(set([k[i] for k in payoff_dict.keys()])) for i in np.arange(num_players)]
             if len(all_agents) < 2:
                 continue
-            emp_acts,rule_acts = self.get_emp_and_rule_actions(file_str,payoff_dict)
+            emp_acts,rule_acts = self.emp_acts_dict[file_str], self.rule_acts_dict[file_str]
             agents_on_rule = [[False]*len(all_agents)]*len(emp_acts)
             if len(emp_acts) > 0 and len(rule_acts) > 0:
                 for emp_idx,e in enumerate(emp_acts):
@@ -818,6 +954,8 @@ class InverseMaxMaxResponse(InverseQlkRGameLearningModel):
                                     cons_list.append(nlc)
                             if len(self.curr_objstrat_subsets) == 0:
                                 continue
+                            if any([np.isnan(x).any() or np.isinf(x).any() for x in self.curr_strat_subsets.values()]) or any([np.isnan(x).any() or np.isinf(x).any() for x in self.curr_objstrat_subsets.values()]):
+                                continue
                             lc = LinearConstraint(np.asarray([1,1,1]), 1, 1)
                             cons_list.append(lc)
                             res_obj_high = minimize(fun=_maximizing_problem, x0=np.asarray([0.25, 0.25, 0.5]), bounds=Bounds(lb=np.asarray([0,0,0]),ub=np.asarray([1,1,1])), method='trust-constr', constraints=cons_list, callback = _stopping_callback)
@@ -831,7 +969,7 @@ class InverseMaxMaxResponse(InverseQlkRGameLearningModel):
                             solns = [(ag,[(0,0),(0,0),(0,0),(1,1)])]
                         for s in solns:
                             ag_id = s[0][0] if s[0][1] == 0 else s[0][1]
-                            ag_obj = self.agent_object_dict[s[0]]
+                            ag_obj = self.agent_object_dict[file_str][s[0]]
                             leading_veh_id = ag_obj.leading_vehicle.id if ag_obj.leading_vehicle is not None else None
                             relev_agents = []
                             for a in all_agents:
@@ -858,7 +996,7 @@ class InverseMaxMaxResponse(InverseQlkRGameLearningModel):
                                 speed_fact = 'HIGH'
                                 
                             #ag_state_info = (ag_obj.signal, str((int(next_signal_change[0]),next_signal_change[1])), ag_obj.current_segment, int(ag_obj.speed), leading_veh_id, len(relev_agents), 'Y' if ag_obj.relev_pedestrians is not None else 'N')
-                            ins_list.append((int(self.file_id), ag_id, time_ts, ag_obj.signal, next_signal_change[1], time_to_change, ag_obj.current_segment, speed_fact, 'Y' if leading_veh_id is not None else 'N', relev_agents, 'Y' if ag_obj.relev_pedestrians is not None else 'N','maxmax', s[1][0][0], s[1][1][0], s[1][2][0], s[1][3][0], s[1][0][1], s[1][1][1], s[1][2][1], s[1][3][1]))
+                            ins_list.append((int(self.file_id), ag_id, time_ts, ag_obj.signal, next_signal_change[1], time_to_change, ag_obj.current_segment, speed_fact, 'Y' if leading_veh_id is not None else 'N', relev_agents, 'Y' if ag_obj.relev_pedestrians is not None else 'N','maxmax',self.l1_model_config.model_type, s[1][0][0], s[1][1][0], s[1][2][0], s[1][3][0], s[1][0][1], s[1][1][1], s[1][2][1], s[1][3][1]))
                             print(file_str,ct,'/',N)
         c.executemany(q_string,ins_list)
         conn.commit()
@@ -867,38 +1005,25 @@ class InverseMaxMaxResponse(InverseQlkRGameLearningModel):
     def solve(self):
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
         c = conn.cursor()
-        q_string = "SELECT * FROM UTILITY_WEIGHTS where MODEL_TYPE='maxmax'"
-        c.execute(q_string)
-        res = c.fetchall()
-        if len(res) == 0:
-            sys.exit('UTILITY_WEIGHTS weights table is not populated ')
-        weights_dict = dict()
-        for row in res:
-            if row[12] is not None:
-                if tuple(row[3:11]) not in weights_dict:
-                    weights_dict[tuple(row[3:11])] = [row[12:]]
-                else:
-                    weights_dict[tuple(row[3:11])].append(row[12:])
-        weights_dict = {k: np.mean(np.asarray(v), axis=0) for k,v in weights_dict.items()}
-        q_string = "SELECT * FROM UTILITY_WEIGHTS where MODEL_TYPE='maxmax'"
-        c.execute(q_string)
-        res = c.fetchall()
-        agent_info = {tuple(row[:3]):tuple(row[3:11]) for row in res}
+        ins_string = 'INSERT INTO L1_SOLUTIONS VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+        ins_list = []
         self.confusion_dict, self.confusion_dict_N = dict(), dict()
+        weights_dict = utils.load_weights_map(self.l1_model_config.l1_model_type,self.l1_model_config.model_type)
+        ag_info_map = utils.load_agent_info_map(self.file_id)
         ct,N = 0,len(self.file_keys)
         for file_str in self.file_keys:
             
             ct +=1
             #if ct > 20:
             #    continue
-            print('processing',ct,'/',N)
+            print('processing',self.file_id,ct,'/',N)
             time_ts = file_str.split('_')[1].replace(',','.')
             time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
             all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
             if len(all_agents) < 2:
                 continue
-            emp_acts,rule_acts = self.get_emp_and_rule_actions(file_str,payoff_dict)
+            emp_acts,rule_acts = self.emp_acts_dict[file_str], self.rule_acts_dict[file_str]
             if len(rule_acts) == 0:
                 continue
             num_players = len(all_agents)
@@ -906,15 +1031,15 @@ class InverseMaxMaxResponse(InverseQlkRGameLearningModel):
             player_acts_solns = [[] for i in range(num_players)]
             high_bounds_transformed_payoffs = {k:[None]*len(all_agents) for k in payoff_dict} 
             low_bounds_transformed_payoffs = {k:[None]*len(all_agents) for k in payoff_dict} 
+            weights_info = [[] for i in range(num_players)]
             for idx,ag in enumerate(all_agents):
                 ag_id = ag[0] if ag[1]==0 else ag[1]
-                agent_info_key = (int(self.file_id),ag_id,time_ts)
-                ag_state_key = agent_info[agent_info_key] if agent_info_key in agent_info else None
-                if (ag_state_key is not None and ag_state_key in weights_dict) and not self.with_baseline_weights:
-                    ag_weights = weights_dict[ag_state_key]
+                ag_info_key = (int(self.file_id),ag_id,time_ts)
+                if (ag_info_key in ag_info_map and ag_info_map[ag_info_key] in weights_dict) and not self.l1_model_config.with_baseline_weights:
+                    ag_weights = weights_dict[ag_info_map[ag_info_key]]
                 else:
                     ag_weights = np.asarray([0.25, 0.25,  0.5, 0, 0.25, 0.25, 0.5, 0])
-                    print('default weights assigned')
+                weights_info[idx] = ag_weights
                 for k in payoff_dict.keys():
                     orig_payoff = payoff_dict[k]
                     if len(rule_acts) == 0:
@@ -937,13 +1062,34 @@ class InverseMaxMaxResponse(InverseQlkRGameLearningModel):
                     high_bounds_transformed_payoffs[k][idx] = high_weighted_payoffs[0]
                     low_weighted_payoffs = low_weights @ ag_orig_payoff
                     low_bounds_transformed_payoffs[k][idx] = low_weighted_payoffs[0]
-            
+                opt_strat = []
                 this_player_payoff_dict = {k:v[idx] for k,v in high_bounds_transformed_payoffs.items()}
-                opt_strat,opt_val = self.keywithmaxval(this_player_payoff_dict)
-                player_acts_solns[idx] = list(set([x[idx][9:11] for x in opt_strat]))
+                opt_strat_high,opt_val_high = self.keywithmaxval(this_player_payoff_dict)
+                opt_strat.extend(opt_strat_high)
+                player_acts_solns[idx] = list(set([x[idx][9:11] for x in opt_strat_high]))
                 this_player_payoff_dict = {k:v[idx] for k,v in low_bounds_transformed_payoffs.items()}
-                opt_strat,opt_val = self.keywithmaxval(this_player_payoff_dict)
-                for l_s in list(set([x[idx][9:11] for x in opt_strat])):
+                opt_strat_low,opt_val_low = self.keywithmaxval(this_player_payoff_dict)
+                opt_strat.extend(opt_strat_low)
+                opt_strat = list(set(opt_strat))
+                model_parms_str = self.l1_model_config.get_model_parms_str()
+                emp_utils, rule_utils, soln_utils = None, None, None
+                if len(emp_acts) > 0:
+                    emp_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in emp_acts]
+                    emp_utils = np.asarray(emp_utils)
+                    assert emp_utils.shape == (len(emp_acts),3,num_players) , str(emp_utils.shape) + str((len(emp_acts),3,num_players))
+                if len(rule_acts) > 0:
+                    rule_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in rule_acts]
+                    rule_utils = np.asarray(rule_utils)
+                    assert rule_utils.shape == (len(rule_acts),3,num_players) , str(rule_utils.shape) + str((len(rule_acts),3,num_players))
+                if len(opt_strat) > 0:
+                    soln_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in opt_strat]
+                    soln_utils = np.asarray(soln_utils)
+                    assert soln_utils.shape == (len(opt_strat),3,num_players) , str(soln_utils.shape) + str((len(opt_strat),3,num_players))
+                soln_vect = (int(self.file_id),ag_id,time_ts,self.l1_model_config.l1_model_type,model_parms_str,str(emp_acts) if emp_acts is not None else None,str(rule_acts) if rule_acts is not None else None,str(opt_strat) if opt_strat is not None else None,json.dumps(emp_utils.tolist()) if emp_utils is not None else None,json.dumps(rule_utils.tolist()) if rule_utils is not None else None,json.dumps(soln_utils.tolist()) if soln_utils is not None else None,json.dumps(weights_info[idx].tolist()) if weights_info[idx] is not None else None)
+                #soln_vect = (int(self.file_id),ag_id,time_ts,'Ql1',model_parms_str,str(emp_acts) if emp_acts is not None else None,str(rule_acts) if rule_acts is not None else None,str(opt_strat) if opt_strat is not None else None,emp_utils,rule_utils,soln_utils,weights_info[idx])
+                ins_list.append(soln_vect)
+                
+                for l_s in list(set([x[idx][9:11] for x in opt_strat_low])):
                     if l_s not in player_acts_solns[idx]:
                         player_acts_solns[idx].append(l_s)
                 this_player_emp_acts = list(set([x[idx][9:11] for x in emp_acts]))
@@ -961,25 +1107,31 @@ class InverseMaxMaxResponse(InverseQlkRGameLearningModel):
                         ''' since the mis-prediction is multi-valued we need to add N-1 true values to the count for proper normalization'''
                         self.confusion_dict[e_a] += [e_a]*(len(player_acts_solns[idx])-1)
                         self.confusion_dict_N[e_a] += 1
-
+        c.executemany(ins_string,ins_list)
+        conn.commit()
+        conn.close()
+        
+        
+        
+        
 class InverseBestResponseWithTrueBelief(InverseQlkRGameLearningModel):
     
     def calculate_and_insert_weights(self):
         ct,N = 0,len(self.file_keys)
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
         c = conn.cursor()
-        q_string = "INSERT INTO UTILITY_WEIGHTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        q_string = "INSERT INTO UTILITY_WEIGHTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         ins_list = []
         for file_str in self.file_keys:
             ct +=1
-            print('processing',ct,'/',N)
+            print('processing',self.file_id,ct,'/',N)
             time_ts = file_str.split('_')[1].replace(',','.')
             time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
             all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
             if len(all_agents) < 2:
                 continue
-            emp_acts,rule_acts = self.get_emp_and_rule_actions(file_str,payoff_dict)
+            emp_acts,rule_acts = self.emp_acts_dict[file_str], self.rule_acts_dict[file_str]
             agents_on_rule = [[False]*len(all_agents)]*len(emp_acts)
             if len(emp_acts) > 0 and len(rule_acts) > 0:
                 for emp_idx,e in enumerate(emp_acts):
@@ -1016,10 +1168,10 @@ class InverseBestResponseWithTrueBelief(InverseQlkRGameLearningModel):
                 else:
                     for emp_idx,obj_utils in enumerate(obj_utils):
                         constr_utils = [v-obj_utils for k,v in payoff_dict.items() if k not in act_tups]
-                        solns = self.formulate_and_solve_lp_qlkr(all_agents,obj_utils,constr_utils,self.agents_on_rule[emp_idx],idx)
+                        solns = self.formulate_and_solve_lp_qlkr(all_agents,obj_utils,constr_utils,self.agents_on_rule[emp_idx],idx,file_str)
                         for s in solns:
                             ag_id = s[0][0] if s[0][1] == 0 else s[0][1]
-                            ag_obj = self.agent_object_dict[s[0]]
+                            ag_obj = self.agent_object_dict[file_str][s[0]]
                             leading_veh_id = ag_obj.leading_vehicle.id if ag_obj.leading_vehicle is not None else None
                             relev_agents = []
                             for a in all_agents:
@@ -1046,7 +1198,7 @@ class InverseBestResponseWithTrueBelief(InverseQlkRGameLearningModel):
                                 speed_fact = 'HIGH'
                                 
                             #ag_state_info = (ag_obj.signal, str((int(next_signal_change[0]),next_signal_change[1])), ag_obj.current_segment, int(ag_obj.speed), leading_veh_id, len(relev_agents), 'Y' if ag_obj.relev_pedestrians is not None else 'N')
-                            ins_list.append((int(self.file_id), ag_id, time_ts, ag_obj.signal, next_signal_change[1], time_to_change, ag_obj.current_segment, speed_fact, 'Y' if leading_veh_id is not None else 'N', relev_agents, 'Y' if ag_obj.relev_pedestrians is not None else 'N','brtb', s[1][0][0], s[1][1][0], s[1][2][0], s[1][3][0], s[1][0][1], s[1][1][1], s[1][2][1], s[1][3][1]))
+                            ins_list.append((int(self.file_id), ag_id, time_ts, ag_obj.signal, next_signal_change[1], time_to_change, ag_obj.current_segment, speed_fact, 'Y' if leading_veh_id is not None else 'N', relev_agents, 'Y' if ag_obj.relev_pedestrians is not None else 'N','brtb',self.l1_model_config.model_type, s[1][0][0], s[1][1][0], s[1][2][0], s[1][3][0], s[1][0][1], s[1][1][1], s[1][2][1], s[1][3][1]))
                             print(file_str,ct,'/',N)
         c.executemany(q_string,ins_list)
         conn.commit()
@@ -1087,51 +1239,38 @@ class InverseBestResponseWithTrueBelief(InverseQlkRGameLearningModel):
     def solve(self):
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
         c = conn.cursor()
-        q_string = "SELECT * FROM UTILITY_WEIGHTS where MODEL_TYPE='brtb'"
-        c.execute(q_string)
-        res = c.fetchall()
-        if len(res) == 0:
-            sys.exit('UTILITY_WEIGHTS weights table is not populated ')
-        weights_dict = dict()
-        for row in res:
-            if row[12] is not None:
-                if tuple(row[3:11]) not in weights_dict:
-                    weights_dict[tuple(row[3:11])] = [row[12:]]
-                else:
-                    weights_dict[tuple(row[3:11])].append(row[12:])
-        weights_dict = {k: np.mean(np.asarray(v), axis=0) for k,v in weights_dict.items()}
-        q_string = "SELECT * FROM UTILITY_WEIGHTS where MODEL_TYPE='brtb'"
-        c.execute(q_string)
-        res = c.fetchall()
-        agent_info = {tuple(row[:3]):tuple(row[3:11]) for row in res}
+        ins_string = 'INSERT INTO L1_SOLUTIONS VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+        ins_list = []
         self.confusion_dict, self.confusion_dict_N = dict(), dict()
+        weights_dict = utils.load_weights_map(self.l1_model_config.l1_model_type,self.l1_model_config.model_type)
+        ag_info_map = utils.load_agent_info_map(self.file_id)
         ct,N = 0,len(self.file_keys)
         for file_str in self.file_keys:
             ct +=1
             #if ct > 20:
             #    continue
-            print('processing',ct,'/',N)
+            print('processing',self.file_id,ct,'/',N)
             time_ts = file_str.split('_')[1].replace(',','.')
             time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
             all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
             if len(all_agents) < 2:
                 continue
-            emp_acts,rule_acts = self.get_emp_and_rule_actions(file_str,payoff_dict)
+            emp_acts,rule_acts = self.emp_acts_dict[file_str], self.rule_acts_dict[file_str]
             if len(rule_acts) == 0:
                 continue
             num_players = len(all_agents)
             player_actions = [list(set([k[i] for k in payoff_dict.keys()])) for i in np.arange(num_players)]
             player_acts_solns = [[] for i in range(num_players)]
+            weights_info = [[] for i in range(num_players)]
             for idx,ag in enumerate(all_agents):
                 ag_id = ag[0] if ag[1]==0 else ag[1]
-                agent_info_key = (int(self.file_id),ag_id,time_ts)
-                ag_state_key = agent_info[agent_info_key] if agent_info_key in agent_info else None
-                if (ag_state_key is not None and ag_state_key in weights_dict) and not self.with_baseline_weights:
-                    ag_weights = weights_dict[ag_state_key]
+                ag_info_key = (int(self.file_id),ag_id,time_ts)
+                if (ag_info_key in ag_info_map and ag_info_map[ag_info_key] in weights_dict) and not self.l1_model_config.with_baseline_weights:
+                    ag_weights = weights_dict[ag_info_map[ag_info_key]]
                 else:
                     ag_weights = np.asarray([0.25, 0.25,  0.5, 0, 0.25, 0.25, 0.5, 0])
-                    print('default weights assigned')
+                weights_info[idx] = ag_weights
                 low_bounds_transformed_payoffs = {k:[None]*len(all_agents) for k in payoff_dict}
                 high_bounds_transformed_payoffs = {k:[None]*len(all_agents) for k in payoff_dict} 
                 for k in payoff_dict.keys():
@@ -1164,6 +1303,7 @@ class InverseBestResponseWithTrueBelief(InverseQlkRGameLearningModel):
                     low_weighted_payoffs = low_weights @ ag_orig_payoff
                     low_bounds_transformed_payoffs[k][idx] = low_weighted_payoffs[0]
                     high_bounds_transformed_payoffs[k][idx] = high_weighted_payoffs[0]
+                opt_strat = []
                 for r in emp_acts:
                     this_player_strats = []
                     for this_player_action in player_actions[idx]:
@@ -1174,16 +1314,36 @@ class InverseBestResponseWithTrueBelief(InverseQlkRGameLearningModel):
                     if len(this_player_payoffdict) == 0:
                         continue
                     s_star, v_star = self.keywithmaxval(this_player_payoffdict)
+                    opt_strat.extend(s_star)
                     for s in s_star:
                         this_s_act_code = s[idx][9:11]
                         if this_s_act_code not in player_acts_solns[idx]: 
                             player_acts_solns[idx].append(this_s_act_code)
                     this_player_payoffdict = {k:v[idx] for k,v in low_bounds_transformed_payoffs.items() if k in this_player_strats}
                     s_star, v_star = self.keywithmaxval(this_player_payoffdict)
+                    opt_strat.extend(s_star)
                     for s in s_star:
                         this_s_act_code = s[idx][9:11]
                         if this_s_act_code not in player_acts_solns[idx]: 
                             player_acts_solns[idx].append(this_s_act_code)
+                opt_strat = list(set(opt_strat))
+                model_parms_str = self.l1_model_config.get_model_parms_str()
+                emp_utils, rule_utils, soln_utils = None, None, None
+                if len(emp_acts) > 0:
+                    emp_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in emp_acts]
+                    emp_utils = np.asarray(emp_utils)
+                    assert emp_utils.shape == (len(emp_acts),3,num_players) , str(emp_utils.shape) + str((len(emp_acts),3,num_players))
+                if len(rule_acts) > 0:
+                    rule_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in rule_acts]
+                    rule_utils = np.asarray(rule_utils)
+                    assert rule_utils.shape == (len(rule_acts),3,num_players) , str(rule_utils.shape) + str((len(rule_acts),3,num_players))
+                if len(opt_strat) > 0:
+                    soln_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in opt_strat]
+                    soln_utils = np.asarray(soln_utils)
+                    assert soln_utils.shape == (len(opt_strat),3,num_players) , str(soln_utils.shape) + str((len(opt_strat),3,num_players))
+                soln_vect = (int(self.file_id),ag_id,time_ts,self.l1_model_config.l1_model_type,model_parms_str,str(emp_acts) if emp_acts is not None else None,str(rule_acts) if rule_acts is not None else None,str(opt_strat) if opt_strat is not None else None,json.dumps(emp_utils.tolist()) if emp_utils is not None else None,json.dumps(rule_utils.tolist()) if rule_utils is not None else None,json.dumps(soln_utils.tolist()) if soln_utils is not None else None,json.dumps(weights_info[idx].tolist()) if weights_info[idx] is not None else None)
+                #soln_vect = (int(self.file_id),ag_id,time_ts,'Ql1',model_parms_str,str(emp_acts) if emp_acts is not None else None,str(rule_acts) if rule_acts is not None else None,str(opt_strat) if opt_strat is not None else None,emp_utils,rule_utils,soln_utils,weights_info[idx])
+                ins_list.append(soln_vect)
                 this_player_emp_acts = list(set([x[idx][9:11] for x in emp_acts]))
                 for e_a in this_player_emp_acts:
                     if e_a not in self.confusion_dict:
@@ -1199,7 +1359,9 @@ class InverseBestResponseWithTrueBelief(InverseQlkRGameLearningModel):
                         ''' since the mis-prediction is multi-valued we need to add N-1 true values to the count for proper normalization'''
                         self.confusion_dict[e_a] += [e_a]*(len(player_acts_solns[idx])-1)
                         self.confusion_dict_N[e_a] += 1
-    
+        c.executemany(ins_string,ins_list)
+        conn.commit()
+        conn.close()
     
 class InverseMaxMinResponse(InverseMaxMaxResponse):
     
@@ -1233,11 +1395,11 @@ class InverseMaxMinResponse(InverseMaxMaxResponse):
         ct,N = 0,len(self.file_keys)
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
         c = conn.cursor()
-        q_string = "INSERT INTO UTILITY_WEIGHTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        q_string = "INSERT INTO UTILITY_WEIGHTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         ins_list = []
         for file_str in self.file_keys:
             ct +=1
-            print('processing',ct,'/',N)
+            print('processing',self.file_id,ct,'/',N)
             time_ts = file_str.split('_')[1].replace(',','.')
             time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
@@ -1246,7 +1408,7 @@ class InverseMaxMinResponse(InverseMaxMaxResponse):
             player_actions = [list(set([k[i] for k in payoff_dict.keys()])) for i in np.arange(num_players)]
             if len(all_agents) < 2:
                 continue
-            emp_acts,rule_acts = self.get_emp_and_rule_actions(file_str,payoff_dict)
+            emp_acts,rule_acts = self.emp_acts_dict[file_str], self.rule_acts_dict[file_str]
             agents_on_rule = [[False]*len(all_agents)]*len(emp_acts)
             if len(emp_acts) > 0 and len(rule_acts) > 0:
                 for emp_idx,e in enumerate(emp_acts):
@@ -1289,6 +1451,8 @@ class InverseMaxMinResponse(InverseMaxMaxResponse):
                                     cons_list.append(nlc)
                             if len(self.curr_objstrat_subsets) == 0:
                                 continue
+                            if any([np.isnan(x).any() or np.isinf(x).any() for x in self.curr_strat_subsets.values()]) or any([np.isnan(x).any() or np.isinf(x).any() for x in self.curr_objstrat_subsets.values()]):
+                                continue
                             lc = LinearConstraint(np.asarray([1,1,1]), 1, 1)
                             cons_list.append(lc)
                             res_obj_high = minimize(fun=_maximizing_problem, x0=np.asarray([0.25, 0.25, 0.5]), bounds=Bounds(lb=np.asarray([0,0,0]),ub=np.asarray([1,1,1])), method='trust-constr', constraints=cons_list, callback = _stopping_callback)
@@ -1302,7 +1466,7 @@ class InverseMaxMinResponse(InverseMaxMaxResponse):
                             solns = [(ag,[(0,0),(0,0),(0,0),(1,1)])]
                         for s in solns:
                             ag_id = s[0][0] if s[0][1] == 0 else s[0][1]
-                            ag_obj = self.agent_object_dict[s[0]]
+                            ag_obj = self.agent_object_dict[file_str][s[0]]
                             leading_veh_id = ag_obj.leading_vehicle.id if ag_obj.leading_vehicle is not None else None
                             relev_agents = []
                             for a in all_agents:
@@ -1329,7 +1493,7 @@ class InverseMaxMinResponse(InverseMaxMaxResponse):
                                 speed_fact = 'HIGH'
                                 
                             #ag_state_info = (ag_obj.signal, str((int(next_signal_change[0]),next_signal_change[1])), ag_obj.current_segment, int(ag_obj.speed), leading_veh_id, len(relev_agents), 'Y' if ag_obj.relev_pedestrians is not None else 'N')
-                            ins_list.append((int(self.file_id), ag_id, time_ts, ag_obj.signal, next_signal_change[1], time_to_change, ag_obj.current_segment, speed_fact, 'Y' if leading_veh_id is not None else 'N', relev_agents, 'Y' if ag_obj.relev_pedestrians is not None else 'N','maxmin', s[1][0][0], s[1][1][0], s[1][2][0], s[1][3][0], s[1][0][1], s[1][1][1], s[1][2][1], s[1][3][1]))
+                            ins_list.append((int(self.file_id), ag_id, time_ts, ag_obj.signal, next_signal_change[1], time_to_change, ag_obj.current_segment, speed_fact, 'Y' if leading_veh_id is not None else 'N', relev_agents, 'Y' if ag_obj.relev_pedestrians is not None else 'N','maxmin',self.l1_model_config.model_type, s[1][0][0], s[1][1][0], s[1][2][0], s[1][3][0], s[1][0][1], s[1][1][1], s[1][2][1], s[1][3][1]))
                             print(file_str,ct,'/',N)
         c.executemany(q_string,ins_list)
         conn.commit()
@@ -1338,38 +1502,25 @@ class InverseMaxMinResponse(InverseMaxMaxResponse):
     def solve(self):
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
         c = conn.cursor()
-        q_string = "SELECT * FROM UTILITY_WEIGHTS where MODEL_TYPE='maxmin'"
-        c.execute(q_string)
-        res = c.fetchall()
-        if len(res) == 0:
-            sys.exit('UTILITY_WEIGHTS weights table is not populated ')
-        weights_dict = dict()
-        for row in res:
-            if row[12] is not None:
-                if tuple(row[3:11]) not in weights_dict:
-                    weights_dict[tuple(row[3:11])] = [row[12:]]
-                else:
-                    weights_dict[tuple(row[3:11])].append(row[12:])
-        weights_dict = {k: np.mean(np.asarray(v), axis=0) for k,v in weights_dict.items()}
-        q_string = "SELECT * FROM UTILITY_WEIGHTS where MODEL_TYPE='maxmin'"
-        c.execute(q_string)
-        res = c.fetchall()
-        agent_info = {tuple(row[:3]):tuple(row[3:11]) for row in res}
+        ins_string = 'INSERT INTO L1_SOLUTIONS VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+        ins_list = []
         self.confusion_dict, self.confusion_dict_N = dict(), dict()
+        weights_dict = utils.load_weights_map(self.l1_model_config.l1_model_type,self.l1_model_config.model_type)
+        ag_info_map = utils.load_agent_info_map(self.file_id)
         ct,N = 0,len(self.file_keys)
         for file_str in self.file_keys:
             
             ct +=1
             #if ct > 20:
             #    continue
-            print('processing',ct,'/',N)
+            print('processing',self.file_id,ct,'/',N)
             time_ts = file_str.split('_')[1].replace(',','.')
             time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
             all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
             if len(all_agents) < 2:
                 continue
-            emp_acts,rule_acts = self.get_emp_and_rule_actions(file_str,payoff_dict)
+            emp_acts,rule_acts = self.emp_acts_dict[file_str], self.rule_acts_dict[file_str]
             if len(rule_acts) == 0:
                 continue
             num_players = len(all_agents)
@@ -1377,15 +1528,15 @@ class InverseMaxMinResponse(InverseMaxMaxResponse):
             player_acts_solns = [[] for i in range(num_players)]
             high_bounds_transformed_payoffs = {k:[None]*len(all_agents) for k in payoff_dict} 
             low_bounds_transformed_payoffs = {k:[None]*len(all_agents) for k in payoff_dict} 
+            weights_info = [[] for i in range(num_players)]
             for idx,ag in enumerate(all_agents):
                 ag_id = ag[0] if ag[1]==0 else ag[1]
-                agent_info_key = (int(self.file_id),ag_id,time_ts)
-                ag_state_key = agent_info[agent_info_key] if agent_info_key in agent_info else None
-                if (ag_state_key is not None and ag_state_key in weights_dict) and not self.with_baseline_weights:
-                    ag_weights = weights_dict[ag_state_key]
+                ag_info_key = (int(self.file_id),ag_id,time_ts)
+                if (ag_info_key in ag_info_map and ag_info_map[ag_info_key] in weights_dict) and not self.l1_model_config.with_baseline_weights:
+                    ag_weights = weights_dict[ag_info_map[ag_info_key]]
                 else:
                     ag_weights = np.asarray([0.25, 0.25,  0.5, 0, 0.25, 0.25, 0.5, 0])
-                    print('default weights assigned')
+                weights_info[idx] = ag_weights
                 for k in payoff_dict.keys():
                     orig_payoff = payoff_dict[k]
                     if len(rule_acts) == 0:
@@ -1414,6 +1565,25 @@ class InverseMaxMinResponse(InverseMaxMaxResponse):
             eq = equilibria_core.EquilibriaCore(num_players,low_bounds_transformed_payoffs,len(low_bounds_transformed_payoffs),player_actions[idx],False)
             soln_low = eq.calc_max_min_response()
             soln.update(soln_low)
+            opt_strat = list(soln.keys())
+            model_parms_str = self.l1_model_config.get_model_parms_str()
+            emp_utils, rule_utils, soln_utils = None, None, None
+            if len(emp_acts) > 0:
+                emp_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in emp_acts]
+                emp_utils = np.asarray(emp_utils)
+                assert emp_utils.shape == (len(emp_acts),3,num_players) , str(emp_utils.shape) + str((len(emp_acts),3,num_players))
+            if len(rule_acts) > 0:
+                rule_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in rule_acts]
+                rule_utils = np.asarray(rule_utils)
+                assert rule_utils.shape == (len(rule_acts),3,num_players) , str(rule_utils.shape) + str((len(rule_acts),3,num_players))
+            if len(opt_strat) > 0:
+                soln_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in opt_strat]
+                soln_utils = np.asarray(soln_utils)
+                assert soln_utils.shape == (len(opt_strat),3,num_players) , str(soln_utils.shape) + str((len(opt_strat),3,num_players))
+            soln_vect = (int(self.file_id),ag_id,time_ts,self.l1_model_config.l1_model_type,model_parms_str,str(emp_acts) if emp_acts is not None else None,str(rule_acts) if rule_acts is not None else None,str(opt_strat) if opt_strat is not None else None,json.dumps(emp_utils.tolist()) if emp_utils is not None else None,json.dumps(rule_utils.tolist()) if rule_utils is not None else None,json.dumps(soln_utils.tolist()) if soln_utils is not None else None,json.dumps(weights_info[idx].tolist()) if weights_info[idx] is not None else None)
+            #soln_vect = (int(self.file_id),ag_id,time_ts,'Ql1',model_parms_str,str(emp_acts) if emp_acts is not None else None,str(rule_acts) if rule_acts is not None else None,str(opt_strat) if opt_strat is not None else None,emp_utils,rule_utils,soln_utils,weights_info[idx])
+            ins_list.append(soln_vect)
+                
             for idx,ag in enumerate(all_agents):
                 player_acts_solns[idx] = list(set([x[idx][9:11] for x in soln.keys()]))
                 this_player_emp_acts = list(set([x[idx][9:11] for x in emp_acts]))
@@ -1431,43 +1601,68 @@ class InverseMaxMinResponse(InverseMaxMaxResponse):
                         ''' since the mis-prediction is multi-valued we need to add N-1 true values to the count for proper normalization'''
                         self.confusion_dict[e_a] += [e_a]*(len(player_acts_solns[idx])-1)
                         self.confusion_dict_N[e_a] += 1
-    
+        c.executemany(ins_string,ins_list)
+        conn.commit()
+        conn.close()
+        
+        
+        
 class Ql1Model(InverseQlkRGameLearningModel):
     
-    def solve(self,lzero_behavior):
-        
+    def solve(self):
+        self.lzero_behavior = self.l1_model_config.lzero_behavior
+        if self.lzero_behavior == 'maxmax':
+            self.solve_maxmax()
+        else:
+            self.solve_maxmin()
+            
+    def solve_maxmin(self):
+        ins_list = []
+        lzero_behavior = self.lzero_behavior
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
         c = conn.cursor()
+        ins_string = 'INSERT INTO L1_SOLUTIONS VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
         self.confusion_dict, self.confusion_dict_N = dict(), dict()
+        weights_dict = utils.load_weights_map(lzero_behavior,self.l1_model_config.model_type)
+        ag_info_map = utils.load_agent_info_map(self.file_id)
         ct,N = 0,len(self.file_keys)
         for file_str in self.file_keys:
             ct +=1
             #if ct > 20:
             #    continue
-            print('processing',ct,'/',N)
+            print('processing',self.file_id,ct,'/',N)
             time_ts = file_str.split('_')[1].replace(',','.')
             time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
             all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
             if len(all_agents) < 2:
                 continue
-            emp_acts,rule_acts = self.get_emp_and_rule_actions(file_str,payoff_dict)
+            emp_acts,rule_acts = self.emp_acts_dict[file_str], self.rule_acts_dict[file_str]
             if len(rule_acts) == 0:
                 continue
             num_players = len(all_agents)
             player_actions = [list(set([k[i] for k in payoff_dict.keys()])) for i in np.arange(num_players)]
             player_acts_solns = [[] for i in range(num_players)]
             high_bounds_transformed_payoffs = {k:[None]*len(all_agents) for k in payoff_dict} 
+            low_bounds_transformed_payoffs = {k:[None]*len(all_agents) for k in payoff_dict} 
+            weights_info = [[] for i in range(num_players)]
             for idx,ag in enumerate(all_agents):
-                ag_weights = np.asarray([0.25, 0.25,  0.5, 0, 0.25, 0.25, 0.5, 0])
-                
+                ag_id = ag[0] if ag[1]==0 else ag[1]
+                ag_info_key = (int(self.file_id),ag_id,time_ts)
+                if (ag_info_key in ag_info_map and ag_info_map[ag_info_key] in weights_dict) and not self.l1_model_config.with_baseline_weights:
+                    ag_weights = weights_dict[ag_info_map[ag_info_key]]
+                else:
+                    ag_weights = np.asarray([0.25, 0.25,  0.5, 0, 0.25, 0.25, 0.5, 0])
+                weights_info[idx] = ag_weights
                 for k in payoff_dict.keys():
                     orig_payoff = payoff_dict[k]
                     if len(rule_acts) == 0:
                         high_weights = np.reshape(np.take(ag_weights, [0,1,2], 0), newshape=(1,3))
+                        low_weights = np.reshape(np.take(ag_weights, [4,5,6], 0), newshape=(1,3))
                         ag_orig_payoff = orig_payoff[:,idx]
                     else:
                         high_weights = np.reshape(np.take(ag_weights, [0,1,2,3], 0), newshape=(1,4))
+                        low_weights = np.reshape(np.take(ag_weights, [4,5,6,7], 0), newshape=(1,4))
                         if k[idx] in [x[idx] for x in rule_acts]:
                             ag_orig_payoff = np.append(orig_payoff[:,idx],1)
                         else:
@@ -1476,22 +1671,28 @@ class Ql1Model(InverseQlkRGameLearningModel):
                         high_weights = np.where(high_weights == max(high_weights), 1, 0)
                         #if np.sum(np.exp(10*high_weights)) != 0:
                         #    high_weights = np.exp(10*high_weights)/np.sum(np.exp(10*high_weights))
-                        
+                    else:
+                        if np.sum(high_weights) != 0:
+                            high_weights = high_weights/np.sum(high_weights)
+                        if np.sum(low_weights) != 0:
+                            low_weights = low_weights/np.sum(low_weights)   
                     high_weighted_payoffs = high_weights @ ag_orig_payoff
                     high_bounds_transformed_payoffs[k][idx] = high_weighted_payoffs[0]
+                    low_weighted_payoffs = low_weights @ ag_orig_payoff
+                    low_bounds_transformed_payoffs[k][idx] = low_weighted_payoffs[0]
             lzero_soln_strats = [[] for i in range(num_players)]
             for idx,ag in enumerate(all_agents):
-                if lzero_behavior == 'maxmax':
-                    this_player_payoff_dict = {k:v[idx] for k,v in high_bounds_transformed_payoffs.items()}
-                    opt_strat,opt_val = self.keywithmaxval(this_player_payoff_dict)
-                    lzero_soln_strats[idx].extend([x[idx] for x in opt_strat])
-                else:
-                    this_player_payoff_dict = {k:v[idx] for k,v in high_bounds_transformed_payoffs.items()}
-                    opt_strat,opt_val = self.keywithmaxval(this_player_payoff_dict)
-                    lzero_soln_strats[idx].extend([x[idx] for x in opt_strat])
+                eq = equilibria_core.EquilibriaCore(num_players,high_bounds_transformed_payoffs,len(high_bounds_transformed_payoffs),player_actions[idx],False)
+                soln = eq.calc_max_min_response()
+                eq = equilibria_core.EquilibriaCore(num_players,low_bounds_transformed_payoffs,len(low_bounds_transformed_payoffs),player_actions[idx],False)
+                soln_low = eq.calc_max_min_response()
+                soln.update(soln_low)
+                opt_strat = list(soln.keys())
+                lzero_soln_strats[idx].extend([x[idx] for x in opt_strat])
             lzero_soln_strats = [list(set(x)) for x in lzero_soln_strats]
             lzero_soln_strats = list(itertools.product(*lzero_soln_strats))
             for idx,ag in enumerate(all_agents):
+                ag_id = ag[0] if ag[1]==0 else ag[1]
                 opt_strat = []
                 for s in lzero_soln_strats:
                     strat_subsets = []
@@ -1506,8 +1707,32 @@ class Ql1Model(InverseQlkRGameLearningModel):
                     for l_str in l_one_soln_strat:
                         if l_str not in opt_strat:
                             opt_strat.append(l_str)
+                    this_player_payoff_dict = {k:v[idx] for k,v in low_bounds_transformed_payoffs.items() if k in strat_subsets}
+                    l_one_soln_strat,l_one_opt_val = self.keywithmaxval(this_player_payoff_dict)
+                    for l_str in l_one_soln_strat:
+                        if l_str not in opt_strat:
+                            opt_strat.append(l_str)
+                
+                ''' build the confusion dict '''
                 player_acts_solns[idx] = list(set([x[idx][9:11] for x in opt_strat]))
                 this_player_emp_acts = list(set([x[idx][9:11] for x in emp_acts]))
+                model_parms_str = self.l1_model_config.get_model_parms_str()
+                emp_utils, rule_utils, soln_utils = None, None, None
+                if len(emp_acts) > 0:
+                    emp_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in emp_acts]
+                    emp_utils = np.asarray(emp_utils)
+                    assert emp_utils.shape == (len(emp_acts),3,num_players) , str(emp_utils.shape) + str((len(emp_acts),3,num_players))
+                if len(rule_acts) > 0:
+                    rule_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in rule_acts]
+                    rule_utils = np.asarray(rule_utils)
+                    assert rule_utils.shape == (len(rule_acts),3,num_players) , str(rule_utils.shape) + str((len(rule_acts),3,num_players))
+                if len(opt_strat) > 0:
+                    soln_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in opt_strat]
+                    soln_utils = np.asarray(soln_utils)
+                    assert soln_utils.shape == (len(opt_strat),3,num_players) , str(soln_utils.shape) + str((len(opt_strat),3,num_players))
+                soln_vect = (int(self.file_id),ag_id,time_ts,self.l1_model_config.l1_model_type,model_parms_str,str(emp_acts) if emp_acts is not None else None,str(rule_acts) if rule_acts is not None else None,str(opt_strat) if opt_strat is not None else None,json.dumps(emp_utils.tolist()) if emp_utils is not None else None,json.dumps(rule_utils.tolist()) if rule_utils is not None else None,json.dumps(soln_utils.tolist()) if soln_utils is not None else None,json.dumps(weights_info[idx].tolist()) if weights_info[idx] is not None else None)
+                #soln_vect = (int(self.file_id),ag_id,time_ts,'Ql1',model_parms_str,str(emp_acts) if emp_acts is not None else None,str(rule_acts) if rule_acts is not None else None,str(opt_strat) if opt_strat is not None else None,emp_utils,rule_utils,soln_utils,weights_info[idx])
+                ins_list.append(soln_vect)
                 for e_a in this_player_emp_acts:
                     if e_a not in self.confusion_dict:
                         self.confusion_dict[e_a] = []
@@ -1522,7 +1747,143 @@ class Ql1Model(InverseQlkRGameLearningModel):
                         ''' since the mis-prediction is multi-valued we need to add N-1 true values to the count for proper normalization'''
                         self.confusion_dict[e_a] += [e_a]*(len(player_acts_solns[idx])-1)
                         self.confusion_dict_N[e_a] += 1
-
+        c.executemany(ins_string,ins_list)
+        conn.commit()
+        conn.close()
+        
+    def solve_maxmax(self):
+        ins_list = []
+        lzero_behavior = self.lzero_behavior
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
+        c = conn.cursor()
+        ins_string = 'INSERT INTO L1_SOLUTIONS VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+        self.confusion_dict, self.confusion_dict_N = dict(), dict()
+        weights_dict = utils.load_weights_map(lzero_behavior,self.l1_model_config.model_type)
+        ag_info_map = utils.load_agent_info_map(self.file_id)
+        ct,N = 0,len(self.file_keys)
+        for file_str in self.file_keys:
+            ct +=1
+            #if ct > 20:
+            #    continue
+            print('processing',self.file_id,ct,'/',N)
+            time_ts = file_str.split('_')[1].replace(',','.')
+            time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
+            payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
+            all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
+            if len(all_agents) < 2:
+                continue
+            emp_acts,rule_acts = self.emp_acts_dict[file_str], self.rule_acts_dict[file_str]
+            if len(rule_acts) == 0:
+                continue
+            num_players = len(all_agents)
+            player_actions = [list(set([k[i] for k in payoff_dict.keys()])) for i in np.arange(num_players)]
+            player_acts_solns = [[] for i in range(num_players)]
+            high_bounds_transformed_payoffs = {k:[None]*len(all_agents) for k in payoff_dict} 
+            low_bounds_transformed_payoffs = {k:[None]*len(all_agents) for k in payoff_dict} 
+            weights_info = [[] for i in range(num_players)]
+            for idx,ag in enumerate(all_agents):
+                ag_id = ag[0] if ag[1]==0 else ag[1]
+                ag_info_key = (int(self.file_id),ag_id,time_ts)
+                if (ag_info_key in ag_info_map and ag_info_map[ag_info_key] in weights_dict) and not self.l1_model_config.with_baseline_weights:
+                    ag_weights = weights_dict[ag_info_map[ag_info_key]]
+                else:
+                    ag_weights = np.asarray([0.25, 0.25,  0.5, 0, 0.25, 0.25, 0.5, 0])
+                weights_info[idx] = ag_weights
+                for k in payoff_dict.keys():
+                    orig_payoff = payoff_dict[k]
+                    if len(rule_acts) == 0:
+                        high_weights = np.reshape(np.take(ag_weights, [0,1,2], 0), newshape=(1,3))
+                        low_weights = np.reshape(np.take(ag_weights, [4,5,6], 0), newshape=(1,3))
+                        ag_orig_payoff = orig_payoff[:,idx]
+                    else:
+                        high_weights = np.reshape(np.take(ag_weights, [0,1,2,3], 0), newshape=(1,4))
+                        low_weights = np.reshape(np.take(ag_weights, [4,5,6,7], 0), newshape=(1,4))
+                        if k[idx] in [x[idx] for x in rule_acts]:
+                            ag_orig_payoff = np.append(orig_payoff[:,idx],1)
+                        else:
+                            ag_orig_payoff = np.append(orig_payoff[:,idx], 0)
+                    if not self.mixed_weights:
+                        high_weights = np.where(high_weights == max(high_weights), 1, 0)
+                        #if np.sum(np.exp(10*high_weights)) != 0:
+                        #    high_weights = np.exp(10*high_weights)/np.sum(np.exp(10*high_weights))
+                    else:
+                        if np.sum(high_weights) != 0:
+                            high_weights = high_weights/np.sum(high_weights)
+                        if np.sum(low_weights) != 0:
+                            low_weights = low_weights/np.sum(low_weights)   
+                    high_weighted_payoffs = high_weights @ ag_orig_payoff
+                    high_bounds_transformed_payoffs[k][idx] = high_weighted_payoffs[0]
+                    low_weighted_payoffs = low_weights @ ag_orig_payoff
+                    low_bounds_transformed_payoffs[k][idx] = low_weighted_payoffs[0]
+            lzero_soln_strats = [[] for i in range(num_players)]
+            for idx,ag in enumerate(all_agents):
+                this_player_payoff_dict = {k:v[idx] for k,v in high_bounds_transformed_payoffs.items()}
+                opt_strat,opt_val = self.keywithmaxval(this_player_payoff_dict)
+                lzero_soln_strats[idx].extend([x[idx] for x in opt_strat])
+                this_player_payoff_dict = {k:v[idx] for k,v in low_bounds_transformed_payoffs.items()}
+                opt_strat,opt_val = self.keywithmaxval(this_player_payoff_dict)
+                lzero_soln_strats[idx].extend([x[idx] for x in opt_strat])
+            lzero_soln_strats = [list(set(x)) for x in lzero_soln_strats]
+            lzero_soln_strats = list(itertools.product(*lzero_soln_strats))
+            for idx,ag in enumerate(all_agents):
+                ag_id = ag[0] if ag[1]==0 else ag[1]
+                opt_strat = []
+                for s in lzero_soln_strats:
+                    strat_subsets = []
+                    for pl_strat in player_actions[idx]:
+                        _s = list(s)
+                        _s[idx] = pl_strat
+                        _s = tuple(_s)
+                        if _s not in strat_subsets:
+                            strat_subsets.append(_s)
+                    this_player_payoff_dict = {k:v[idx] for k,v in high_bounds_transformed_payoffs.items() if k in strat_subsets}
+                    l_one_soln_strat,l_one_opt_val = self.keywithmaxval(this_player_payoff_dict)
+                    for l_str in l_one_soln_strat:
+                        if l_str not in opt_strat:
+                            opt_strat.append(l_str)
+                    this_player_payoff_dict = {k:v[idx] for k,v in low_bounds_transformed_payoffs.items() if k in strat_subsets}
+                    l_one_soln_strat,l_one_opt_val = self.keywithmaxval(this_player_payoff_dict)
+                    for l_str in l_one_soln_strat:
+                        if l_str not in opt_strat:
+                            opt_strat.append(l_str)
+                
+                ''' build the confusion dict '''
+                player_acts_solns[idx] = list(set([x[idx][9:11] for x in opt_strat]))
+                this_player_emp_acts = list(set([x[idx][9:11] for x in emp_acts]))
+                model_parms_str = self.l1_model_config.get_model_parms_str()
+                emp_utils, rule_utils, soln_utils = None, None, None
+                if len(emp_acts) > 0:
+                    emp_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in emp_acts]
+                    emp_utils = np.asarray(emp_utils)
+                    assert emp_utils.shape == (len(emp_acts),3,num_players) , str(emp_utils.shape) + str((len(emp_acts),3,num_players))
+                if len(rule_acts) > 0:
+                    rule_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in rule_acts]
+                    rule_utils = np.asarray(rule_utils)
+                    assert rule_utils.shape == (len(rule_acts),3,num_players) , str(rule_utils.shape) + str((len(rule_acts),3,num_players))
+                if len(opt_strat) > 0:
+                    soln_utils = [payoff_dict[x] if x in payoff_dict else np.full((3, num_players), np.nan, dtype=float) for x in opt_strat]
+                    soln_utils = np.asarray(soln_utils)
+                    assert soln_utils.shape == (len(opt_strat),3,num_players) , str(soln_utils.shape) + str((len(opt_strat),3,num_players))
+                soln_vect = (int(self.file_id),ag_id,time_ts,self.l1_model_config.l1_model_type,model_parms_str,str(emp_acts) if emp_acts is not None else None,str(rule_acts) if rule_acts is not None else None,str(opt_strat) if opt_strat is not None else None,json.dumps(emp_utils.tolist()) if emp_utils is not None else None,json.dumps(rule_utils.tolist()) if rule_utils is not None else None,json.dumps(soln_utils.tolist()) if soln_utils is not None else None,json.dumps(weights_info[idx].tolist()) if weights_info[idx] is not None else None)
+                #soln_vect = (int(self.file_id),ag_id,time_ts,'Ql1',model_parms_str,str(emp_acts) if emp_acts is not None else None,str(rule_acts) if rule_acts is not None else None,str(opt_strat) if opt_strat is not None else None,emp_utils,rule_utils,soln_utils,weights_info[idx])
+                ins_list.append(soln_vect)
+                for e_a in this_player_emp_acts:
+                    if e_a not in self.confusion_dict:
+                        self.confusion_dict[e_a] = []
+                    if e_a not in self.confusion_dict_N:
+                        self.confusion_dict_N[e_a] = 0
+                    if e_a in player_acts_solns[idx]:
+                        self.confusion_dict[e_a].append(e_a)
+                        self.confusion_dict_N[e_a] += 1
+                    else:
+                        for s_a in player_acts_solns[idx]:
+                            self.confusion_dict[e_a].append(s_a)
+                        ''' since the mis-prediction is multi-valued we need to add N-1 true values to the count for proper normalization'''
+                        self.confusion_dict[e_a] += [e_a]*(len(player_acts_solns[idx])-1)
+                        self.confusion_dict_N[e_a] += 1
+        c.executemany(ins_string,ins_list)
+        conn.commit()
+        conn.close()
 
 class InverseCorrelatedEquilibriaLearningModel(InverseNashEqLearningModel):
     
@@ -1568,9 +1929,9 @@ class InverseCorrelatedEquilibriaLearningModel(InverseNashEqLearningModel):
         for row in res:
             if row[12] is not None:
                 if tuple(row[3:11]) not in weights_dict:
-                    weights_dict[tuple(row[3:11])] = [row[12:]]
+                    weights_dict[tuple(row[3:11])] = [row[13:]]
                 else:
-                    weights_dict[tuple(row[3:11])].append(row[12:])
+                    weights_dict[tuple(row[3:11])].append(row[13:])
         weights_dict = {k: np.mean(np.asarray(v), axis=0) for k,v in weights_dict.items()}
         q_string = "SELECT * FROM UTILITY_WEIGHTS where MODEL_TYPE='CorrEq'"
         c.execute(q_string)
@@ -1582,7 +1943,7 @@ class InverseCorrelatedEquilibriaLearningModel(InverseNashEqLearningModel):
             ct +=1
             #if ct > 20:
             #    continue
-            print('processing',ct,'/',N)
+            print('processing',self.file_id,ct,'/',N)
             time_ts = file_str.split('_')[1].replace(',','.')
             time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
@@ -1590,7 +1951,7 @@ class InverseCorrelatedEquilibriaLearningModel(InverseNashEqLearningModel):
             if len(all_agents) < 2:
                 print('less than 2 continuing')
                 continue
-            emp_acts,rule_acts = self.get_emp_and_rule_actions(file_str,payoff_dict)
+            emp_acts,rule_acts = self.emp_acts_dict[file_str], self.rule_acts_dict[file_str]
             num_players = len(all_agents)
             player_actions = [list(set([k[i] for k in payoff_dict.keys()])) for i in np.arange(num_players)]
             all_indices = list(itertools.product(*[list(np.arange(len(x))) for x in player_actions]))
@@ -1717,7 +2078,7 @@ class InverseCorrelatedEquilibriaLearningModel(InverseNashEqLearningModel):
         all_solns = []
         for idx,ag in enumerate(all_agents):
             if idx == this_idx:
-                num_params = 2 if self.all_agent_obj_dict[file_str][ag].relev_pedestrians is None else 3
+                num_params = 2 if self.agent_object_dict[file_str][ag].relev_pedestrians is None else 3
                 solns = solve_lp(obj_mat, constr_mat, num_params)
                 all_solns.append((ag,solns))
         return all_solns
@@ -1730,7 +2091,7 @@ class InverseCorrelatedEquilibriaLearningModel(InverseNashEqLearningModel):
                 if on_rule:
                     all_solns.append((ag,[(0,0),(0,0),(0,0),(1,1)]))
                 else:
-                    num_params = 2 if self.all_agent_obj_dict[file_str][ag].relev_pedestrians is None else 3
+                    num_params = 2 if self.agent_object_dict[file_str][ag].relev_pedestrians is None else 3
                     solns = solve_lp(obj_mat, constr_mat, num_params)
                     all_solns.append((ag,solns))
         return all_solns
@@ -1741,7 +2102,7 @@ class InverseCorrelatedEquilibriaLearningModel(InverseNashEqLearningModel):
         emp_act_distr = dict()
         for file_str in self.file_keys:
             ct +=1
-            print('processing',ct,'/',N)
+            print('processing',self.file_id,ct,'/',N)
             #if ct > 20:
             #    continue
             
@@ -1785,11 +2146,11 @@ class InverseCorrelatedEquilibriaLearningModel(InverseNashEqLearningModel):
         ct,N = 0,len(self.file_keys)
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+self.file_id+'\\uni_weber_'+self.file_id+'.db')
         c = conn.cursor()
-        q_string = "INSERT INTO UTILITY_WEIGHTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        q_string = "INSERT INTO UTILITY_WEIGHTS VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         ins_list = []
         for file_str in self.file_keys:
             ct +=1
-            print('processing',ct,'/',N)
+            print('processing',self.file_id,ct,'/',N)
             time_ts = file_str.split('_')[1].replace(',','.')
             time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
             payoff_dict = utils.pickle_load(os.path.join(self.l3_cache_str,file_str))
@@ -1868,7 +2229,7 @@ class InverseCorrelatedEquilibriaLearningModel(InverseNashEqLearningModel):
                     solns = self.formulate_and_solve_lp_est_weights(all_agents,obj_utils,constr_list,on_rule,idx,file_str)
                     for s in solns:
                         ag_id = s[0][0] if s[0][1] == 0 else s[0][1]
-                        ag_obj = self.all_agent_obj_dict[file_str][s[0]]
+                        ag_obj = self.agent_object_dict[file_str][s[0]]
                         leading_veh_id = ag_obj.leading_vehicle.id if ag_obj.leading_vehicle is not None else None
                         relev_agents = []
                         for a in all_agents:
@@ -1895,93 +2256,320 @@ class InverseCorrelatedEquilibriaLearningModel(InverseNashEqLearningModel):
                             speed_fact = 'HIGH'
                             
                         #ag_state_info = (ag_obj.signal, str((int(next_signal_change[0]),next_signal_change[1])), ag_obj.current_segment, int(ag_obj.speed), leading_veh_id, len(relev_agents), 'Y' if ag_obj.relev_pedestrians is not None else 'N')
-                        ins_list.append((int(self.file_id), ag_id, time_ts, ag_obj.signal, next_signal_change[1], time_to_change, ag_obj.current_segment, speed_fact, 'Y' if leading_veh_id is not None else 'N', relev_agents, 'Y' if ag_obj.relev_pedestrians is not None else 'N','CorrEq', s[1][0][0], s[1][1][0], s[1][2][0], s[1][3][0], s[1][0][1], s[1][1][1], s[1][2][1], s[1][3][1]))
+                        ins_list.append((int(self.file_id), ag_id, time_ts, ag_obj.signal, next_signal_change[1], time_to_change, ag_obj.current_segment, speed_fact, 'Y' if leading_veh_id is not None else 'N', relev_agents, 'Y' if ag_obj.relev_pedestrians is not None else 'N','CorrEq',self.l1_model_config.model_type, s[1][0][0], s[1][1][0], s[1][2][0], s[1][3][0], s[1][0][1], s[1][1][1], s[1][2][1], s[1][3][1]))
                         print(file_str,ct,'/',N)
         c.executemany(q_string,ins_list)
         conn.commit()
         conn.close()
-            
-'''
-def read_l3_tree():
-    file_id = '769'
-    N = None
-    for k in payoff_dict.keys():
-        orig_payoff = payoff_dict[k]
-        if N is None:
-            N = len(k)
-            for ag in k:
-                if int(ag[6:9]) == 0:
-                    agents.append(int(ag[3:6]))
-                else:
-                    agents.append(int(ag[6:9]))
-        weights = np.reshape(np.asarray([0.25,0.25,0.5]), newshape=(1,3))
-        weighted_payoffs = weights @ orig_payoff
-        payoff_dict[k] = np.reshape(weighted_payoffs, newshape=(N,))
-    for k,v in acts_dict.items():
-        if k[1] in agents:
-            brk = 1
+
+
+def insert_weights_all_models():
     
-    f=1
-    eq = EquilibriaCore(N,payoff_dict,len(payoff_dict),None,None)
-    eq.transform_to_nfg_format()
-    ne_all = eq.calc_pure_strategy_nash_equilibrium_exhaustive()
-    for k,v in ne_all.items():
-        print(k,v)
-'''
-'''
-with_baseline_weights = False
-mixed_weights = False
-l1_model = InverseNashEqLearningModel('769',with_baseline_weights,mixed_weights)
-#l1_model.calculate_and_insert_weights()
-#l1_model.solve()
-l1_model.calc_confusion_matrix()
-'''
+    file_id = sys.argv[1]
+    traj_type = sys.argv[2]
+    soln = sys.argv[3]
+    '''
+    l1_model_config = L1_Model_Config()
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id(file_id)
+    l1_model_config.set_l3_model_def(traj_type,soln)
+    l1_model_config.set_l3_weights_estimation_model_type(traj_type)
+    l1_model_config.set_l1_model_type('NASH')
+    l1_model_config.set_update_only(False)
+    l1_model = InverseNashEqLearningModel(l1_model_config)
+    l1_model.calculate_and_insert_weights()
+    #l1_model.solve()
+    #l1_model.calc_confusion_matrix()
+    
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id(file_id)
+    l1_model_config.set_l3_model_def(traj_type,soln)
+    l1_model_config.set_l3_weights_estimation_model_type(traj_type)
+    l1_model_config.set_l1_model_type('QlkR')
+    l1_model_config.set_update_only(False)
+    l1_model = InverseQlkRGameLearningModel(l1_model_config)        
+    l1_model.calculate_and_insert_weights()
+    #l1_model.solve()
+    #l1_model.calc_confusion_matrix()
+    
+    
+    
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id(file_id)
+    l1_model_config.set_l3_model_def(traj_type,soln)
+    l1_model_config.set_l3_weights_estimation_model_type(traj_type)
+    l1_model_config.set_l1_model_type('CorrEq')
+    l1_model_config.set_update_only(False)
+    l1_model = InverseCorrelatedEquilibriaLearningModel(l1_model_config)
+    l1_model.build_emp_distribution()
+    l1_model.calculate_and_insert_weights()
+    #l1_model.solve()
+    #l1_model.calc_confusion_matrix()
+    
+    
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id(file_id)
+    l1_model_config.set_l3_model_def(traj_type,soln)
+    l1_model_config.set_l3_weights_estimation_model_type(traj_type)
+    l1_model_config.set_l1_model_type('brtb')
+    l1_model_config.set_update_only(False)
+    l1_model = InverseBestResponseWithTrueBelief(l1_model_config)  
+    l1_model.calculate_and_insert_weights() 
+    #l1_model.solve()
+    #l1_model.calc_confusion_matrix('brtb_')
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id(file_id)
+    l1_model_config.set_l3_model_def(traj_type,soln)
+    l1_model_config.set_l3_weights_estimation_model_type(traj_type)
+    l1_model_config.set_l1_model_type('maxmin')
+    l1_model_config.set_update_only(False)
+    l1_model = InverseMaxMinResponse(l1_model_config)   
+    l1_model.calculate_and_insert_weights()
+    #l1_model.solve()
+    #l1_model.calc_confusion_matrix('maxmin')
+    '''
+    
+    l1_model_config = L1_Model_Config()
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id(file_id)
+    l1_model_config.set_l3_model_def(traj_type,soln)
+    l1_model_config.set_l3_weights_estimation_model_type(traj_type)
+    l1_model_config.set_l1_model_type('maxmax')
+    l1_model_config.set_update_only(False)
+    l1_model = InverseMaxMaxResponse(l1_model_config)   
+    l1_model.calculate_and_insert_weights()
+    #l1_model.solve()
+    #l1_model.calc_confusion_matrix('maxmin')
+    
+    
+def solve_l1_all_models():
+    
+    file_id = sys.argv[1]
+    traj_type = sys.argv[2]
+    soln = sys.argv[3]
+    
+    l1_model_config = L1_Model_Config()
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id(file_id)
+    l1_model_config.set_run_type('solve')
+    l1_model_config.set_l3_model_def(traj_type,soln)
+    l1_model_config.set_l3_weights_estimation_model_type(traj_type)
+    l1_model_config.set_l1_model_type('NASH')
+    l1_model_config.set_update_only(False)
+    l1_model = InverseNashEqLearningModel(l1_model_config)
+    #l1_model.calculate_and_insert_weights()
+    l1_model.solve()
+    #l1_model.calc_confusion_matrix()
+    
+    
+    
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id(file_id)
+    l1_model_config.set_l3_model_def(traj_type,soln)
+    l1_model_config.set_run_type('solve')
+    l1_model_config.set_l3_weights_estimation_model_type(traj_type)
+    l1_model_config.set_l1_model_type('QlkR')
+    l1_model_config.set_update_only(False)
+    l1_model = InverseQlkRGameLearningModel(l1_model_config)        
+    #l1_model.calculate_and_insert_weights()
+    l1_model.solve()
+    #l1_model.calc_confusion_matrix()
+    
+    
+    '''
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id(file_id)
+    l1_model_config.set_l3_model_def(traj_type,soln)
+    l1_model_config.set_run_type('solve')
+    l1_model_config.set_l3_weights_estimation_model_type(traj_type)
+    l1_model_config.set_l1_model_type('CorrEq')
+    l1_model_config.set_update_only(False)
+    l1_model = InverseCorrelatedEquilibriaLearningModel(l1_model_config)
+    l1_model.build_emp_distribution()
+    #l1_model.calculate_and_insert_weights()
+    l1_model.solve()
+    #l1_model.calc_confusion_matrix()
+    '''
+    
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id(file_id)
+    l1_model_config.set_l3_model_def(traj_type,soln)
+    l1_model_config.set_run_type('solve')
+    l1_model_config.set_l3_weights_estimation_model_type(traj_type)
+    l1_model_config.set_l1_model_type('brtb')
+    l1_model_config.set_update_only(False)
+    l1_model = InverseBestResponseWithTrueBelief(l1_model_config)  
+    #l1_model.calculate_and_insert_weights() 
+    l1_model.solve()
+    #l1_model.calc_confusion_matrix('brtb_')
+    
+    
+    
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id(file_id)
+    l1_model_config.set_l3_model_def(traj_type,soln)
+    l1_model_config.set_run_type('solve')
+    l1_model_config.set_l3_weights_estimation_model_type(traj_type)
+    l1_model_config.set_l1_model_type('maxmin')
+    l1_model_config.set_update_only(False)
+    l1_model = InverseMaxMinResponse(l1_model_config)   
+    #l1_model.calculate_and_insert_weights()
+    l1_model.solve()
+    #l1_model.calc_confusion_matrix('maxmin')
+    
+    
+    
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id(file_id)
+    l1_model_config.set_l3_model_def(traj_type,soln)
+    l1_model_config.set_run_type('solve')
+    l1_model_config.set_l3_weights_estimation_model_type(traj_type)
+    l1_model_config.set_l1_model_type('maxmax')
+    l1_model_config.set_update_only(False)
+    l1_model = InverseMaxMaxResponse(l1_model_config)   
+    #l1_model.calculate_and_insert_weights()
+    l1_model.solve()
+    #l1_model.calc_confusion_matrix('maxmin')
+    
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id(file_id)
+    l1_model_config.set_l3_model_def(traj_type,soln)
+    l1_model_config.set_lzero_behavior('maxmin')
+    l1_model_config.set_l1_model_type('Ql1')
+    l1_model_config.set_l3_weights_estimation_model_type(traj_type)
+    l1_model = Ql1Model(l1_model_config)
+    l1_model.solve()
+    
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id(file_id)
+    l1_model_config.set_l3_model_def(traj_type,soln)
+    l1_model_config.set_lzero_behavior('maxmax')
+    l1_model_config.set_l1_model_type('Ql1')
+    l1_model_config.set_l3_weights_estimation_model_type(traj_type)
+    l1_model = Ql1Model(l1_model_config)
+    l1_model.solve()
+    
+    
+    
 
-'''
-with_baseline_weights = False
-mixed_weights = True
-l1_model = InverseQlkRGameLearningModel('769',with_baseline_weights,mixed_weights)        
-#l1_model.calculate_and_insert_weights()
-l1_model.solve()
-l1_model.calc_confusion_matrix()
-'''
+def insert_weights_maxmax():
+    l1_model_config = L1_Model_Config()
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id('771')
+    l1_model_config.set_l3_model_def('SAMPLING_EQ', 'NA')
+    l1_model_config.set_l3_weights_estimation_model_type('SAMPLING_EQ')
+    l1_model_config.set_l1_model_type('maxmax')
+    l1_model_config.set_update_only(True)
+    l1_model = InverseMaxMaxResponse(l1_model_config)   
+    l1_model.calculate_and_insert_weights()
+    #l1_model.solve()
+    #l1_model.calc_confusion_matrix('maxmax')
 
-'''
-with_baseline_weights = False
-mixed_weights = True
-l1_model = InverseCorrelatedEquilibriaLearningModel('769',with_baseline_weights,mixed_weights)
-#l1_model.build_emp_distribution()
-#l1_model.calculate_and_insert_weights()
-l1_model.solve()
-l1_model.calc_confusion_matrix()
-'''
-'''
-with_baseline_weights = True
-mixed_weights = True
-l1_model = InverseBestResponseWithTrueBelief('769',with_baseline_weights,mixed_weights)  
-#l1_model.calculate_and_insert_weights() 
-l1_model.solve()
-l1_model.calc_confusion_matrix('brtb_')
-'''
-'''
-with_baseline_weights = False
-mixed_weights = True
-l1_model = MaxMaxResponse('769',with_baseline_weights,mixed_weights)   
-#l1_model.calculate_and_insert_weights()
-l1_model.solve()
-l1_model.calc_confusion_matrix('maxmax')
-'''
-'''
-with_baseline_weights = True
-mixed_weights = True
-l1_model = Ql1Model('769',with_baseline_weights,mixed_weights)
-l1_model.solve('maxmax')
-l1_model.calc_confusion_matrix('ql1maxmax')
-'''
+def insert_weights_maxmin():
+    l1_model_config = L1_Model_Config()
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id('771')
+    l1_model_config.set_l3_model_def('SAMPLING_EQ', 'NA')
+    l1_model_config.set_l3_weights_estimation_model_type('SAMPLING_EQ')
+    l1_model_config.set_l1_model_type('maxmin')
+    l1_model_config.set_update_only(True)
+    l1_model = InverseMaxMinResponse(l1_model_config)   
+    l1_model.calculate_and_insert_weights()
+    #l1_model.solve()
+    #l1_model.calc_confusion_matrix('maxmin')
+    
+def solve_Ql1():
+    l1_model_config = L1_Model_Config()
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id('769')
+    l1_model_config.set_l3_model_def('SAMPLING_EQ', 'NA')
+    l1_model_config.set_lzero_behavior('maxmin')
+    l1_model_config.set_l1_model_type('Ql1')
+    l1_model_config.set_l3_weights_estimation_model_type('SAMPLING_EQ')
+    l1_model = Ql1Model(l1_model_config)
+    l1_model.solve()
+    #l1_model.calc_confusion_matrix('ql1maxma_l3baseline')
 
-with_baseline_weights = True
-mixed_weights = True
-l1_model = InverseMaxMinResponse('769',with_baseline_weights,mixed_weights)   
-#l1_model.calculate_and_insert_weights()
-l1_model.solve()
-l1_model.calc_confusion_matrix('maxmax')
+def solve_maxmax():
+    l1_model_config = L1_Model_Config()
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id('769')
+    l1_model_config.set_l3_model_def('SAMPLING_EQ', 'NA')
+    l1_model_config.set_l3_weights_estimation_model_type('SAMPLING_EQ')
+    l1_model_config.set_l1_model_type('maxmax')
+    l1_model = InverseMaxMaxResponse(l1_model_config)   
+    #l1_model.calculate_and_insert_weights()
+    l1_model.solve()
+    
+def solve_maxmin():
+    l1_model_config = L1_Model_Config()
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id('769')
+    l1_model_config.set_l3_model_def('SAMPLING_EQ', 'NA')
+    l1_model_config.set_l3_weights_estimation_model_type('SAMPLING_EQ')
+    l1_model_config.set_l1_model_type('maxmin')
+    l1_model = InverseMaxMinResponse(l1_model_config)   
+    #l1_model.calculate_and_insert_weights()
+    l1_model.solve()
+
+def solve_nash():
+    l1_model_config = L1_Model_Config()
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id('769')
+    l1_model_config.set_l3_model_def('SAMPLING_EQ', 'NA')
+    l1_model_config.set_l3_weights_estimation_model_type('SAMPLING_EQ')
+    l1_model_config.set_l1_model_type('NASH')
+    l1_model = InverseNashEqLearningModel(l1_model_config)   
+    #l1_model.calculate_and_insert_weights()
+    #l1_model.solve()
+    l1_model.calc_confusion_matrix()
+    
+def solve_qlkr():
+    l1_model_config = L1_Model_Config()
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id('769')
+    l1_model_config.set_l3_model_def('SAMPLING_EQ', 'NA')
+    l1_model_config.set_l3_weights_estimation_model_type('SAMPLING_EQ')
+    l1_model_config.set_l1_model_type('QlkR')
+    l1_model = InverseQlkRGameLearningModel(l1_model_config)   
+    #l1_model.calculate_and_insert_weights()
+    l1_model.solve()
+    
+def solve_brtb():
+    l1_model_config = L1_Model_Config()
+    l1_model_config.set_baseline_weights_flag(False)
+    l1_model_config.set_mixed_weights_flag(True)
+    l1_model_config.set_file_id('769')
+    l1_model_config.set_l3_model_def('SAMPLING_EQ', 'NA')
+    l1_model_config.set_l3_weights_estimation_model_type('SAMPLING_EQ')
+    l1_model_config.set_l1_model_type('brtb')
+    l1_model = InverseBestResponseWithTrueBelief(l1_model_config)   
+    #l1_model.calculate_and_insert_weights()
+    l1_model.solve()
+
+
+if __name__ == '__main__':    
+    solve_l1_all_models()
+
+

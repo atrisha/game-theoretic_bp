@@ -12,7 +12,7 @@ import constants
 import ast
 import math
 import pickle
-from visualizer import visualizer
+
 import os.path
 from os import listdir
 from os.path import isfile, join
@@ -39,12 +39,12 @@ log = constants.common_logger
 
 
 
-def calc_time_gap(ag_obj,ra_obj,strat):
+def calc_time_gap(ag_obj,ra_obj):
     ttc = None
     if (ag_obj.leading_vehicle is not None and ag_obj.leading_vehicle.id == ra_obj.id) or ag_obj.task == ra_obj.task:
         ttc =  np.inf
     else:
-        ag_time_to_collision_region,ra_time_to_collision_region = None
+        ag_time_to_collision_region,ra_time_to_collision_region = None,None
         if ag_obj.task == 'LEFT_TURN' or ag_obj.task == 'RIGHT_TURN' :
             if ag_obj.origin_pt is not None and ag_obj.segment_seq[0] in constants.TURN_TIME_MAP:
                 slope,intercept = utils.get_slope_intercept(constants.TURN_TIME_MAP[ag_obj.segment_seq[0]])
@@ -57,13 +57,109 @@ def calc_time_gap(ag_obj,ra_obj,strat):
                 ra_time_to_collision_region = slope*dist_from_origin_pt + intercept
         if ag_obj.task == 'STRAIGHT':
             ''' ra_obj has to be left or right turning, so find the common conflict region '''
+            if ra_obj.task == 'LEFT_TURN' or ra_obj.task == 'RIGHT_TURN' :
+                if ag_obj.segment_seq[0] == 'ln_s_2' and ag_obj.segment_seq[-1] == 'ln_w_-1':
+                    conflict_pt = utils.get_conflict_points(['ln_s_1', 'prep-turn_s', 'exec-turn_s', 'ln_w_-1'], ag_obj.signal, ra_obj.segment_seq, ra_obj.signal)
+                elif ra_obj.segment_seq[0] == 'ln_s_2' and ra_obj.segment_seq[-1] == 'ln_w_-1':
+                    conflict_pt = utils.get_conflict_points(ag_obj.segment_seq, ag_obj.signal, ['ln_s_1', 'prep-turn_s', 'exec-turn_s', 'ln_w_-1'], ra_obj.signal)
+                else:
+                    conflict_pt = utils.get_conflict_points(ag_obj.segment_seq, ag_obj.signal, ra_obj.segment_seq, ra_obj.signal)
+                if conflict_pt is not None:
+                    ''' agents has not crossed the conflict point'''
+                    if (utils.zero_pi_angle_bet_lines([(ag_obj.x,ag_obj.y),((ag_obj.nose_x,ag_obj.nose_y))], [(ag_obj.x,ag_obj.y),conflict_pt]) < 90 or math.hypot(ag_obj.x-conflict_pt[0],ag_obj.y-conflict_pt[1]) <= constants.CAR_LENGTH):
+                        
+                        
+                        if ag_obj.long_acc != 0:
+                            if ag_obj.speed**2 - (4*ag_obj.long_acc/2*(-math.hypot(ag_obj.x-conflict_pt[0],ag_obj.y-conflict_pt[1]))) < 0:
+                                ag_time_to_collision_region = np.inf
+                            else:
+                                t = utils.solve_quadratic(ag_obj.long_acc/2, ag_obj.speed, -math.hypot(ag_obj.x-conflict_pt[0],ag_obj.y-conflict_pt[1]))
+                                ag_time_to_collision_region = max(t[0],t[1])
+                        else:
+                            t = math.hypot(ag_obj.x-conflict_pt[0],ag_obj.y-conflict_pt[1]) / ag_obj.speed if ag_obj.speed != 0 else np.inf
+                            ag_time_to_collision_region = t
+                        
+                    else:
+                        ag_time_to_collision_region = np.inf
+                else:
+                    ag_time_to_collision_region = np.inf
+            else:
+                ttc =  np.inf
         if ra_obj.task == 'STRAIGHT':
-            ''' ag_obj has to be left or right turning, so find the common conflict region '''
-            
-            f=1
+            if ag_obj.task == 'LEFT_TURN' or ag_obj.task == 'RIGHT_TURN' :
+                if ag_obj.segment_seq[0] == 'ln_s_2' and ag_obj.segment_seq[-1] == 'ln_w_-1':
+                    conflict_pt = utils.get_conflict_points(['ln_s_1', 'prep-turn_s', 'exec-turn_s', 'ln_w_-1'], ag_obj.signal, ra_obj.segment_seq, ra_obj.signal)
+                elif ra_obj.segment_seq[0] == 'ln_s_2' and ra_obj.segment_seq[-1] == 'ln_w_-1':
+                    conflict_pt = utils.get_conflict_points(ag_obj.segment_seq, ag_obj.signal, ['ln_s_1', 'prep-turn_s', 'exec-turn_s', 'ln_w_-1'], ra_obj.signal)
+                else:
+                    conflict_pt = utils.get_conflict_points(ag_obj.segment_seq, ag_obj.signal, ra_obj.segment_seq, ra_obj.signal)
+                if conflict_pt is not None:
+                    ''' agents has not crossed the conflict point'''
+                    if (utils.zero_pi_angle_bet_lines([(ra_obj.x,ra_obj.y),((ra_obj.nose_x,ra_obj.nose_y))], [(ra_obj.x,ra_obj.y),conflict_pt]) < 90 or math.hypot(ra_obj.x-conflict_pt[0],ra_obj.y-conflict_pt[1]) <= constants.CAR_LENGTH):
+                        if ra_obj.long_acc != 0:
+                            if ra_obj.speed**2 - (4*ra_obj.long_acc/2*(-math.hypot(ra_obj.x-conflict_pt[0],ra_obj.y-conflict_pt[1]))) < 0:
+                                ra_time_to_collision_region = np.inf
+                            else:
+                                t = utils.solve_quadratic(ra_obj.long_acc/2, ra_obj.speed, -math.hypot(ra_obj.x-conflict_pt[0],ra_obj.y-conflict_pt[1]))
+                                ra_time_to_collision_region = max(t[0],t[1])
+                        else:
+                            t = math.hypot(ra_obj.x-conflict_pt[0],ra_obj.y-conflict_pt[1]) / ra_obj.speed if ra_obj.speed != 0 else np.inf
+                            ra_time_to_collision_region = t
+                        
+                    else:
+                        ra_time_to_collision_region = np.inf
+                else:
+                    ra_time_to_collision_region = np.inf
+            else:
+                ttc =  np.inf
+        if ttc is None:
+            if ag_time_to_collision_region == np.inf or ra_time_to_collision_region == np.inf:
+                ttc = np.inf
+            else:
+                if ag_time_to_collision_region is None or ra_time_to_collision_region is None:
+                    brk = 1
+                if abs(ag_time_to_collision_region-ra_time_to_collision_region) < 2:
+                    ttc = min(ag_time_to_collision_region,ra_time_to_collision_region)
+                else:
+                    ttc = np.inf
     return ttc    
     
 
+def assign_baseline_utils(strat,ag_obj_list,eq_context):
+    util_list = None
+    for idx,act in enumerate(strat):
+        this_ag_utils = []
+        l1_act_code = int(strat[idx][9:11])
+        l2_act_code = int(strat[idx][11:13])
+        l1_act = utils.get_l1_action_string(l1_act_code)
+        l2_act = utils.get_l2_action_string(l2_act_code)
+        
+        ''' vehicle inhibitory '''
+        all_time_gaps = []
+        if l1_act in constants.PROCEED_ACTIONS:
+            for idx2,act2 in enumerate(strat):
+                if idx != idx2:
+                    ra_l1_act_code = int(strat[idx2][9:11])
+                    ra_l1_act = utils.get_l1_action_string(ra_l1_act_code)
+                    if ra_l1_act in constants.PROCEED_ACTIONS:
+                        tg = calc_time_gap(ag_obj_list[idx], ag_obj_list[idx2])
+                        all_time_gaps.append(tg)
+        time_gap = min(all_time_gaps) if len(all_time_gaps) > 0 else np.inf
+        veh_inh_util = dist_payoffs(time_gap, (constants.DIST_COST_MEAN,constants.DIST_COST_SD))
+        ''' vehicle excitatory '''
+        if l1_act in constants.PROCEED_ACTIONS:
+            veh_exc_util = 1.0
+        else:
+            veh_exc_util = 0.0
+        ''' pedestrian inhibitory '''
+        c_eval = CostEvaluation(eq_context)
+        ped_inh_util = c_eval.eval_pedestrian_inh_by_action(strat[idx], (ag_obj_list[idx].x,ag_obj_list[idx].y))
+        if util_list is None:
+            util_list = np.asarray([veh_inh_util,veh_exc_util,ped_inh_util]).reshape((3,1)) 
+        else:
+            util_list = np.append(util_list, np.asarray([veh_inh_util,veh_exc_util,ped_inh_util]).reshape((3,1)), axis = 1)
+        
+    return util_list
 
 
 
@@ -125,7 +221,7 @@ class CostEvaluation():
         payoff_stats[3,] = np.std(all_possible_payoffs_vals,axis = 0)
         payoff_stats_trajectories = payoff_stats_trajectories.astype(int)
         ''' equilibria_core for l3 actions'''
-        #visualizer.plot_payoff_grid(all_possible_payoffs_vals)
+        #rg_visualizer.plot_payoff_grid(all_possible_payoffs_vals)
         #print('calculating l3 equilibria_core')
         eq = equilibria_core.calc_pure_strategy_nash_equilibrium_exhaustive(all_possible_payoffs)
         br = equilibria_core.calc_best_response(all_possible_payoffs)
@@ -149,12 +245,12 @@ class CostEvaluation():
         for traj_idx_tuple in all_possible_payoffs.keys():
             distgap_parm_matrix = np.apply_along_axis(self.get_dist_gap_params,axis=2,arr=act_code_m)
             payoff_m = exp_dist_payoffs(dist_mat, distgap_parm_matrix)
-            #payoffs = dist_payoffs(dist) + constants.L2_ACTION_PAYOFF_ADDITIVE
-            payoffs = np.amin(payoff_m,axis=1)
-            all_possible_payoffs_inh[traj_idx_tuple] = payoffs
+            #combined_payoffs = dist_payoffs(dist) + constants.L2_ACTION_PAYOFF_ADDITIVE
+            combined_payoffs = np.amin(payoff_m,axis=1)
+            all_possible_payoffs_inh[traj_idx_tuple] = combined_payoffs
         return all_possible_payoffs_inh
     
-    ''' given a strategy combination, evaluate the vector of payoffs for each agent.'''
+    ''' given a strategy combination, evaluate the vector of combined_payoffs for each agent.'''
     def eval_inhibitory(self,traj_dict_list, all_possible_payoffs, strategy_tuple):
         disp_arr_x,disp_arr_y = [],[] 
         num_agents = len(strategy_tuple)
@@ -171,7 +267,7 @@ class CostEvaluation():
                 for j in np.arange(i,num_agents):
                     if i != j:
                         s_x,r_x = traj_dict_list[i][traj_idx_tuple[i]][:,2],traj_dict_list[j][traj_idx_tuple[j]][:,2]
-                        ''' for now calculate the plan payoffs instead of payoffs for the next 1 second '''
+                        ''' for now calculate the plan combined_payoffs instead of combined_payoffs for the next 1 second '''
                         #slice_len = min(s_x.shape[0],r_x.shape[0])
                         slice_len = int(min(5*constants.PLAN_FREQ/constants.LP_FREQ,s_x.shape[0],r_x.shape[0]))
                         s_x,r_x = s_x[:slice_len],r_x[:slice_len]
@@ -201,9 +297,9 @@ class CostEvaluation():
             ''' find the minimum distance for a vehicle action given all other agent actions '''
             distgap_parm_matrix = np.apply_along_axis(self.get_dist_gap_params,axis=2,arr=act_code_m)
             payoff_m = exp_dist_payoffs(dist_among_agents, distgap_parm_matrix)
-            #payoffs = dist_payoffs(dist) + constants.L2_ACTION_PAYOFF_ADDITIVE
-            payoffs = np.amin(payoff_m,axis=1)
-            all_possible_payoffs_inh[traj_idx_tuple] = payoffs
+            #combined_payoffs = dist_payoffs(dist) + constants.L2_ACTION_PAYOFF_ADDITIVE
+            combined_payoffs = np.amin(payoff_m,axis=1)
+            all_possible_payoffs_inh[traj_idx_tuple] = combined_payoffs
         return all_possible_payoffs_inh
         
     def eval_excitatory(self,traj_dict_list, all_possible_payoffs, strategy_tuple):
@@ -212,15 +308,15 @@ class CostEvaluation():
         all_possible_payoffs_exc = dict(all_possible_payoffs)
         payoff_stats = np.full(shape=(4,num_agents),fill_value=np.inf)
         for traj_idx_tuple in all_possible_payoffs.keys():
-            payoffs = np.full(shape=(num_agents,),fill_value=np.inf)
+            combined_payoffs = np.full(shape=(num_agents,),fill_value=np.inf)
             for i in np.arange(num_agents):
                 s_V = traj_dict_list[i][traj_idx_tuple[i]][:,5]
                 s_traj = list(zip(traj_dict_list[i][traj_idx_tuple[i]][:,2],traj_dict_list[i][traj_idx_tuple[i]][:,3]))
                 traj_len = utils.calc_traj_len(s_traj)
                 
-                ''' for now calculate the plan payoffs '''
-                payoffs[i] = progress_payoffs_dist(traj_len)
-            all_possible_payoffs_exc[traj_idx_tuple] = payoffs
+                ''' for now calculate the plan combined_payoffs '''
+                combined_payoffs[i] = progress_payoffs_dist(traj_len)
+            all_possible_payoffs_exc[traj_idx_tuple] = combined_payoffs
         return all_possible_payoffs_exc
     
     
@@ -244,7 +340,7 @@ class CostEvaluation():
                                 if l1_act_code == 11:
                                     payoff = payoff*1
                                 else:
-                                    dist_to_ped = math.hypot(ped_state.x-ag_pos[0],ped_state.y-ag_pos[0])
+                                    dist_to_ped = math.hypot(ped_state.x-ag_pos[0],ped_state.y-ag_pos[1])
                                     if dist_to_ped <= 2*constants.PEDESTRIAN_CROSSWALK_DIST_THRESH:
                                         payoff = payoff*0
                                     else:
@@ -260,7 +356,7 @@ class CostEvaluation():
                                 if l1_act_code == 11:
                                     payoff = payoff*1
                                 else:
-                                    dist_to_ped = math.hypot(ped_state.x-ag_pos[0],ped_state.y-ag_pos[0])
+                                    dist_to_ped = math.hypot(ped_state.x-ag_pos[0],ped_state.y-ag_pos[1])
                                     if dist_to_ped <= 2*constants.PEDESTRIAN_CROSSWALK_DIST_THRESH:
                                         payoff = payoff*0
                                     else:
@@ -287,7 +383,7 @@ class CostEvaluation():
             raise ValueError('L3 utility dict cannot be None when L3 Equilibria is set to None')
     
         if eq.eval_config.l3_eq is None or eq.eval_config.l3_eq == 'SAMPLING_EQ':
-            ''' payoffs will be calculated just from the baselines '''
+            ''' combined_payoffs will be calculated just from the baselines '''
             baseline_ids = [[int(x.split('-')[1])] for x in strategy_tuple]
             all_possible_payoffs = {k:np.zeros(shape=len(k)) for k in list(itertools.product(*[v for v in baseline_ids]))}
             traj_dict_list = [{t:eq.l1l2_trajectory_cache[k[0]] for t in k} for k in baseline_ids]
@@ -354,7 +450,7 @@ class CostEvaluation():
             raise ValueError('L3 utility dict cannot be None when L3 Equilibria is set to None')
         ag_indexes = dict()
         if eq.eval_config.l3_eq is None or eq.eval_config.l3_eq == 'SAMPLING_EQ':
-            ''' payoffs will be calculated just from the baselines '''
+            ''' combined_payoffs will be calculated just from the baselines '''
             baseline_ids = [[int(x.split('-')[1])] for x in strategy_tuple]
             all_possible_payoffs = {k:np.zeros(shape=len(k)) for k in list(itertools.product(*[v for v in baseline_ids]))}
             traj_dict_list = [{t:eq.l1l2_trajectory_cache[k[0]] for t in k} for k in baseline_ids]
@@ -434,7 +530,7 @@ class CostEvaluation():
         for k,v in position_distr.items():
             #plt.title(k)
             #ax = plt.gca()
-            #visualizer.visualizer.plot_traffic_regions()
+            #rg_visualizer.rg_visualizer.plot_traffic_regions()
             for k1,v1 in v.items():
                 mean, cov = stat_utils.get_distribution_params(v1)
                 position_distr[k][k1] = (mean,cov)
@@ -568,9 +664,9 @@ class CostEvaluation():
         #exec_time = str((end_time-start_time))
         #log.info('pedestrian '+exec_time+'s')
         weights = self.eq_context.weights_info[s_code]
-        #final_payoff = ( (1-constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT) * ((constants.INHIBITORY_PAYOFF_WEIGHT*inh_payoff) + (constants.EXCITATORY_PAYOFF_WEIGHT*exc_payoff)) ) + \
-        #                    (constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT*ped_inh_payoff)
-        final_payoff = weights[0]*inh_payoff + weights[1]*exc_payoff + weights[2]*ped_inh_payoff 
+        final_payoff = ( (1-constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT) * ((constants.INHIBITORY_PAYOFF_WEIGHT*inh_payoff) + (constants.EXCITATORY_PAYOFF_WEIGHT*exc_payoff)) ) + \
+                            (constants.INHIBITORY_PEDESTRIAN_PAYOFF_WEIGHT*ped_inh_payoff)
+        #final_payoff = weights[0]*inh_payoff + weights[1]*exc_payoff + weights[2]*ped_inh_payoff 
         return final_payoff
 
 def eval_trajectory_viability(traj_id_list):
@@ -609,8 +705,6 @@ def progress_payoffs_dist(traj_len):
     else:
         return traj_len/100
 
-def eval_regulatory(traj_list,time_ts,dist_arr,traffic_signal,strat_str):
-    g = 1
     
 
 def calc_baseline_traj_payoffs(eval_config):

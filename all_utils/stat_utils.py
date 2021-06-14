@@ -15,6 +15,10 @@ import math
 from itertools import combinations
 import visualizer
 import constants
+from symfit import Parameter, Variable, exp, Fit
+from symfit.core.objectives import LogLikelihood    
+    
+    
 log = constants.common_logger
 
 def square_distance(x,y): return sum([(xi-yi)**2 for xi, yi in zip(x,y)]) 
@@ -96,7 +100,7 @@ def get_distribution_params(points):
         
         #plt.title(k)
         #ax = plt.gca()
-        #visualizer.visualizer.plot_traffic_regions()
+        #rg_visualizer.rg_visualizer.plot_traffic_regions()
         #plt.plot([x[0] for x in points],[x[1] for x in points],'o')
         '''
         A,C = mvee(points)
@@ -158,7 +162,44 @@ def calc_wasserstein_distance_multivariate(dist_1,dist_2):
     mean_part = np.linalg.norm(mu_1-mu_2)**2
     try:
         trace_part = np.trace( sigma_1 + sigma_2 - (2*sqrtm(sigma_1@sigma_2)) )
-    except ValueError:
+    except ValueError as e:
+        log.info(str(e)+" error in distance calculation. Handled. Continuing...")
         trace_part = 0 
-    wasserstein_dist = math.sqrt( mean_part + trace_part)
+    if mean_part + trace_part <= 0:
+        wasserstein_dist = 0
+    else:
+        wasserstein_dist = math.sqrt( mean_part + trace_part)
     return wasserstein_dist
+
+def plot_wass_dist_graph():
+    eucld_dist = np.arange(100)
+    wass_dist = []
+    for d in eucld_dist:
+        w_d = calc_wasserstein_distance_multivariate((0,[[2,2],[2,2]]), (d,[[3,3],[4,3]]))
+        wass_dist.append(w_d)
+    for i in np.arange(len(eucld_dist)):
+        print(eucld_dist[i],wass_dist[i])
+    plt.plot(eucld_dist.tolist(),wass_dist)
+    plt.show()
+        
+
+def fit_exponential(samples):
+    # Define the model for an exponential distribution (numpy style)
+    beta = Parameter('beta')
+    x = Variable('x')
+    model = (1 / beta) * exp(-x / beta)
+    
+    # Draw 100 samples from an exponential distribution with beta=5.5
+    data = samples
+    
+    # Do the fitting!
+    fit = Fit(model, data, objective=LogLikelihood)
+    fit_result = fit.execute()
+    #print(1/fit_result.value(beta))
+    y = model(x=np.sort(data), beta=fit_result.value(beta))
+    #plt.plot(data, [0]*len(data),'.')
+    #plt.plot(np.sort(data).tolist(),y)
+    #plt.show()
+    return 1/fit_result.value(beta)
+
+

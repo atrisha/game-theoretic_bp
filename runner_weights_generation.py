@@ -1,3 +1,3 @@
-from equilibria.l1_models import solve_l1_all_models
+from equilibria.l1_models import solve_l1_all_models_old_params
 
-solve_l1_all_models()
+solve_l1_all_models_old_params()

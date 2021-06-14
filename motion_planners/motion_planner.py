@@ -24,7 +24,7 @@ from scipy.stats import halfnorm
 from pip._vendor.distlib.util import proceed
 from collections import OrderedDict
 from constants import L2_ACTION_CODES
-from visualizer import visualizer
+
 from collections import OrderedDict
 from all_utils.thread_utils import CustomMPS
 from scipy.stats import truncnorm
@@ -227,15 +227,19 @@ class TrajectoryPlan:
             if traj_info_dict is not None and (agent_id,relev_agent,l1_action,l2_action,time_ts) in traj_info_dict:
                 traj_info_id = traj_info_dict[(agent_id,relev_agent,l1_action,l2_action,time_ts)]
             else:
-                c.execute("SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE AGENT_ID="+str(i_string_data[1])+" AND RELEV_AGENT_ID="+str(i_string_data[2])+" AND L1_ACTION='"+str(i_string_data[3])+"' AND \
-                            L2_ACTION='"+str(i_string_data[4])+"' AND TIME="+str(i_string_data[5]))
+                c.execute("SELECT * FROM GENERATED_TRAJECTORY_INFO WHERE AGENT_ID="+str(i_string_data[2])+" AND RELEV_AGENT_ID="+str(i_string_data[3])+" AND L1_ACTION='"+str(i_string_data[4])+"' AND \
+                            L2_ACTION='"+str(i_string_data[5])+"' AND TIME="+str(i_string_data[6]))
                 res = c.fetchone()
                 if res is not None and len(res) > 0:
                     traj_info_id = res[1]
                 else:
-                    c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?)',i_string_data)
+                    print(i_string_data)
+                    c.execute('INSERT INTO GENERATED_TRAJECTORY_INFO VALUES (?,NULL,?,?,?,?,?,?)',[x for i,x in enumerate(i_string_data) if i!=1])
+                    
+                    
                     conn.commit()
                     traj_info_id = int(c.lastrowid)
+                    log.info('inserted GENERATED_TRAJECTORY_INFO with info id'+str(traj_info_id)+ ' and time_ts '+str(i_string_data[6]))
             i_string_data = (int(constants.CURRENT_FILE_ID),traj_info_id,agent_id,relev_agent,l1_action,l2_action,time_ts,1)
         else:
             i_string_data = (int(constants.CURRENT_FILE_ID),traj_info_id,agent_id,relev_agent,l1_action,l2_action,time_ts,1)
@@ -270,14 +274,13 @@ class TrajectoryPlan:
             ins_list.extend(list(zip([traj_id]*slice_len,[traj_info_id]*slice_len,[round(x,5) for x in tx],[round(x,5) for x in rx],[round(x,5) for x in ry],[round(x,5) for x in ryaw],[round(x,5) for x in rv],[round(x,5) for x in ra],[round(x,5) for x in rj])))
             traj_id += 1
         new_max_trajid = traj_id-1
-        i_string = 'INSERT INTO '+table_name+' VALUES (?,?,?,?,?,?,?,?,?)'
+        #i_string = 'INSERT INTO '+table_name+' VALUES (?,?,?,?,?,?,?,?,?)'
         #n=1000
         #chunks = [ins_list[i:i+n] for i in range(0, len(ins_list), n)]
         #for chunk in chunks:
         #c.executemany(i_string,ins_list)
         #conn.commit()
         #conn.close()
-        log.info('inserted '+table_name+' with info id'+str(traj_info_id)+ ' and time_ts '+str(i_string_data[5]))
         return ins_list,new_max_trajid,i_string_data
 
     
@@ -506,7 +509,7 @@ class TrajectoryPlan:
                 plt.title(self.veh_state.l1_action + ' ' + str(_type))
                 #_x,_y = utils.fresnet_to_map(self.veh_state.x, self.veh_state.y, res[1], res[2], self.veh_state.yaw)
                 _x,_y = res[1], res[2]
-                visualizer.plot_traffic_regions()
+                rg_visualizer.plot_traffic_regions()
                 plt.plot(_x,_y,'black')
             plt.figure()
             for _type, res in all_trajs:

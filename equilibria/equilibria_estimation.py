@@ -17,6 +17,7 @@ import sqlite3
 import ast
 from scipy.optimize import curve_fit
 from sklearn import tree
+from timeit import default_timer as timer
 import csv
 from sklearn.preprocessing import OneHotEncoder
 
@@ -125,22 +126,22 @@ def calc_equilibria(curr_time,traj_det,payoff_type,status_str,param_str,emp_acti
             else:
                 eval_config.strat_traj_ids.append([traj_info_to_traj_id[traj_info_id]])
                 
-        #print('calculating payoffs')
+        #print('calculating combined_payoffs')
         if not BASELINE_TRAJECTORIES_ONLY:
-            payoffs,traj_indices,eq = cost_evaluation.calc_l3_equilibrium_payoffs(True,True,traj_id_list,a_c,traffic_signal)
+            combined_payoffs,traj_indices,eq = cost_evaluation.calc_l3_equilibrium_payoffs(True,True,traj_id_list,a_c,traffic_signal)
             if a_c not in pay_off_dict:
-                pay_off_dict[a_c] = payoffs
+                pay_off_dict[a_c] = combined_payoffs
                 payoff_trajectories_indices_dict[a_c] = traj_indices
             traj_ct += 1
             print(status_str,traj_ct,'/',N_traj_ct)
         else:
-            payoffs = cost_evaluation.calc_baseline_traj_payoffs(eval_config)
+            combined_payoffs = cost_evaluation.calc_baseline_traj_payoffs(eval_config)
             if a_c not in pay_off_dict:
-                pay_off_dict[a_c] = next(iter(payoffs.values())).tolist()
+                pay_off_dict[a_c] = next(iter(combined_payoffs.values())).tolist()
                 payoff_trajectories_indices_dict[a_c] = traj_id_list
             traj_ct += 1
             print(status_str,traj_ct,'/',N_traj_ct)
-        #print('calculating payoffs....DONE')
+        #print('calculating combined_payoffs....DONE')
     if not BASELINE_TRAJECTORIES_ONLY:    
         seq = ['max','min','mean']
         
@@ -161,7 +162,7 @@ def calc_equilibria(curr_time,traj_det,payoff_type,status_str,param_str,emp_acti
                 for j in np.arange(num_agents):
                     traj_xs.append(traj_dict[e[j]][int(traj_indices[0,j])]['x'])
                     traj_ys.append(traj_dict[e[j]][int(traj_indices[0,j])]['y'])
-                #visualizer.show_animation(traj_xs, traj_ys)
+                #rg_visualizer.show_animation(traj_xs, traj_ys)
     else:
         if param_str == 'l2_Nash|l3_baseline_only':
             eq = equilibria_core.calc_pure_strategy_nash_equilibrium_exhaustive(pay_off_dict,True)
@@ -1086,7 +1087,7 @@ def build_results_tree():
 Assumes that the trajectories are already present in the cache.'''
 def calc_eqs_for_hopping_trajectories():
     db_utils.reduce_relev_agents()
-    update_only = True
+    update_only = False
     eval_config = EvalConfig()
     eval_config.set_l1_eq_type(constants.L1_EQ_TYPE)
     eval_config.set_l3_eq_type(constants.L3_EQ_TYPE)
@@ -1125,33 +1126,126 @@ def calc_eqs_for_hopping_trajectories():
         eq.calc_equilibrium()
         #add_eq_state_contexts(param_str,direction)
     
-    
+def generate_baseline_util_tables():
+    for file_id in constants.ALL_FILE_IDS: 
+        constants.CURRENT_FILE_ID = file_id
+        constants.L3_ACTION_CACHE = "F:\\Spring2017\\workspaces\\game_theoretic_planner_cache\\l3_action_trajectories_"+file_id
+        baseline_traj_table_cache = constants.CACHE_DIR+"l3_trees_BASELINE_NA\\"+file_id  
+        baseline_util_table_cache = constants.CACHE_DIR+"l3_trees_BASELINEUTILS_NA\\"+file_id
+        file_keys = os.listdir(baseline_traj_table_cache)  
+        processed_file_keys = os.listdir(baseline_util_table_cache) if os.path.exists(baseline_util_table_cache) else []
+        ct = 0
+        origin_pt_map = dict()
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
+        c = conn.cursor()
+        q_string = "select * from TRAFFIC_REGIONS_DEF WHERE name in "+str(tuple(list(constants.TURN_TIME_MAP.keys())))+" and TRAFFIC_REGIONS_DEF.REGION_PROPERTY='entry_boundary'"
+        c.execute(q_string)
+        res = c.fetchall()
+        for row in res:
+            x_pts = np.mean(ast.literal_eval(row[4]))
+            y_pts = np.mean(ast.literal_eval(row[5]))
+            origin_pt_map[row[0]] = (x_pts,y_pts)
+        N = len(file_keys)
+        for file_str in file_keys:
+            ct +=1
+            #if ct > 30:
+            #    continue
+            print('processing',file_id,ct,'/',N,file_str)
+            if file_str in processed_file_keys:
+                continue
+            payoff_dict = utils.pickle_load(os.path.join(baseline_traj_table_cache,file_str))
+            baseline_payoffdict = {k:None for k in payoff_dict.keys()}
+            time_ts = file_str.split('_')[1].replace(',','.')
+            time_ts = round(float(time_ts),len(time_ts.split('.')[1])) if '.' in time_ts else round(float(time_ts),0)
+            pedestrian_info = utils.setup_pedestrian_info(time_ts)
+            agent_object_dict = dict()
+            all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
+            start_time = timer()
+            for ag in all_agents:
+                if ag[1] == 0:
+                    ag_file_key = os.path.join(constants.L3_ACTION_CACHE, str(ag[0])+'-0_'+str(time_ts).replace('.', ','))
+                    agent_id = ag[0]
+                else:
+                    ag_file_key = os.path.join(constants.L3_ACTION_CACHE, str(ag[0])+'-'+str(ag[1])+'_'+str(time_ts).replace('.', ','))
+                    agent_id = ag[1]
+                if os.path.exists(ag_file_key):
+                    ag_info = utils.pickle_load(ag_file_key)
+                else:
+                    print("setup vehicle state")
+                    ag_info = utils.setup_vehicle_state(agent_id,time_ts)
+                if not hasattr(ag_info, 'relev_crosswalks'):
+                    relev_crosswalks = utils.get_relevant_crosswalks(ag_info)
+                    ag_info.set_relev_crosswalks(relev_crosswalks)
+                ag_info.has_oncoming_vehicle = False
+                ag_info.nose_x = ag_info.x + (constants.CAR_LENGTH/2)*np.cos(ag_info.yaw)
+                ag_info.nose_y = ag_info.y + (constants.CAR_LENGTH/2)*np.sin(ag_info.yaw)
+                if ag_info.segment_seq[0] in origin_pt_map:
+                    ag_info.origin_pt = origin_pt_map[ag_info.segment_seq[0]]
+                else:
+                    ag_info.origin_pt = None
+                if file_str not in agent_object_dict:
+                    agent_object_dict[file_str] = dict()
+                agent_object_dict[file_str][ag] = ag_info
+            
+            end_time = timer()
+            exec_time = str(end_time-start_time)
+            print('executed 1 in ', exec_time)
+            start_time = timer()
+            if 'TURN' in agent_object_dict[file_str][ag].task:
+                for ag,ag_obj in agent_object_dict[file_str].items():
+                    if ag != agent_id and 'TURN' not in ag_obj.task:
+                        if agent_object_dict[file_str][ag].leading_vehicle is None or (agent_object_dict[file_str][ag].leading_vehicle is not None and ag != agent_object_dict[file_str][ag].leading_vehicle.id):
+                            agent_object_dict[file_str][ag].has_oncoming_vehicle = True
+                            break
+            end_time = timer()
+            exec_time = str(end_time-start_time)
+            print('executed 2 in ', exec_time)
+            
+            start_time = timer()
+            for k,v in payoff_dict.items():
+                ag_obj_list = []
+                for act in k:
+                    ag_id = int(act[3:6])
+                    ra_id = int(act[6:9])
+                    ag_obj = agent_object_dict[file_str][(ag_id,ra_id)]
+                    ag_obj_list.append(ag_obj)
+                eval_config = EvalConfig()
+                eval_config.set_pedestrian_info(pedestrian_info)
+                eq = Equilibria(eval_config)
+                util_arr = cost_evaluation.assign_baseline_utils(k, ag_obj_list,eq)
+                baseline_payoffdict[k] = util_arr
+            
+            utils.pickle_dump_to_dir(os.path.join(baseline_util_table_cache,file_str), baseline_payoffdict)
+            end_time = timer()
+            exec_time = str(end_time-start_time)
+            print('executed 3 in ', exec_time)
+            
+            f=1
+        
     
 def main():
+    
     constants.CURRENT_FILE_ID = sys.argv[1]
+    '''
     constants.TRAJECTORY_TYPE = sys.argv[2]
     constants.L1_EQ_TYPE = sys.argv[3]
     constants.L3_EQ_TYPE = sys.argv[4] if sys.argv[4] != 'None' else None
+    '''
+    #for file_id in [x for x in constants.ALL_FILE_IDS if int(x) > 768]:
+    #constants.CURRENT_FILE_ID = file_id
+    constants.TRAJECTORY_TYPE = 'BASELINE'
+    constants.L1_EQ_TYPE = 'NA'
+    constants.L3_EQ_TYPE = None #'BASELINE'
+    
     if constants.TRAJECTORY_TYPE == 'BOUNDARY':
-        constants.WEIGHTS_FLAG = sys.argv[5]
+        constants.WEIGHTS_FLAG = sys.argv[5] if sys.argv[5] != 'None' else None
     constants.TEMP_TRAJ_CACHE = 'temp_traj_cache_'+constants.CURRENT_FILE_ID+'_'+constants.TRAJECTORY_TYPE
     constants.L3_ACTION_CACHE = 'l3_action_trajectories_'+constants.CURRENT_FILE_ID
     constants.RESULTS = 'results_'+constants.CURRENT_FILE_ID
     constants.setup_logger()
-    
     calc_eqs_for_hopping_trajectories()
-    '''
-    eval_config = EvalConfig()
-    eval_config.set_l1_eq_type(constants.L1_EQ_TYPE)
-    eval_config.set_l3_eq_type(constants.L3_EQ_TYPE)
-    traj_util_obj = trajectory_utils.TrajectoryUtils()
-    param_str = eval_config.l1_eq +'|'+ eval_config.l3_eq +'|'+ constants.TRAJECTORY_TYPE if eval_config.l3_eq is not None else eval_config.l1_eq +'|BASELINE_ONLY'
-    traj_util_obj.update_l1_action_in_eq_data(param_str)
-    traj_util_obj.update_pedestrian_info_in_eq_data(param_str)
     
-    build_analysis_table(False,True)
-    #build_analysis_table(True,False)
-    '''
+    
 def generate_results_file():
     constants.CURRENT_FILE_ID = sys.argv[1]
     constants.TRAJECTORY_TYPE = sys.argv[2]

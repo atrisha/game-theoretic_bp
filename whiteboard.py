@@ -222,6 +222,7 @@ def dist_payoffs(dist_arr):
 plt.plot(np.arange(0,15,.1),dist_payoffs(np.arange(0,15,.1)))
 plt.show()
 
+print(dist_payoffs(3))
 
 
 '''    
@@ -342,10 +343,10 @@ for par in p:
     plt.plot(a,dist_payoffs_exp(a,par[0],par[1]),color='red')
 plt.show()
 '''
-a = np.asarray([1,1,1])
-b = np.asarray([2,2,2])
-c = a@b
-print(c)
+a = np.all(np.logical_not(np.asarray([False,False,False,False,False,False,False])))
+b = np.all(np.asarray([True,True,True,True,True,True,True]))
+c = np.all(np.asarray([True,True,True,True,True,False,False]))
+print(a,b,c)
     
     
     

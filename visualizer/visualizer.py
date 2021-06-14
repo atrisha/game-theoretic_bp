@@ -319,8 +319,8 @@ def plot_baselines():
     c.execute(q_string)
     res = c.fetchall()
     all_l1_actions = [row[0] for row in res]        
-    emp_path = utils.get_path(ag_id)
-    plt.plot([x[0] for x in emp_path],[x[1] for x in emp_path],'blue')
+    get_nearest_node = utils.get_path(ag_id)
+    plt.plot([x[0] for x in get_nearest_node],[x[1] for x in get_nearest_node],'blue')
     for l1_act in all_l1_actions:
         q_string = "SELECT DISTINCT TRAJ_ID FROM GENERATED_TRAJECTORY_INFO where l1_action='"+l1_act
         c.execute(q_string)
@@ -369,8 +369,8 @@ def plot_boundaries():
     c.execute(q_string)
     res = c.fetchall()
     all_l1_actions = [row[0] for row in res]        
-    emp_path = utils.get_path(ag_id)
-    plt.plot([x[0] for x in emp_path],[x[1] for x in emp_path],'blue')
+    get_nearest_node = utils.get_path(ag_id)
+    plt.plot([x[0] for x in get_nearest_node],[x[1] for x in get_nearest_node],'blue')
     for l1_act in all_l1_actions:
         q_string = "SELECT DISTINCT TRAJ_ID FROM GENERATED_TRAJECTORY_INFO where l1_action='"+l1_act+"'"
         c.execute(q_string)
@@ -421,8 +421,8 @@ def plot_baseline_velocities():
     c.execute(q_string)
     res = c.fetchall()
     all_l1_actions = [row[0] for row in res]        
-    emp_path = utils.get_path(ag_id)
-    plt.plot([x[0] for x in emp_path],[x[1] for x in emp_path],'blue')
+    get_nearest_node = utils.get_path(ag_id)
+    plt.plot([x[0] for x in get_nearest_node],[x[1] for x in get_nearest_node],'blue')
     for l1_act in all_l1_actions:
         q_string = "SELECT DISTINCT TRAJ_ID FROM GENERATED_TRAJECTORY_INFO where l1_action='"+l1_act+"'"
         c.execute(q_string)
@@ -479,25 +479,32 @@ def plot_all_trajectories(traj,ax1,ax2,ax3):
         ax2.plot(np.arange(len(V)),V)
         ax3.plot(np.arange(len(A)),A)
         
-def plot_traffic_regions():
+def plot_traffic_regions(ax=None):
     import ast
     conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\769\\uni_weber_769.db')
     c = conn.cursor()
-    q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point' and region_property == 'center_line'"
+    q_string = "SELECT * FROM TRAFFIC_REGIONS_DEF where shape <> 'point' and region_property in ('lane_boundary')"
+    
     c.execute(q_string)
     q_res = c.fetchall()
-    plt.axis("equal")
+    if ax is None:
+        plt.axis("equal")
     for row in q_res:
         #plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
         X,Y = ast.literal_eval(row[4]),ast.literal_eval(row[5])
         if len(X) == 2:
-            plt.arrow(X[0], Y[0], X[1]-X[0], Y[1]-Y[0], head_width=0.5, head_length=0.5)
+            if ax is None:
+                plt.arrow(X[0], Y[0], X[1]-X[0], Y[1]-Y[0], head_width=0.5, head_length=0.5)
             f=1
         else:
             for i,j in zip(np.arange(len(X)-1), np.arange(1,len(Y))):
-                plt.arrow(X[i], Y[i], X[j]-X[i], Y[j]-Y[i], head_width=0.5, head_length=0.5)
+                if ax is None:
+                    plt.arrow(X[i], Y[i], X[j]-X[i], Y[j]-Y[i], head_width=0.5, head_length=0.5)
                 f=1
-        plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
+        if ax is None:
+            plt.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
+        else:
+            ax.plot(ast.literal_eval(row[4]),ast.literal_eval(row[5]))
     
     '''
     q_string = "SELECT X_POSITION,Y_POSITION FROM CONFLICT_POINTS"
@@ -510,9 +517,9 @@ def plot_traffic_regions():
     all_y = np.arange(4813970,4814055,.5)
     grids = list(itertools.product(list(all_x),list(all_y)))
     #plt.plot([x[0] for x in grids],[x[1] for x in grids],'r.',markersize=.25)   
-    
-    #plt.ylim(4813961, 4814065)
-    #plt.xlim(538776, 538897)
+    if ax is None:
+        plt.ylim(4813961, 4814065)
+        plt.xlim(538776, 538897)
     #plt.show()
         
 def verify_traffic_regions():
@@ -716,7 +723,7 @@ def show_baseline_animation():
         if len(v) == 0:
             continue
         max_len = max([len(t) for _,t in v.items()])
-        this_frame_list = [(x,k)for x in np.arange(max_len)]
+        this_frame_list = [(x,k) for x in np.arange(max_len)]
         frame_list.extend(this_frame_list)
     frame_list.sort(key=lambda tup: tup[1])
     fig.canvas.mpl_connect('button_press_event', onClick)
@@ -804,7 +811,9 @@ def plot_confusion_matrix():
     plt.show()
             
 if __name__ == '__main__':   
-    plot_turn_times('left') 
+    #plot_turn_times('left')
+    #show_baseline_animation()
+    plot_traffic_regions() 
     
 
       

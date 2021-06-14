@@ -184,7 +184,7 @@ def generate_velocity_profile_deprecated(self,all_params):
                 plt.title(self.veh_state.l1_action + 'traj')
                 #_x,_y = all_utils.fresnet_to_map(self.veh_state.x, self.veh_state.y, res[1], res[2], self.veh_state.yaw)
                 _x,_y = res[1], res[2]
-                visualizer.plot_traffic_regions()
+                rg_visualizer.plot_traffic_regions()
                 plt.plot(_x,_y,'black')
             plt.show()
             for res in all_trajs:

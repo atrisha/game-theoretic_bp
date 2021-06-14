@@ -163,6 +163,8 @@ SEGMENT_MAP = {
                'l_e_w_r':'through-lane',
                'l_w_e_l':'through-lane',
                'l_w_e_r':'through-lane',
+               'ln_n_4':'right-turn-lane',
+               'l_n_w':'exec-right-turn'
                }
 
 STOP_SEGMENT = {'wait-for-oncoming':['exec-left-turn','exec-right-turn'],
@@ -308,7 +310,7 @@ BUILD_L3_TREE = True
 TRAJECTORY_TYPE = None
 
 
-CURRENT_FILE_ID = '769'
+CURRENT_FILE_ID = None
 ALL_FILE_IDS = ['769','770','771'] + [str(x) for x in np.arange(775,786)]
 TEMP_TRAJ_CACHE = None
 L3_ACTION_CACHE = None

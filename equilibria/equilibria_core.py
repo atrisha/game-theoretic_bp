@@ -12,6 +12,7 @@ import os
 import constants
 import logging
 from collections import OrderedDict
+from timeit import default_timer as timer
 logging.basicConfig(format='%(levelname)-8s %(filename)s: %(message)s',level=logging.INFO)
 
 class EquilibriaCore:
@@ -494,11 +495,37 @@ end_t = timer()
 print('time taken',end_t - start_t)
 '''
 '''
+payoff_dict = utils.pickle_load(os.path.join('F:\\Spring2017\\workspaces\\game_theoretic_planner_cache\\l3_trees_SAMPLING_EQ_NA\\769','44_38,872167'))
+ag_weights = np.reshape(np.asarray([0.25, 0.25,  0.5]), newshape=(1,3))
+for k in list(payoff_dict.keys()):
+    _prod = ag_weights @ payoff_dict[k]
+    payoff_dict[k] = _prod[0].tolist()
+all_agents = [(int(x[3:6]), int(x[6:9])) for x in list(payoff_dict.keys())[0]]
+num_players = len(all_agents)
+player_actions = [list(set([k[i] for k in payoff_dict.keys()])) for i in np.arange(num_players)]  
 start_t = timer()
-eq = calc_pure_strategy_nash_equilibrium_exhaustive1(pay_off_dict)
-print(len(eq))
+eq = EquilibriaCore(num_players,payoff_dict,len(payoff_dict),player_actions[0],False)
+soln = eq.calc_pure_strategy_nash_equilibrium_exhaustive()
+#mxmx = eq.calc_best_response() #maxmax
+#mxmn = eq.calc_max_min_response() #maxmin
 end_t = timer()
-print('time taken',end_t - start_t)
+print('time taken',end_t - start_t,'s')
+for s in soln.keys():
+    print(s)
+'''
+'''
+manv_level_payoff_dict = dict()
+for manv_combination in all_manv_combinations:
+    traj_level_dict = dict() - 10x5x7 size
+    all_trajectory_combinations = itertools.crossproduct(traj_id(manv_ag1_,traj_id(manv_ag2),.....)
+    for traj_comb in all_trajectory_combinations:
+        traj_level_dict[traj_comb] = utility of the traj_comb
+    eq = EquilibriaCore(num_players,traj_level_dict,len(traj_level_dict),player_actions[0],False)
+    mxmx = eq.calc_best_response()
+    optimal_utility_for_manv_combination = mxmx.values()[0]
+    manv_level_payoff_dict[manv_combination] = optimal_utility_for_manv_combination
+eq = EquilibriaCore(num_players,manv_level_payoff_dict,len(manv_level_payoff_dict),player_actions[0],False)
+soln = eq.calc_pure_strategy_nash_equilibrium_exhaustive()    
 '''
 '''
 l3_payoff = all_utils.pickle_load(os.path.join(constants.ROOT_DIR,constants.TEMP_TRAJ_CACHE,'l3_payoff'))

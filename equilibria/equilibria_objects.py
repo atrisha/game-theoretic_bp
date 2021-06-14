@@ -196,7 +196,7 @@ class L1L2UtilityProcessor:
         all_agents = [x[0] if x[1] == 0 else x[1] for x in all_agents]
         weights_info = {x:None for x in all_agents}
         for ag_id in all_agents:
-            if (int(CURRENT_FILE_ID),ag_id,self.time_ts) in self.eq_context.eval_config.agent_info_map:
+            if (int(constants.CURRENT_FILE_ID),ag_id,self.time_ts) in self.eq_context.eval_config.agent_info_map:
                 ag_info_vect = self.eq_context.eval_config.agent_info_map[(int(CURRENT_FILE_ID),ag_id,self.time_ts)]
                 if ag_info_vect in self.eq_context.eval_config.weights_map:
                     if constants.WEIGHTS_FLAG == 'high':
@@ -619,10 +619,10 @@ class Equilibria:
                     #payoffdict = self.assign_utility_to_table(l1l2_utility_dict,{})
                     ''' release this '''    
                     l1l2_utility_dict = None
-                    logging.info('calculating utilities...DONE')
+                    logging.info(constants.CURRENT_FILE_ID+' calculating utilities...DONE')
                     ''' release this '''    
                     l1l2_utility_dict = None
-                    logging.info('calculating utilities...DONE')
+                    
                 else:
                     u_ct = 0
                     N_payoff_table = len(l1l2_utility_dict)
@@ -856,9 +856,9 @@ class EvalConfig:
         res = c_traj.fetchall()
         self.traj_errs = {(row[1],row[0]):row[2:] for row in res}
         conn_traj.close()
-        if self.traj_type == 'BOUNDARY':
+        if self.traj_type == 'BOUNDARY' or self.traj_type == 'GAUSSIAN':
             model_type = 'maxmax' if self.l3_eq == 'BR' else 'maxmin'
-            self.weights_map = utils.load_weights_map(model_type)
+            self.weights_map = utils.load_weights_map(model_type,'BASELINE')
             self.agent_info_map = utils.load_agent_info_map()
             
         
@@ -937,6 +937,6 @@ class SamplingEquilibria:
                 payoffdict = self.eq_context.assign_utility_to_table(l1l2_utility_dict,{})
                 l1l2_utility_dict = None
                 logging.info('calculating utilities...DONE')
-                utils.pickle_dump_to_dir("F:\\Spring2017\\workspaces\\game_theoretic_planner_cache\\l3_trees\\"+constants.CURRENT_FILE_ID+'\\'+str(sv_id)+'_'+str(time_ts).replace('.', ','), payoffdict)
+                utils.pickle_dump_to_dir("F:\\Spring2017\\workspaces\\game_theoretic_planner_cache\\l3_trees_"+self.eq_context.eval_config.l3_eq+"_"+self.eq_context.eval_config.traj_type+"\\"+constants.CURRENT_FILE_ID+'\\'+str(sv_id)+'_'+str(time_ts).replace('.', ','), payoffdict)
                 logging.info(self.eq_context.eval_config.direction+" "+str(time_ts)+"-"+str(sv_id)+":"+str(ct)+'/'+str(N)+":"+str(N_payoff_table))
     

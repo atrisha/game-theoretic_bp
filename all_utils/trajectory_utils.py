@@ -293,7 +293,7 @@ class TrajectoryUtils:
         u_string = "REPLACE INTO L1_ACTIONS VALUES (?,?,?)"
         u_list = []
         for time_ts,agent_id in time_track_list:
-            if agent_id == 100 and time_ts == 100.1:
+            if agent_id == 221 and int(round(time_ts)) == 223:
                 brk = 1
             ct += 1
             pedestrian_info = utils.setup_pedestrian_info(time_ts)
@@ -346,7 +346,7 @@ class TrajectoryUtils:
                             emp_act.append('follow_lead')
                         else:
                             emp_act.append('track_speed')
-            if (len(wait_actions) > 0 and (not proceed and not wait)) or (wait and not proceed)> 0:
+            if (len(wait_actions) > 0 and (not proceed and not wait)) or (wait and not proceed):
                 if 'wait-for-pedestrian' in wait_actions:
                     emp_act.append('wait-for-pedestrian')
                 stationary = self.eval_stationary(wait_actions,proceed_actions,vel_profile,veh_state)
@@ -392,7 +392,7 @@ class TrajectoryUtils:
                     l2_act = 'NORMAL'
             emp_act = [utils.unreadable(str(agent_id)+'|'+str(0)+'|'+x+'|'+l2_act) for x in emp_act]
             u_list.append((time_ts,agent_id,str(emp_act)))
-        c.executemany(u_string,u_list)
+        #c.executemany(u_string,u_list)
         conn.commit()
         conn.close()               
         
@@ -467,4 +467,10 @@ def main():
         #traj_util_obj.update_l1_action_in_eq_data('all')
 
 if __name__ == '__main__':
-    assign_true_utils()
+    traj_util_obj = TrajectoryUtils()
+    constants.CURRENT_FILE_ID = '769'
+    constants.L3_ACTION_CACHE = 'l3_action_trajectories_769'
+    traj_util_obj.assign_l1_actions(221)
+    
+    
+    

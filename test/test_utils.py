@@ -23,8 +23,8 @@ class BaselineTrajectoryGenerationTest(unittest.TestCase):
         c.execute(q_string)
         res = c.fetchall()
         all_l1_actions = [row[0] for row in res]        
-        emp_path = all_utils.get_path(ag_id)
-        #plt.plot([x[0] for x in emp_path],[x[1] for x in emp_path],'blue')
+        get_nearest_node = all_utils.get_path(ag_id)
+        #plt.plot([x[0] for x in get_nearest_node],[x[1] for x in get_nearest_node],'blue')
         for l1_act in all_l1_actions:
             q_string = "SELECT DISTINCT TRAJ_ID FROM GENERATED_TRAJECTORY_INFO where l1_action='"+l1_act+"'"
             c.execute(q_string)

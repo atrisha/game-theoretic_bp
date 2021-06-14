@@ -1,3 +1,3 @@
-from action_generators.game_tree_builder import main
+from action_generators.game_tree_builder import regenerate_trajectories
 
-main()
+regenerate_trajectories()

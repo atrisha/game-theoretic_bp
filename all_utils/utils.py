@@ -292,6 +292,7 @@ def get_leading_vehicles(veh_state):
                 dist_from_subject = math.hypot(float(lv.x)-veh_pos_x, float(lv.y)-veh_pos_y)
                 if dist_from_subject < min_dist:
                     lv_idx = idx
+                    min_dist = dist_from_subject
             return potential_lead_vehicles[lv_idx]
                     
                 
@@ -703,10 +704,7 @@ def load_trajs_for_traj_info_id(traj_info_id,baseline_only,traj_type):
                 info_id_dict[row[1]] = [row[0]]
         selected_traj_ids = []
         for info_id,traj_ids in info_id_dict.items():
-            if len(traj_ids) > 3:
-                selected_traj_ids.append(traj_ids[1])
-            else:
-                selected_traj_ids.append(traj_ids[0])
+            selected_traj_ids.append(traj_ids[int(len(traj_ids)//2)])
         try:
             if len(selected_traj_ids) > 1:        
                 q_string = "SELECT * FROM GENERATED_BASELINE_TRAJECTORY WHERE TRAJECTORY_ID IN "+str(tuple(selected_traj_ids))
@@ -1018,6 +1016,44 @@ def print_readable(eq):
         for s in eq:
             readable_eq.append(s[3:6]+'_'+s[6:9]+'_'+get_l1_action_string(int(s[9:11]))+'_'+get_l2_action_string(int(s[11:13])))
         return readable_eq
+    
+def get_conflict_points(path1, path1_signal, path2, path2_signal):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
+    c = conn.cursor()
+    q_string = "select * from CONFLICT_POINTS WHERE (CONFLICT_POINTS.PATH_1 LIKE '%"+path1[0]+","+path1[-1]+"%' AND CONFLICT_POINTS.PATH_2 LIKE '%"+path2[0]+","+path2[-1]+"%' AND SIGNAL_STATE_PATH_1 LIKE '%"+path1_signal+"%' AND SIGNAL_STATE_PATH_2 LIKE '%"+path2_signal+"%') OR (CONFLICT_POINTS.PATH_2 LIKE '%"+path1[0]+","+path1[-1]+"%' AND CONFLICT_POINTS.PATH_1 LIKE '%"+path2[0]+","+path2[-1]+"%' AND SIGNAL_STATE_PATH_2 LIKE '%"+path1_signal+"%' AND SIGNAL_STATE_PATH_1 LIKE '%"+path2_signal+"%')"
+    c.execute(q_string)
+    res = c.fetchall()
+    if len(res) > 0:
+        X,Y = res[0][5],res[0][6]
+        return (X,Y)
+    else:
+        return None 
+
+def dot(vA, vB):
+    return vA[0]*vB[0]+vA[1]*vB[1]
+
+def zero_pi_angle_bet_lines(lineA, lineB):
+    # Get nicer vector form
+    vA = [(lineA[1][0]-lineA[0][0]), (lineA[1][1]-lineA[0][1])]
+    vB = [(lineB[1][0]-lineB[0][0]), (lineB[1][1]-lineB[0][1])]
+    # Get dot prod
+    dot_prod = dot(vA, vB)
+    # Get magnitudes
+    magA = dot(vA, vA)**0.5
+    magB = dot(vB, vB)**0.5
+    # Get cosine value
+    cos_ = dot_prod/magA/magB
+    # Get angle in radians and then convert to degrees
+    angle = math.acos(dot_prod/magB/magA)
+    # Basically doing angle <- angle mod 360
+    ang_deg = math.degrees(angle)%360
+
+    if ang_deg-180>=0:
+        # As in if statement
+        return 360 - ang_deg
+    else: 
+
+        return ang_deg
     
 def query_agent(conflict,subject_path,veh_state):
     vehicles = []
@@ -1423,7 +1459,8 @@ def insert_generated_trajectory(l3_actions,f):
 
 
 def solve_quadratic(a,b,c):
-    return (-b + math.sqrt(b**2 - 4*a*c)) / (2 * a),(-b - math.sqrt(b**2 - 4*a*c)) / (2 * a)        
+    return (-b + math.sqrt(b**2 - 4*a*c)) / (2 * a),(-b - math.sqrt(b**2 - 4*a*c)) / (2 * a)
+           
     
 def generate_baseline_velocity(time_tx,v_s,a_s,target_vel,max_acc,max_jerk,acc):
     vels = []
@@ -1929,7 +1966,19 @@ def load_agent_info_map(file_id=None):
     res = c.fetchall()
     agent_info = {tuple(row[:3]):tuple(row[3:11]) for row in res}
     return agent_info
-           
+
+def load_direction_map():
+    direction_map = dict()
+    for file_id in constants.ALL_FILE_IDS:
+        if file_id not in direction_map:
+            direction_map[file_id] = dict()
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
+        c = conn.cursor()
+        q_string = "select TRACK_ID,TRAFFIC_SEGMENT_SEQ from TRAJECTORY_MOVEMENTS WHERE TRAFFIC_SEGMENT_SEQ IS NOT NULL"
+        c.execute(q_string)
+        res = c.fetchall()
+        direction_map[file_id] = {row[0]:ast.literal_eval(row[1])[0][3].upper()+'_'+ast.literal_eval(row[1])[-1][3].upper() for row in res}
+    return direction_map
 
 ''' this function interpolates track information only for real trajectories '''
 def interpolate_track_info(veh_state,forward,backward,partial_track=None):
@@ -1939,6 +1988,7 @@ def interpolate_track_info(veh_state,forward,backward,partial_track=None):
         track_info = [None]*9
     veh_id,curr_time = veh_state.id,veh_state.current_time
     track_info[0],track_info[6] = veh_id,curr_time
+    
     veh_entry_segment, veh_exit_segment = veh_state.segment_seq[0],veh_state.segment_seq[-1]
     if not hasattr(veh_state, 'track'):
         q_string = "select TIME,TRAFFIC_REGIONS,X,Y,SPEED from trajectories_0"+constants.CURRENT_FILE_ID+" where track_id="+str(veh_id)+" order by time"
@@ -1949,7 +1999,7 @@ def interpolate_track_info(veh_state,forward,backward,partial_track=None):
         traffic_regions = []
         for r in res:
             traffic_regions.append((float(r[0]),r[1]))
-        veh_entry_speed, veh_exit_speed = res[0][4],res[-1][4]
+        veh_entry_speed, veh_exit_speed = res[0][4]/3.6,res[-1][4]/3.6
         conn.close()
     else:
         for r in veh_state.track:

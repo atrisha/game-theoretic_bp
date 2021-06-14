@@ -122,7 +122,8 @@ class ResidualGeneration:
                     if len(res) == 0:
                         self.traj_info_dict[k][ag] = []
                         continue
-                    selected_traj_id = res[0][0]
+                    _alltrajinfoids = list(set([x[0] for x in res]))
+                    selected_traj_id = _alltrajinfoids[int(len(_alltrajinfoids)//2)]
                     self.traj_info_dict[k][ag] = [(row[3],row[4], row[2], row[6]) for row in res if row[0]==selected_traj_id and k <= row[2] < k+HORIZON]
                     #if ag == (8,0) and k==1:
                     #    f=1

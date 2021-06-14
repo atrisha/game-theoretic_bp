@@ -1123,4 +1123,4 @@ def plot_velocity_distr_by_segment():
         
 
 if __name__ == '__main__':     
-    plot_velocity_distr_by_segment()
+    count_agents()

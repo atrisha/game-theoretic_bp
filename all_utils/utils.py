@@ -25,6 +25,7 @@ import statistics
 from scipy.interpolate import CubicSpline
 from itertools import islice
 import logging
+import itertools
 import planning_objects
 logging.basicConfig(format='%(levelname)-8s %(filename)s: %(message)s',level=logging.INFO)
 log = constants.common_logger
@@ -2200,5 +2201,52 @@ def dist_to_line(A,B,pt):
     ''' line is from A to B '''
     d=((pt[0]-A[0])*(B[1]-A[1]))-((pt[1]-A[1])*(B[0]-A[0]))
     return d  
+
+
+def get_rule_action(veh_state):
+    conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+constants.CURRENT_FILE_ID+'\\uni_weber_'+constants.CURRENT_FILE_ID+'.db')
+    c = conn.cursor()
+    q_string = "select * from ACTIONS where IS_RULE='Y'"
+    c.execute(q_string)
+    res = c.fetchall()                
+    ''' (segment,signal,lead vehicle,task, pedestrian,state_string(lead,pedestrian,oncoming))):action'''
+    rules = {(row[0],row[3],row[4],row[5],row[7],row[8]):row[1] for row in res}
+    key_tuples = [[constants.SEGMENT_MAP[veh_state.current_segment]], [veh_state.signal,'*']]
+    state_str = []
+    if veh_state.leading_vehicle is not None:
+        key_tuples.append(['Y','*'])
+    else:
+        key_tuples.append(['N','*'])
+    key_tuples.append([veh_state.task])
+    key_tuples.append(['N','*'])
+    if veh_state.has_oncoming_vehicle:
+        oncoming_veh = ['Y','*']
+    else:
+        oncoming_veh = ['N','*']
+    state_str = [','.join(x) for x in itertools.product(key_tuples[2],key_tuples[4],oncoming_veh)]
+    all_keys = list(itertools.product(key_tuples[0],key_tuples[1],key_tuples[2],key_tuples[3],key_tuples[4],state_str))
+    action = []
+    for k in all_keys:
+        if k in rules:
+            action.append(rules[k])
+    if len(action) > 1:
+        all_wait_actions = all(a in constants.WAIT_ACTIONS for a in action)
+        if all_wait_actions:
+            chosen_action = None
+            for a in reversed(constants.WAIT_ACTIONS):
+                if a in action:
+                    chosen_action = a
+                    break
+            if chosen_action is None:
+                sys.exit('No action in '+str(action)+' found in the list of wait actions')
+            else:
+                action = [chosen_action]
+        else:
+            if 'wait_for_lead_to_cross' in action and 'Y' in oncoming_veh :
+                action = ['wait_for_lead_to_cross']
+            else:
+                if 'follow_lead_into_intersection' in action and 'Y' in oncoming_veh:
+                    action.remove('follow_lead_into_intersection')
+    return action
     
 

@@ -20,7 +20,10 @@ from equilibria import equilibria_core
 from pylatex import Document, Section, Subsection, Tabular, MultiRow
 import pylatex.utils
 from collections import OrderedDict
+import pandas as pd
+from collections import Counter
 import matplotlib as mpl
+import seaborn as sn
 
 log = constants.common_logger
 
@@ -1190,8 +1193,8 @@ def print_rules_mismatch():
     okct = 0 
     for runidx,row in enumerate(res):
         print('processing',file_id,runidx,'/',N)
-        rule_strat = ast.literal_eval(row[5])
-        emp_strat = ast.literal_eval(row[6])
+        rule_strat = ast.literal_eval(row[6])
+        emp_strat = ast.literal_eval(row[5])
         if len(emp_strat) >0 and len(rule_strat) >0:
             num_agents = len(emp_strat[0])
             for agidx in np.arange(num_agents):
@@ -1213,14 +1216,217 @@ def print_rules_mismatch():
         print(_e)
     print(len(rule_mismatch_list),okct)
     
+    
+def print_conf_matrix_results(sampling_type):
+    def _rulematch(_manv,_rule_list):
+        manv,rule_list = utils.get_l1_action_string(_manv),[utils.get_l1_action_string(x) for x in _rule_list]
+        match = False
+        for r in rule_list:
+            if r != manv:
+                if r in constants.WAIT_ACTIONS and manv in constants.WAIT_ACTIONS:
+                    match = True
+                    break
+            else:
+                match = True
+                break
+        return match
+    
+    #file_id = '776'
+    print('***************',sampling_type,'********************')  
+    for model_type in [('NASH',None),('QlkR',None),('brtb',None),('maxmin',None),('maxmax',None),('Ql1','maxmin'),('Ql1','maxmax')]:
+        confusion_dict,confusion_dict_N = dict(), dict()
+        for file_id in [x for x in constants.ALL_FILE_IDS if int(x) > 775]:
+            conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
+            c = conn.cursor()
+            
+            if model_type[1] is None:
+                q_string = "select * from L1_SOLUTIONS WHERE MODEL_PARMS LIKE '%l3_sampling="+sampling_type+",%' AND MODEL='"+model_type[0]+"'"
+            else:
+                q_string = "select * from L1_SOLUTIONS WHERE MODEL_PARMS LIKE '%l3_sampling="+sampling_type+",%lzero_behavior="+model_type[1]+"%' AND MODEL='"+model_type[0]+"'"
+            
+            #q_string = "select * from L1_SOLUTIONS WHERE MODEL_PARMS LIKE '%l3_sampling="+sampling_type+",%'"
+            c.execute(q_string)
+            res = c.fetchall()  
+            rule_mismatch_list = []
+            N = len(res)
+            okct = 0 
+            for runidx,row in enumerate(res):
+                #print('processing',file_id,runidx,'/',N)
+                soln_strat = ast.literal_eval(row[7])
+                emp_strat = ast.literal_eval(row[5])
+                row_agid = int(row[1])
+                if len(emp_strat) >0 and len(soln_strat) >0:
+                    num_agents = len(emp_strat[0])
+                    if num_agents <2:
+                        continue
+                    agidx = None
+                    for _idx,_es in enumerate(emp_strat[0]):
+                        _thisagid = int(_es[3:6]) if int(_es[6:9]) == 0 else int(_es[6:9])
+                        if _thisagid == row_agid:
+                            agidx = _idx
+                            break
+                    soln_acts = list(set([int(x[agidx][9:11]) for x in soln_strat]))
+                    emp_acts = list(set([int(x[agidx][9:11]) for x in emp_strat]))
+                    for e_a in emp_acts:
+                        if e_a not in confusion_dict:
+                            confusion_dict[e_a] = []
+                        if e_a not in confusion_dict_N:
+                            confusion_dict_N[e_a] = 0
+                        if e_a in soln_acts:
+                            confusion_dict[e_a].append(e_a)
+                            confusion_dict_N[e_a] += 1
+                        else:
+                            for s_a in soln_acts:
+                                confusion_dict[e_a].append(s_a)
+                            #since the mis-prediction is multi-valued we need to add N-1 true values to the count for proper normalization
+                            confusion_dict[e_a] += [e_a]*(len(soln_acts)-1)
+                            confusion_dict_N[e_a] += 1
+        confusion_dict = {utils.get_l1_action_string(int(k)):[utils.get_l1_action_string(int(x)) for x in v] for k,v in confusion_dict.items()}
+        confusion_dict_N = {utils.get_l1_action_string(int(k)):v for k,v in confusion_dict_N.items()}
+        confusion_key_list = list(confusion_dict.keys())
+        confusion_matrix = []
+        for k in confusion_key_list:
+            confusion_arr = []
+            ctr = Counter(confusion_dict[k])
+            _sum = sum(ctr.values())
+            for p_k in confusion_key_list:
+                th_prob = ctr[p_k]/_sum
+                confusion_arr.append(th_prob)
+            confusion_matrix.append(confusion_arr)
+            
+        df_cm = pd.DataFrame(confusion_matrix, index = [x+'('+str(confusion_dict_N[x])+')' for x in confusion_key_list],
+                      columns = confusion_key_list)
+        plt.figure()
+        chart = sn.heatmap(df_cm, annot=True)
+        chart.figure.tight_layout()
+        sn.set(font_scale=.50)
+        plt.xticks(rotation=75)
+        plt.yticks(rotation=0)
+        plt.xlabel('Equilibrium action', labelpad=15)
+        plt.ylabel('Empirical action')
+        b, t = plt.ylim() # discover the values for bottom and top
+        b += 0.5 # Add 0.5 to the bottom
+        t -= 0.5 # Subtract 0.5 from the top
+        plt.ylim(b, t)
+        model_str = sampling_type + '_' + model_type[0] if model_type[1] is None else sampling_type + '_' + model_type[0]+'-'+model_type[1]
+        plt.savefig(model_str+'.png', bbox_inches='tight')
+        #plt.show()
+        
+        print('-----------',model_type if model_type[1] is not None else model_type[0],'---------------')
+        _sum = []
+        for idx,e in enumerate(confusion_matrix):
+            print(confusion_key_list[idx],e[idx])
+            _sum.append(e[idx])
+        print('mean:',np.mean(_sum))
+        f=1
+    print('***************',sampling_type,'********************')                   
+                    
+def print_rulemismatch_results():
+    def _rulematch(_manv,_rule_list):
+        if _manv == 5 and 2 in _rule_list:
+            f=1
+        manv,rule_list = utils.get_l1_action_string(_manv),[utils.get_l1_action_string(x) for x in _rule_list]
+        match = False
+        for r in rule_list:
+            if r != manv:
+                if r in constants.WAIT_ACTIONS and manv in constants.WAIT_ACTIONS:
+                    match = True
+                    break
+            else:
+                match = True
+                break
+        return match
+    
+    #file_id = '776'
+    sampling_type = 'SAMPLING_EQ'
+    
+    confusion_dict,confusion_dict_N = dict(), dict()
+    for file_id in [x for x in constants.ALL_FILE_IDS if int(x) > 775]:
+        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
+        c = conn.cursor()
+        
+        q_string = "select * from L1_SOLUTIONS WHERE MODEL_PARMS LIKE '%l3_sampling="+sampling_type+",%'"
+        c.execute(q_string)
+        res = c.fetchall()  
+        rule_mismatch_list = []
+        N = len(res)
+        okct = 0 
+        for runidx,row in enumerate(res):
+            print('processing',file_id,runidx,'/',N)
+            rule_strat = ast.literal_eval(row[6])
+            emp_strat = ast.literal_eval(row[5])
+            row_agid = int(row[1])
+            if len(emp_strat) >0 and len(rule_strat) >0:
+                num_agents = len(emp_strat[0])
+                if num_agents <2:
+                    continue
+                agidx = None
+                for _idx,_es in enumerate(emp_strat[0]):
+                    _thisagid = int(_es[3:6]) if int(_es[6:9]) == 0 else int(_es[6:9])
+                    if _thisagid == row_agid:
+                        agidx = _idx
+                        break
+                rule_acts = list(set([int(x[agidx][9:11]) for x in rule_strat]))
+                emp_acts = list(set([int(x[agidx][9:11]) for x in emp_strat]))
+                for e_a in emp_acts:
+                    if e_a not in confusion_dict:
+                        confusion_dict[e_a] = []
+                    if e_a not in confusion_dict_N:
+                        confusion_dict_N[e_a] = 0
+                    if _rulematch(e_a, rule_acts):
+                        confusion_dict[e_a].append(e_a)
+                        confusion_dict_N[e_a] += 1
+                    else:
+                        for s_a in rule_acts:
+                            confusion_dict[e_a].append(s_a)
+                        #since the mis-prediction is multi-valued we need to add N-1 true values to the count for proper normalization
+                        confusion_dict[e_a] += [e_a]*(len(rule_acts)-1)
+                        confusion_dict_N[e_a] += 1
+    confusion_dict = {utils.get_l1_action_string(int(k)):[utils.get_l1_action_string(int(x)) for x in v] for k,v in confusion_dict.items()}
+    confusion_dict_N = {utils.get_l1_action_string(int(k)):v for k,v in confusion_dict_N.items()}
+    confusion_key_list = list(confusion_dict.keys())
+    confusion_matrix = []
+    for k in confusion_key_list:
+        confusion_arr = []
+        ctr = Counter(confusion_dict[k])
+        _sum = sum(ctr.values())
+        for p_k in confusion_key_list:
+            th_prob = ctr[p_k]/_sum
+            confusion_arr.append(th_prob)
+        confusion_matrix.append(confusion_arr)
+    _sum = []
+    for idx,e in enumerate(confusion_matrix):
+        print(confusion_key_list[idx],e[idx])
+        _sum.append(e[idx])
+    print('mean:',np.mean(_sum))
+    df_cm = pd.DataFrame(confusion_matrix, index = [x+'('+str(confusion_dict_N[x])+')' for x in confusion_key_list],
+                  columns = confusion_key_list)
+    plt.figure()
+    chart = sn.heatmap(df_cm, annot=True)
+    chart.figure.tight_layout()
+    sn.set(font_scale=.50)
+    plt.xticks(rotation=75)
+    plt.yticks(rotation=0)
+    plt.xlabel('Equilibrium action', labelpad=15)
+    plt.ylabel('Empirical action')
+    b, t = plt.ylim() # discover the values for bottom and top
+    b += 0.5 # Add 0.5 to the bottom
+    t -= 0.5 # Subtract 0.5 from the top
+    plt.ylim(b, t)
+    plt.show()
+    
+   
+    f=1                   
+
 if __name__ == '__main__':     
     #generate_results_file(None,True, True, True)
     #analyse_l1_precision_spec_ratio(None,True)
     #analyse_l1_precision_spec_ratio_eq_table(None,True)
     #analyse_turning_utilities(None,True, True, True)
-    analyse_weight_distribution('BASELINE')
+    #analyse_weight_distribution('BASELINEUTILS')
     #analyse_weight_distribution('SAMPLING_EQ')
     #plot_util_hist()
-    #print_rules_mismatch()
+    #print_conf_matrix_results('BASELINE')
+    print_rulemismatch_results()
         
     

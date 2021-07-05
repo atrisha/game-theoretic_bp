@@ -1234,16 +1234,19 @@ def main():
     #for file_id in [x for x in constants.ALL_FILE_IDS if int(x) > 768]:
     #constants.CURRENT_FILE_ID = file_id
     constants.TRAJECTORY_TYPE = 'BASELINE'
-    constants.L1_EQ_TYPE = 'NA'
-    constants.L3_EQ_TYPE = None #'BASELINE'
-    
-    if constants.TRAJECTORY_TYPE == 'BOUNDARY':
-        constants.WEIGHTS_FLAG = sys.argv[5] if sys.argv[5] != 'None' else None
-    constants.TEMP_TRAJ_CACHE = 'temp_traj_cache_'+constants.CURRENT_FILE_ID+'_'+constants.TRAJECTORY_TYPE
-    constants.L3_ACTION_CACHE = 'l3_action_trajectories_'+constants.CURRENT_FILE_ID
-    constants.RESULTS = 'results_'+constants.CURRENT_FILE_ID
-    constants.setup_logger()
-    calc_eqs_for_hopping_trajectories()
+    if constants.TRAJECTORY_TYPE == 'BASELINEUTILS':
+        generate_baseline_util_tables()
+    else:
+        constants.L1_EQ_TYPE = 'NA'
+        constants.L3_EQ_TYPE = None #'BASELINE'
+        
+        if constants.TRAJECTORY_TYPE == 'BOUNDARY':
+            constants.WEIGHTS_FLAG = sys.argv[5] if sys.argv[5] != 'None' else None
+        constants.TEMP_TRAJ_CACHE = 'temp_traj_cache_'+constants.CURRENT_FILE_ID+'_'+constants.TRAJECTORY_TYPE
+        constants.L3_ACTION_CACHE = 'l3_action_trajectories_'+constants.CURRENT_FILE_ID
+        constants.RESULTS = 'results_'+constants.CURRENT_FILE_ID
+        constants.setup_logger()
+        calc_eqs_for_hopping_trajectories()
     
     
 def generate_results_file():

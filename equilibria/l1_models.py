@@ -111,6 +111,28 @@ class L1_Model_Config():
         
 class Rules():
     
+    def is_relevant(self,veh_state,pedestrian_info):
+        v_id = veh_state.id
+        relev_xwalk = utils.get_relevant_crosswalks(v_id)
+        is_relevant = False
+        if relev_xwalk is not None:
+            crosswalk_ids,near_gate = relev_xwalk[0], relev_xwalk[1]
+            #current_segment = all_utils.get_current_segment_by_veh_id(v_id,self.eq_context.curr_time)
+            for xwalk in crosswalk_ids:
+                for ped_state in pedestrian_info:
+                    if xwalk in ped_state.crosswalks:
+                        if ped_state.crosswalks[xwalk]['location'] == constants.ON_CROSSWALK:
+                            is_relevant = True
+                        elif ped_state.crosswalks[xwalk]['location'] == constants.BEFORE_CROSSWALK \
+                                and ped_state.crosswalks[xwalk]['dist_to_entry'] < constants.PEDESTRIAN_CROSSWALK_DIST_THRESH \
+                                    and ((ped_state.crosswalks[xwalk]['next_change'][1] == 'G' and ped_state.crosswalks[xwalk]['next_change'][0] <= constants.PEDESTRIAN_CROSSWALK_TIME_THRESH) \
+                                             or ped_state.crosswalks[xwalk]['next_change'][1] == 'R'):
+                            ''' before the crosswalk, within the distance threshold, and the signal is green or about to change to green'''
+                            is_relevant = True
+                        else:
+                            is_relevant = False
+        return is_relevant
+    
     def __init__(self, file_id):
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
         c = conn.cursor()
@@ -130,7 +152,11 @@ class Rules():
             key_tuples.append(['N','*'])
         key_tuples.append([veh_state.task])
         if relev_pedestrians is not None:
-            key_tuples.append(['Y','*'])
+            is_pedestrian_relevant = self.is_relevant(veh_state,relev_pedestrians)
+            if is_pedestrian_relevant:
+                key_tuples.append(['Y','*'])
+            else:
+                key_tuples.append(['N','*'])
         else:
             key_tuples.append(['N','*'])
         if veh_state.has_oncoming_vehicle:
@@ -2470,7 +2496,7 @@ class InverseCorrelatedEquilibriaLearningModel(InverseNashEqLearningModel):
         conn.close()
 
 
-def insert_weights_all_models():
+def insert_weights_all_models(traj_type):
     
     #file_id = sys.argv[1]
     #traj_type = sys.argv[2]
@@ -2478,12 +2504,11 @@ def insert_weights_all_models():
     for file_id in ['769','770','771','775']:
         conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
         c = conn.cursor()
-        q_string = "DELETE from UTILITY_WEIGHTS WHERE UTILITY_WEIGHTS.L3_MODEL_TYPE='BASELINE'"
+        q_string = "DELETE from UTILITY_WEIGHTS WHERE UTILITY_WEIGHTS.L3_MODEL_TYPE='"+traj_type+"'"
         c.execute(q_string)
         conn.commit()
         conn.close()          
         
-        traj_type = 'BASELINE'
         soln = 'NA'
         
         constants.CURRENT_FILE_ID = file_id
@@ -2572,26 +2597,26 @@ def insert_weights_all_models():
         #l1_model.calc_confusion_matrix('maxmin')
     
     
-def solve_l1_all_models():
+def solve_l1_all_models(traj_type,no_insertion):
     
     #file_id = sys.argv[1]
     #traj_type = sys.argv[2]
     #soln = sys.argv[3]
     for file_id in [x for x in constants.ALL_FILE_IDS if int(x) > 775]:
-        traj_type = 'BASELINE'
         soln = 'NA'
         constants.CURRENT_FILE_ID = file_id
         
-        conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
-        c = conn.cursor()
-        q_string = "DELETE from L1_SOLUTIONS WHERE L1_SOLUTIONS.MODEL_PARMS LIKE '%l3_sampling="+traj_type+",%'"
-        c.execute(q_string)
-        conn.commit()
-        conn.close()
+        if not no_insertion:
+            conn = sqlite3.connect('D:\\intersections_dataset\\dataset\\'+file_id+'\\uni_weber_'+file_id+'.db')
+            c = conn.cursor()
+            q_string = "DELETE from L1_SOLUTIONS WHERE L1_SOLUTIONS.MODEL_PARMS LIKE '%l3_sampling="+traj_type+",%'"
+            c.execute(q_string)
+            conn.commit()
+            conn.close()
         
         
         l1_model_config = L1_Model_Config()
-        l1_model_config.set_no_insertion(False)
+        l1_model_config.set_no_insertion(no_insertion)
         l1_model_config.set_baseline_weights_flag(False)
         l1_model_config.set_mixed_weights_flag(True)
         l1_model_config.set_file_id(file_id)
@@ -2897,9 +2922,10 @@ def solve_l1_all_models_old_params():
         l1_model = Ql1Model(l1_model_config)
         l1_model.solve()
         '''
-if __name__ == '__main__':    
-    #insert_weights_all_models()
-    
-    solve_l1_all_models()
+if __name__ == '__main__':   
+    for traj_type in ['BASELINE','BASELINEUTILS','SAMPLING_EQ']: 
+        insert_weights_all_models(traj_type)
+    for traj_type in ['BASELINE','BASELINEUTILS','SAMPLING_EQ']: 
+        solve_l1_all_models(traj_type,False)
 
 

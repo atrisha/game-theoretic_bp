@@ -627,13 +627,13 @@ def regenerate_trajectories():
                     not_generated.append((lead_veh_id,time_ts,'all'))
                     print(veh_id,time_ts,'all','failed')
                     continue
-                lead_ag_obj = lead_ag_obj_scene.agent2
+                lead_ag_obj = lead_ag_obj_scene.agent
             else:
                 lead_ag_obj = None
         else:
             lead_ag_obj = None
         try:
-            ag_obj = scene_def.agent2
+            ag_obj = scene_def.agent
         except AttributeError:
             f=1
             raise
@@ -650,7 +650,7 @@ def regenerate_trajectories():
                         print(lead_veh_id,time_ts,manv,'failed')
                         continue
                 
-                    lead_ag_obj = lead_ag_obj_scene.agent2
+                    lead_ag_obj = lead_ag_obj_scene.agent
                 else:
                     #raise UnsupportedManeuverException(manv+' with no lead info')
                     not_generated.append((lead_veh_id,time_ts,manv))
